@@ -1,0 +1,171 @@
+import { superValidate, message } from 'sveltekit-superforms';
+import { zod4 } from 'sveltekit-superforms/adapters';
+
+import { add } from './schema';
+import { db } from '$lib/server/db';
+import {
+	products as inventory,
+	productCategories,
+	categoriesProducts,
+	productTags,
+	tags,
+	productImages,
+	productSuppliers as suppliers
+} from '$lib/server/db/schema';
+import type { Actions } from './$types';
+import type { PageServerLoad } from './$types.js';
+import { redirect, setFlash } from 'sveltekit-flash-message/server';
+import { eq } from 'drizzle-orm';
+
+export const load: PageServerLoad = async () => {
+	const allCategories = await db
+		.select({
+			value: productCategories.id,
+			name: productCategories.name,
+			description: productCategories.description
+		})
+		.from(productCategories)
+		.where(eq(productCategories.isActive, true));
+	const allTags = await db
+		.select({
+			value: tags.id,
+			name: tags.name
+		})
+		.from(tags);
+	const form = await superValidate(zod4(add));
+
+	const supplierList = await db
+		.select({
+			value: suppliers.id,
+			name: suppliers.name
+		})
+		.from(suppliers)
+		.where(eq(suppliers.isActive, true));
+
+	return {
+		form,
+		allCategories,
+		supplierList,
+		allTags
+	};
+};
+
+import { saveUploadedFile } from '$lib/server/upload.js';
+
+export const actions: Actions = {
+	addProduct: async ({ request, cookies, locals }) => {
+		const form = await superValidate(request, zod4(add));
+		console.log(form);
+
+		if (!form.valid) {
+			// Stay on the same page and set a flash message
+			setFlash({ type: 'error', message: 'Please check your form data.' }, cookies);
+			return message(form, { type: 'error', text: 'Please check your form data.' });
+		}
+
+		const {
+			productName,
+			brand,
+			category,
+			tag,
+			description,
+			quantity,
+
+			supplier,
+			reorderLevel,
+			image,
+			gallery
+		} = form.data;
+		const featuredImage = await saveUploadedFile(image);
+		let galleryImages: string[] = [];
+		if (gallery) galleryImages = await uploadGallery(gallery);
+		const result = await db.transaction(async (tx) => {
+			// 1. Upload images first (usually done before the DB transaction starts
+			// to avoid keeping a DB connection open during slow network I/O)
+
+			// 2. Insert the main product
+			const [product] = await tx
+				.insert(inventory)
+				.values({
+					name: productName,
+					description,
+					brand,
+					quantity,
+					supplierId: supplier ? supplier : null,
+					reorderLevel,
+					featuredImage,
+					createdBy: locals?.user?.id
+				})
+				.$returningId();
+
+			const newProductId = product.id;
+
+			if (category) {
+				const categoryBulk = category.map((cat) => ({
+					categoryId: cat,
+					productId: newProductId
+				}));
+				await tx.insert(categoriesProducts).values(categoryBulk);
+			}
+
+			if (tag) {
+				const tagBulk = tag.map((tagId) => ({
+					tagId,
+					productId: newProductId
+				}));
+				await tx.insert(productTags).values(tagBulk);
+			}
+
+			// 3. Prepare and insert the gallery images
+			if (galleryImages.length > 0) {
+				const imageRecords = galleryImages.map((url) => ({
+					productId: newProductId,
+					imageUrl: url
+				}));
+
+				await tx.insert(productImages).values(imageRecords);
+			}
+
+			// Return the ID or the full object if needed
+			return newProductId;
+		});
+
+		if (!result) {
+			return message(
+				form,
+				{
+					type: 'error',
+					text: 'An error occurred while adding the product.'
+				},
+				{ status: 500 }
+			);
+		} else {
+			// message(form, { type: 'success', text: 'New Product Successfully Added' });
+			redirect(
+				`/dashboard/products/single/${result}`,
+				{ type: 'success', message: 'New Product Successfully Added' },
+				cookies
+			);
+		}
+	}
+};
+
+const uploadGallery = async (gallery: File[] | undefined) => {
+	try {
+		// 1. Map each file to the upload promise
+		const uploadPromises = gallery.map(async (file) => {
+			const address = await saveUploadedFile(file);
+			return address; // This is the string returned by your function
+		});
+
+		// 2. Wait for all uploads to complete and store results in an array
+		const uploadedAddresses: string[] = await Promise.all(uploadPromises);
+
+		console.log('All files uploaded:', uploadedAddresses);
+
+		return uploadedAddresses;
+	} catch (error) {
+		console.error('Error uploading gallery:', error);
+		throw error;
+	}
+};

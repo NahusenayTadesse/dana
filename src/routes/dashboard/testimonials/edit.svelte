@@ -1,0 +1,88 @@
+<script lang="ts">
+	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
+	import { SquarePen, Save } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import type { EditPaymentMethod as schema } from './schema';
+
+	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import { superForm } from 'sveltekit-superforms';
+	import Errors from '$lib/formComponents/Errors.svelte';
+
+	let {
+		data,
+		action = '/dashboard/customers?/addCustomer',
+		id,
+		name,
+		position,
+		testimonial,
+		avatar,
+		icon = false
+	}: {
+		data: SuperValidated<Infer<schema>>;
+		action: string;
+		id: number;
+		name: string;
+		position?: string;
+		avatar?: string;
+		testimonial?: string;
+		icon: boolean;
+	} = $props();
+
+	const { form, errors, enhance, delayed, message, allErrors } = superForm(data, {
+		resetForm: false
+	});
+
+	$form.id = id;
+	$form.name = name;
+	$form.position = position;
+	$form.testimonial = testimonial;
+
+	import { toast } from 'svelte-sonner';
+	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import DialogComp from '$lib/formComponents/DialogComp.svelte';
+	$effect(() => {
+		if ($message) {
+			if ($message.type === 'error') {
+				toast.error($message.text);
+			} else {
+				toast.success($message.text);
+				open = false;
+			}
+		}
+	});
+</script>
+
+<DialogComp title={icon ? 'Edit' : name} variant="ghost" IconComp={icon ? SquarePen : undefined}>
+	<form
+		{action}
+		use:enhance
+		method="post"
+		id="edit"
+		class="flex w-full flex-col gap-4 p-4"
+		enctype="multipart/form-data"
+	>
+		<Errors allErrors={$allErrors} />
+		<input type="hidden" name="id" value={$form.id} />
+		<InputComp {form} {errors} label="Name of Customer" type="text" name="name" required={true} />
+		<InputComp {form} {errors} label="Position" type="text" name="position" />
+		<InputComp {form} {errors} label="Testimonial" type="textarea" name="testimonial" />
+		<InputComp
+			{form}
+			{errors}
+			label="Logo or Avatar"
+			image={avatar ? avatar : ''}
+			type="file"
+			name="avatar"
+		/>
+
+		<Button type="submit" class="mt-4" form="edit">
+			{#if $delayed}
+				<LoadingBtn name="Saving Avatar" />
+			{:else}
+				<Save class="h-4 w-4" />
+
+				Save Changes
+			{/if}
+		</Button>
+	</form>
+</DialogComp>
