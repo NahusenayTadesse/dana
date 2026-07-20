@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initCustomCursor } from '$lib/hooks/utils';
+	import { initPremiumCursor } from '$lib/hooks/utils';
 
 	onMount(() => {
-		initCustomCursor();
+		initPremiumCursor();
 	});
 </script>

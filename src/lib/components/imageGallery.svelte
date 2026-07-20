@@ -45,12 +45,19 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<section class="py-16 px-6  max-w-9/10 mx-auto w-full">
+<section class="py-16 px-6 max-w-[1320px] mx-auto w-full">
   <!-- Header -->
-
+  <div class="mb-10 text-center max-w-xl mx-auto">
+    <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+      Asset Collection
+    </h2>
+    <p class="mt-3 text-muted-foreground text-sm sm:text-base">
+      Click on any preview to open the lightbox gallery viewer.
+    </p>
+  </div>
 
   <!-- Grid Gallery -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
     {#each images as image, i (image.id)}
       <div 
         in:fly={{ y: 20, duration: 500, delay: i * 60, easing: cubicOut }}

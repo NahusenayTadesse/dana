@@ -55,6 +55,8 @@
 
 		$flash = undefined;
 	});
+		import Stars from '$lib/components/Stars.svelte';
+	import Spins from '$lib/components/Spins.svelte';
 </script>
 
 <svelte:head><link rel="icon" href="/logo192.png" /></svelte:head>
@@ -70,6 +72,8 @@
 	<!-- <Cart header={true} /> -->
 	<BottomMenu />
 	<FloatingChat />
+		<Stars />
+	<Spins />
 {:else}
 	{@render children()}
 {/if}
