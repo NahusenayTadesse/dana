@@ -23,7 +23,7 @@
 		</div>
 
 		<Carousel.Root
-			class="w-[70%] justify-self-center lg:w-full"
+			class="justify-self-center lg:w-full"
 			opts={{
 				align: 'center',
 				loop: true
@@ -51,3 +51,5 @@
 		</Carousel.Root>
 	</div>
 </section>
+
+

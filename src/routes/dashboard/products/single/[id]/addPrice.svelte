@@ -46,6 +46,16 @@
 				placeholder="Enter Product Variation"
 				required
 			/>
+
+			<InputComp
+				{form}
+				{errors}
+				type="file"
+				name="image"
+				label="Variant Image"
+				placeholder="Upload Variant Image"
+				
+			/>
 			<Button type="submit" size="lg">
 				{#if $delayed}
 					<LoadingBtn name="Saving Price" />

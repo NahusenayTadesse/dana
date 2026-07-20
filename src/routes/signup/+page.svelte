@@ -10,6 +10,6 @@
 	<title>Signup</title>
 </svelte:head>
 
-<div class="flex h-screen w-full items-center justify-center px-4">
+<div class="flex my-4 w-full items-center justify-center px-4">
 	<Signup data={data?.form} action="?/signup" />
 </div>

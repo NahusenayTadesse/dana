@@ -1,10 +1,10 @@
     {
-    "name": "dana Electronics",
-    "short_name": "dana Electronics",
+    "name": "Dana Steel",
+    "short_name": "Dana Steel",
     "start_url": "/dash/",
     "display": "standalone",
     "background_color": "#ffffff",
-    "theme_color": "#00b4ed",
+    "theme_color": "#1B3A8C",
     "orientation": "portrait-primary",
     "icons": [
         {

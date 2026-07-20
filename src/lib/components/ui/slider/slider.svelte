@@ -31,7 +31,7 @@ get along, so we shut typescript up by casting `value` to `never`.
 			data-slot="slider-track"
 			data-orientation={orientation}
 			class={cn(
-				"bg-input/50 data-horizontal:h-0.5 data-horizontal:w-full data-vertical:h-full data-vertical:w-0.5 bg-muted relative grow overflow-hidden data-horizontal:w-full data-vertical:h-full"
+				"bg-muted rounded-full data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1 bg-muted relative grow overflow-hidden data-horizontal:w-full data-vertical:h-full"
 			)}
 		>
 			<SliderPrimitive.Range
@@ -45,7 +45,7 @@ get along, so we shut typescript up by casting `value` to `never`.
 			<SliderPrimitive.Thumb
 				data-slot="slider-thumb"
 				index={thumb.index}
-				class="bg-primary hover:ring-ring/30 focus-visible:ring-ring/30 size-3 border-none transition-colors hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"
+				class="border-ring ring-ring/50 relative size-3 rounded-full border bg-white transition-[color,box-shadow] after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"
 			/>
 		{/each}
 	{/snippet}

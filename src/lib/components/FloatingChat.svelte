@@ -222,7 +222,7 @@
 	<Button
 		type="button"
 		size="lg"
-		class="h-14 w-14 rounded-full shadow-2xl"
+		class="py-8 px-4 rounded-2xl shadow-2xl"
 		aria-label={open ? m.floating_chat_close_chat() : m.floating_chat_open_chat()}
 		onclick={() => (open = !open)}
 	>
@@ -230,6 +230,9 @@
 			<X class="h-8! w-8!" />
 		{:else}
 			<BotMessageSquare class="h-8! w-8!" />
+			{m.floating_ask_chat()}
 		{/if}
+		
+
 	</Button>
 </div>

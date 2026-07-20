@@ -23,7 +23,7 @@
 	aria-disabled={!emblaCtx.canScrollNext}
 	disabled={!emblaCtx.canScrollNext}
 	class={cn(
-		"cn-carousel-next absolute touch-manipulation",
+		"rounded-full absolute touch-manipulation",
 		emblaCtx.orientation === "horizontal"
 			? "inset-y-0 -end-12 my-auto"
 			: "start-1/2 -bottom-12 -translate-x-1/2 rotate-90",

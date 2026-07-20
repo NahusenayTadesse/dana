@@ -123,7 +123,8 @@ export const prices = mysqlTable('prices', {
 	id: int('id').primaryKey().autoincrement(),
 	productId: int('product_id').references(() => products.id, { onDelete: 'cascade' }),
 	price: decimal('price', { precision: 10, scale: 2 }).notNull(),
-	amount: varchar('variant', { length: 255 }).notNull()
+	amount: varchar('variant', { length: 255 }).notNull(),
+	imageUrl: varchar('image_url', { length: 255 })	
 });
 
 export const productImages = mysqlTable('product_images', {
@@ -139,6 +140,8 @@ export const customers = mysqlTable('customers', {
 	name: varchar('name', { length: 100 }).notNull(),
 	email: varchar('email', { length: 100 }).notNull().unique(),
 	phone: varchar('phone', { length: 20 }),
+	tinNo: varchar('tin_no', { length: 10 }),
+	docs: varchar('docs', { length: 255 }),
 	userId: varchar('user_id', { length: 255 })
 		.notNull()
 		.references(() => user.id),
@@ -241,7 +244,6 @@ export const quoteRequests = mysqlTable('quote_requests', {
 	),
 	orderId: int('order_id').references(() => orders.id, { onDelete: 'set null' }), // set once quote converts into a real order
 	seen: boolean('seen').default(false),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
 	...secureFields
 });
 

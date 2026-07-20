@@ -12,7 +12,7 @@ import {
 	prices as priceList,
 	transactions
 } from '$lib/server/db/schema';
-import { eq, and, sql, isNotNull, desc } from 'drizzle-orm';
+import { eq, sql, } from 'drizzle-orm';
 import { fail, message } from 'sveltekit-superforms';
 import { setFlash } from 'sveltekit-flash-message/server';
 
@@ -244,10 +244,26 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: 'Invalid form data' });
 		}
 
-		const { id, price, amount } = form.data;
+		const { id, price, amount, image } = form.data;
 
 		try {
+			if(image) {
+			const imageUrl = await saveUploadedFile(image);
+
+
 			await db
+				.update(priceList)
+				.set({
+					id,
+					price: String(price),
+					amount,
+					imageUrl
+				})
+				.where(eq(priceList.id, id));
+
+
+			} else {
+				 	await db
 				.update(priceList)
 				.set({
 					id,
@@ -255,6 +271,7 @@ export const actions: Actions = {
 					amount
 				})
 				.where(eq(priceList.id, id));
+			}
 
 			return message(form, { type: 'success', text: 'Product Price updated Successfully!' });
 		} catch (err) {
@@ -270,13 +287,15 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: 'Invalid form data' });
 		}
 
-		const { price, amount } = form.data;
+		const { price, amount, image } = form.data;
 
 		try {
+			 const imageUrl = image ? await saveUploadedFile(image): null;
 			await db.insert(priceList).values({
 				productId: Number(id),
 				price: String(price),
-				amount
+				amount,
+				imageUrl
 			});
 
 			return message(form, { type: 'success', text: 'Product Price added Successfully!' });

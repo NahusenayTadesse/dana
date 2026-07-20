@@ -84,14 +84,17 @@ export type EditGallery = z.infer<typeof editGallery>;
 export const editPrice = z.object({
 	id: z.number('Price Not found'),
 	price: z.coerce.number('Price must be a number'),
-	amount: z.string('Product Variation is required')
+	amount: z.string('Product Variation is required'),
+	image: z.file().max(10000000).optional()
 });
 
 export type EditPrice = z.infer<typeof editPrice>;
 
 export const addPrice = z.object({
 	price: z.coerce.number('Price must be a number'),
-	amount: z.string('Product Variation is required')
+	amount: z.string('Product Variation is required'),
+		image: z.file().max(10000000).optional()
+
 });
 
 export type AddPrice = z.infer<typeof addPrice>;

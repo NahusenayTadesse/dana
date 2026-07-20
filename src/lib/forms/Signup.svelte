@@ -45,7 +45,7 @@
 		<Card.Description>{m.signup_description()}</Card.Description>
 	</Card.Header>
 	<Card.Content>
-		<form method="POST" id="main" class="space-y-4" {action} use:enhance>
+		<form method="POST" id="main" class="space-y-4" {action} enctype="multipart/form-data" use:enhance>
 			<Errors allErrors={$allErrors} />
 
 			<div class="grid gap-4">
@@ -74,6 +74,29 @@
 				{errors}
 				placeholder={m.signup_phone_placeholder()}
 			/>
+			
+			   
+		<InputComp
+									label={m.checkout_tin_label()}
+									name="tinNo"
+									type="number"
+	
+									{form}
+									{errors}
+									placeholder={m.checkout_tin_placeholder()}
+						
+								/>
+
+									<InputComp
+									label={m.checkout_docs_label()}
+									name="docs"
+									type="file"
+									{form}
+									{errors}
+									placeholder={m.checkout_docs_placeholder()}
+									required
+								/>
+							
 			<div class="grid gap-2">
 				<div class="flex items-center">
 					<Label for="password">{m.signup_password_label()}</Label>

@@ -25,31 +25,31 @@
 	const socialLinks = [
 		{
 			name: m.contact_social_phone,
-			url: 'tel:0933111111',
+			url: 'tel:0901020304',
 			icon: Phone,
 			color: 'hover:text-pink-500 hover:border-pink-500/30'
 		},
 		{
 			name: m.contact_social_instagram,
-			url: 'https://www.instagram.com/dana_electronics/',
+			url: 'https://www.instagram.com/dana_steel/',
 			icon: IconBrandInstagram,
 			color: 'hover:text-pink-500 hover:border-pink-500/30'
 		},
 		{
 			name: m.contact_social_tiktok,
-			url: 'https://www.tiktok.com/@danaelectronics',
+			url: 'https://www.tiktok.com/@danasteel',
 			icon: IconBrandTiktok,
 			color: 'hover:text-foreground hover:border-foreground/30'
 		},
 		{
 			name: m.contact_social_facebook,
-			url: 'https://web.facebook.com/danaflash0933111111?_rdc=1&_rdr#',
+			url: 'https://web.facebook.com/danaflash0901020304?_rdc=1&_rdr#',
 			icon: IconBrandFacebook,
 			color: 'hover:text-blue-600 hover:border-blue-600/30'
 		},
 		{
 			name: m.contact_social_telegram,
-			url: 'https://t.me/danaelct',
+			url: 'https://t.me/danasteel',
 			icon: Send,
 			color: 'hover:text-red-600 hover:border-red-600/30'
 		}
@@ -60,15 +60,15 @@
 			key: 'email',
 			icon: MailIcon,
 			label: m.contact_email_support_label,
-			value: 'support@dana.com',
-			href: 'mailto:support@dana.com'
+			value: 'support@dsfet.com',
+			href: 'mailto:support@dsfet.com'
 		},
 		{
 			key: 'phone',
 			icon: PhoneIcon,
 			label: m.contact_direct_call_whatsapp_label,
-			value: '+251 9 33 11 11 11',
-			href: 'https://wa.me/+251933111111'
+			value: '+251 9 01 02 03 04',
+			href: 'https://wa.me/+251901020304'
 		}
 	];
 

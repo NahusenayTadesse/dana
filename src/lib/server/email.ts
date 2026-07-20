@@ -21,6 +21,14 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
 	});
 };
 
+// --- Brand constants ---
+const BRAND_NAME = 'Dana Steel';
+const BRAND_URL = 'http://dsfet.com/';
+const BRAND_LOGO = 'http://dsfet.com/logo192.png';
+const BRAND_PRIMARY = '#3C74FF';
+const BRAND_PRIMARY_DARK = '#1B3A8C';
+const BRAND_HEADER_BG = `linear-gradient(135deg, ${BRAND_PRIMARY} 0%, ${BRAND_PRIMARY_DARK} 100%)`;
+
 const generateOrderTable = (items) => {
 	const rows = items
 		.map((item) => {
@@ -57,7 +65,7 @@ const generateOrderTable = (items) => {
 	return `
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif;">
             <thead>
-                <tr style="background-color: #2596be; color: white;">
+                <tr style="background: ${BRAND_HEADER_BG}; color: white;">
                     <th style="padding: 10px; text-align: left;">Item</th>
                     <th style="padding: 10px; text-align: center;">Qty</th>
                     <th style="padding: 10px; text-align: right;">Price</th>
@@ -70,23 +78,71 @@ const generateOrderTable = (items) => {
     `;
 };
 
+// Quote items don't carry a confirmed price the way order items do, so this
+// table is deliberately labeled "Est. Price" and never sums to a hard total.
+const generateQuoteTable = (items) => {
+	const rows = items
+		.map((item) => {
+			let variation = '';
+			let price = 0;
+
+			if (typeof item.price === 'number') {
+				price = item.price;
+				variation = item.amount;
+			} else if (typeof item.amount === 'string') {
+				const parts = item.amount.split(' ');
+				price = Number(parts[0]) || 0;
+				variation = parts.slice(1).join(' ') || '';
+			}
+
+			return `
+                 <tr style="border-bottom: 1px solid #eee;">
+                     <td style="padding: 10px; text-align: left;">
+                         Product #${item.product} ${variation ? `(${variation})` : ''}
+                     </td>
+                     <td style="padding: 10px; text-align: center;">
+                         ${item.quantity}
+                     </td>
+                     <td style="padding: 10px; text-align: right;">
+                         ${price ? `${price} ETB` : '—'}
+                     </td>
+                 </tr>
+             `;
+		})
+		.join('');
+	return `
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif;">
+            <thead>
+                <tr style="background: ${BRAND_HEADER_BG}; color: white;">
+                    <th style="padding: 10px; text-align: left;">Item</th>
+                    <th style="padding: 10px; text-align: center;">Qty</th>
+                    <th style="padding: 10px; text-align: right;">Est. Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>
+    `;
+};
+
 export const customerCheckoutTemplate = (orderId, items, total) => ({
-	subject: `Order Confirmed - dana Electronics (#${orderId})`,
+	subject: `Order Confirmed - ${BRAND_NAME} (#${orderId})`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
-            <div style="background-color: #2596be; padding: 20px; text-align: center;">
-                <img src="https://danaelectronics.com/logo192.png" alt="dana Electronics Logo" width="80" style="display: block; margin: 0 auto 10px;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
                 <h1 style="color: white; margin: 0; font-size: 20px;">Order Confirmed!</h1>
             </div>
             <div style="padding: 20px; color: #333;">
-                <p>We've received your order <strong>#${orderId}</strong>. Our team is now processing your technology products with care.</p>
+                <p>We've received your order <strong>#${orderId}</strong>. Our team is now processing your order with care.</p>
                 ${generateOrderTable(items)}
                 <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
                     Total: ${total} ETB
                 </div>
             </div>
             <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
-                dana Electronics | Technology you can trust.
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
             </div>
         </div>
     `
@@ -96,31 +152,80 @@ export const adminCheckoutTemplate = (orderId, items, total) => ({
 	subject: `New Order Alert: #${orderId}`,
 	html: `
         <div style="font-family: sans-serif; color: #333;">
-            <h2 style="color: #2596be;">New Order Received</h2>
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">New Order Received</h2>
             <p>A new order has been placed on the website. <strong>Order ID: #${orderId}</strong></p>
             ${generateOrderTable(items)}
             <p style="font-size: 18px;"><strong>Total Revenue: ${total} ETB</strong></p>
-            <a href="https://danaelectronics.com/dashboard/orders"
-               style="background: #2596be; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
                View in Dashboard
             </a>
         </div>
     `
 });
 
+// --- Quote request templates ---
+
+export const customerQuoteTemplate = (quoteIds: number[], items) => {
+	const idLabel = quoteIds.length > 1 ? quoteIds.map((id) => `#${id}`).join(', ') : `#${quoteIds[0]}`;
+	return {
+		subject: `Quote Request Received - ${BRAND_NAME} (${idLabel})`,
+		html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Quote Request Received</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>Thanks for reaching out to <strong>${BRAND_NAME}</strong>. We've received your quote request <strong>${idLabel}</strong> for the items below.</p>
+                ${generateQuoteTable(items)}
+                <p style="margin-top: 20px;">
+                    Our sales team will review your request and follow up shortly with confirmed pricing and availability.
+                </p>
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+	};
+};
+
+export const adminQuoteTemplate = (quoteIds: number[], items) => {
+	const idLabel = quoteIds.length > 1 ? quoteIds.map((id) => `#${id}`).join(', ') : `#${quoteIds[0]}`;
+	return {
+		subject: `New Quote Request: ${idLabel}`,
+		html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">New Quote Request Received</h2>
+            <p>A new quote request has been submitted on the website. <strong>Request ID(s): ${idLabel}</strong></p>
+            ${generateQuoteTable(items)}
+            <a href="${BRAND_URL}dashboard/quotes"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px;">
+               View in Dashboard
+            </a>
+        </div>
+    `
+	};
+};
+
 export const customerWelcomeTemplate = (name: string) => ({
-	subject: `Welcome to dana Electronics, ${name}! 🎉`,
+	subject: `Welcome to ${BRAND_NAME}, ${name}! 🎉`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
 
             <!-- Header -->
-            <div style="background-color: #2596be; padding: 20px; text-align: center;">
-                <img src="https://danaelectronics.com/logo192.png"
-                     alt="dana Electronics Logo"
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}"
+                     alt="${BRAND_NAME} Logo"
                      width="80"
                      style="display: block; margin: 0 auto 10px;">
                 <h1 style="color: white; margin: 0; font-size: 20px;">
-                    Welcome to dana Electronics!
+                    Welcome to ${BRAND_NAME}!
                 </h1>
             </div>
 
@@ -129,17 +234,17 @@ export const customerWelcomeTemplate = (name: string) => ({
                 <p>Hi <strong>${name}</strong>,</p>
 
                 <p>
-                    We're excited to have you join <strong>dana Electronics</strong> 🔌.
-                    You're now part of a community that values reliable, innovative, and high-quality technology products.
+                    We're excited to have you join <strong>${BRAND_NAME}</strong>.
+                    You're now part of a community that values reliable, high-quality steel products.
                 </p>
 
                 <p>
-                    You can now explore mobile accessories, power solutions, storage devices, audio products, and smart electronics designed for everyday performance.
+                    You can now explore our full range of products designed for performance and durability.
                 </p>
 
                 <div style="text-align: center; margin: 25px 0;">
-                    <a href="https://danaelectronics.com"
-                       style="background: #2596be; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                    <a href="${BRAND_URL}"
+                       style="background: ${BRAND_HEADER_BG}; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
                         Start Shopping
                     </a>
                 </div>
@@ -150,13 +255,13 @@ export const customerWelcomeTemplate = (name: string) => ({
 
                 <p style="margin-top: 20px;">
                     Warm regards,<br/>
-                    <strong>dana Electronics Team</strong>
+                    <strong>${BRAND_NAME} Team</strong>
                 </p>
             </div>
 
             <!-- Footer -->
             <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
-                dana Electronics | Technology you can trust.
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
             </div>
         </div>
     `
@@ -168,9 +273,9 @@ export const customerDeliveredTemplate = (orderId, items, total) => ({
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
 
             <!-- Header -->
-            <div style="background-color: #2596be; padding: 20px; text-align: center;">
-                <img src="https://danaelectronics.com/logo192.png"
-                     alt="dana Electronics Logo"
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}"
+                     alt="${BRAND_NAME} Logo"
                      width="80"
                      style="display: block; margin: 0 auto 10px;">
                 <h1 style="color: white; margin: 0; font-size: 20px;">
@@ -182,7 +287,7 @@ export const customerDeliveredTemplate = (orderId, items, total) => ({
             <div style="padding: 20px; color: #333;">
                 <p>Your order <strong>#${orderId}</strong> has been successfully delivered.</p>
 
-                <p>We hope your new technology products keep you connected, productive, and powered wherever you go! 😊</p>
+                <p>We hope your new products serve you well! 😊</p>
 
                 ${generateOrderTable(items)}
 
@@ -191,13 +296,13 @@ export const customerDeliveredTemplate = (orderId, items, total) => ({
                 </div>
 
                 <p style="margin-top: 20px;">
-                    Thank you for choosing <strong>dana Electronics</strong>. We look forward to serving you again!
+                    Thank you for choosing <strong>${BRAND_NAME}</strong>. We look forward to serving you again!
                 </p>
             </div>
 
             <!-- Footer -->
             <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
-                dana Electronics | Technology you can trust.
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
             </div>
         </div>
     `
@@ -207,7 +312,7 @@ export const adminDeliveredTemplate = (orderId, items, total) => ({
 	subject: `Order Delivered: #${orderId}`,
 	html: `
         <div style="font-family: sans-serif; color: #333;">
-            <h2 style="color: #2596be;">Order Marked as Delivered</h2>
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Order Marked as Delivered</h2>
 
             <p>
                 The following order has been successfully delivered.
@@ -220,8 +325,8 @@ export const adminDeliveredTemplate = (orderId, items, total) => ({
                 <strong>Total Value: ${total} ETB</strong>
             </p>
 
-            <a href="https://danaelectronics.com/dashboard/orders"
-               style="background: #2596be; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
                View in Dashboard
             </a>
         </div>
@@ -240,7 +345,7 @@ export const adminContactTemplate = (data: {
         <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee;">
 
             <!-- Header -->
-            <div style="background-color: #2596be; padding: 20px; text-align: center;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
                 <h2 style="color: white; margin: 0;">New Contact Message</h2>
             </div>
 
@@ -260,7 +365,7 @@ export const adminContactTemplate = (data: {
 
                 <div style="margin-top: 20px;">
                     <a href="mailto:${data.email}"
-                       style="background: #2596be; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                       style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
                         Reply to Customer
                     </a>
                 </div>
@@ -268,21 +373,21 @@ export const adminContactTemplate = (data: {
 
             <!-- Footer -->
             <div style="background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;">
-                dana Electronics - Contact Form Notification
+                ${BRAND_NAME} - Contact Form Notification
             </div>
         </div>
     `
 });
 
 export const customerContactTemplate = (name: string, subject: string) => ({
-	subject: `We received your message - dana Electronics`,
+	subject: `We received your message - ${BRAND_NAME}`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
 
             <!-- Header -->
-            <div style="background-color: #2596be; padding: 20px; text-align: center;">
-                <img src="https://danaelectronics.com/logo192.png"
-                     alt="dana Electronics Logo"
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}"
+                     alt="${BRAND_NAME} Logo"
                      width="80"
                      style="display: block; margin: 0 auto 10px;">
                 <h1 style="color: white; margin: 0; font-size: 20px;">
@@ -295,7 +400,7 @@ export const customerContactTemplate = (name: string, subject: string) => ({
                 <p>Hi <strong>${name}</strong>,</p>
 
                 <p>
-                    Thank you for reaching out to <strong>dana Electronics</strong>.
+                    Thank you for reaching out to <strong>${BRAND_NAME}</strong>.
                     We've received your message regarding:
                 </p>
 
@@ -308,18 +413,14 @@ export const customerContactTemplate = (name: string, subject: string) => ({
                 </p>
 
                 <p style="margin-top: 20px;">
-                    If your request is urgent, feel free to contact us directly at <strong>+251 933 111 111</strong> or <strong>info@danaelectronics.com</strong>.
-                </p>
-
-                <p style="margin-top: 20px;">
                     Best regards,<br/>
-                    <strong>dana Electronics Team</strong>
+                    <strong>${BRAND_NAME} Team</strong>
                 </p>
             </div>
 
             <!-- Footer -->
             <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
-                dana Electronics | Technology you can trust.
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
             </div>
         </div>
     `
@@ -361,13 +462,13 @@ export async function sendResetPasswordEmail(toEmail: string, newPassword: strin
 }
 
 export const customerResetPasswordTemplate = (url: string) => ({
-	subject: `Reset Your Password - dana Electronics`,
+	subject: `Reset Your Password - ${BRAND_NAME}`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
             <!-- Header -->
-            <div style="background-color: #2596be; padding: 20px; text-align: center;">
-                <img src="https://danaelectronics.com/logo192.png"
-                     alt="dana Electronics Logo"
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}"
+                     alt="${BRAND_NAME} Logo"
                      width="80"
                      style="display: block; margin: 0 auto 10px;">
                 <h1 style="color: white; margin: 0; font-size: 20px;">
@@ -381,7 +482,7 @@ export const customerResetPasswordTemplate = (url: string) => ({
 
                 <p>
                     We received a request to reset the password for your
-                    <strong>dana Electronics</strong> account.
+                    <strong>${BRAND_NAME}</strong> account.
                 </p>
 
                 <p>
@@ -390,7 +491,7 @@ export const customerResetPasswordTemplate = (url: string) => ({
 
                 <div style="text-align: center; margin: 25px 0;">
                     <a href="${url}"
-                       style="background: #2596be; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                       style="background: ${BRAND_HEADER_BG}; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
                         Reset Password
                     </a>
                 </div>
@@ -399,7 +500,7 @@ export const customerResetPasswordTemplate = (url: string) => ({
                     If the button does not work, copy and paste this link into your browser:
                 </p>
 
-                <p style="word-break: break-all; color: #2596be;">
+                <p style="word-break: break-all; color: ${BRAND_PRIMARY};">
                     ${url}
                 </p>
 
@@ -410,13 +511,13 @@ export const customerResetPasswordTemplate = (url: string) => ({
 
                 <p style="margin-top: 20px;">
                     Best regards,<br/>
-                    <strong>dana Electronics Team</strong>
+                    <strong>${BRAND_NAME} Team</strong>
                 </p>
             </div>
 
             <!-- Footer -->
             <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
-                dana Electronics | Technology You Can Trust.
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
             </div>
         </div>
     `

@@ -8,7 +8,10 @@
 		InfoIcon,
 		ContactIcon,
 		LogInIcon,
-		UserPlusIcon
+		UserPlusIcon,
+
+		Search
+
 	} from '@lucide/svelte';
 	import DarkMode from './DarkMode.svelte';
 	import AvatarSettings from './AvatarSettings.svelte';
@@ -21,6 +24,7 @@
 	import Cart from '$lib/components/floating-cart/cart.svelte';
 	import LanguageSelector from './LanguageSelector.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
 
 	let { data } = $props();
 	let isOpen = $state(false);
@@ -38,6 +42,13 @@
 		{ label: m.header_nav_blog, href: '/blogs', icon: InfoIcon },
 		{ label: m.header_nav_contact_us, href: '/contact-us', icon: ContactIcon }
 	];
+	import { afterNavigate } from '$app/navigation';
+
+	let open = $state(false)
+
+	afterNavigate(() => {
+		open = false;
+	});
 
 	function executionDesktopSearch(e: KeyboardEvent) {
 		if (e.key === 'Enter') {
@@ -54,6 +65,9 @@
 			isOpen = false;
 		}
 	});
+	const on = 'text-primary shadow-lg shadow-primary/20 bg-primary/10';
+	const off = 'text-muted-foreground hover:text-foreground hover:bg-muted/50';
+
 </script>
 
 <header
@@ -63,7 +77,7 @@
 		<div class="flex shrink-0 items-center gap-6">
 			<a href="/" class="transition-transform duration-200 active:scale-95">
 				<img
-					src="/logo.webp"
+					src="/logo.png"
 					class="h-6 w-auto object-contain dark:brightness-110"
 					alt={m.header_logo_alt()}
 					fetchpriority="high"
@@ -86,7 +100,7 @@
 		</div>
 
 		<div class="flex flex-row items-center gap-4">
-			<div class="relative hidden max-w-xs sm:block md:w-48 lg:w-64">
+			<!-- <div class="relative hidden max-w-xs sm:block md:w-48 lg:w-64">
 				<SearchIcon
 					class="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground/60"
 				/>
@@ -97,7 +111,37 @@
 					onkeydown={executionDesktopSearch}
 					class="h-8.5 rounded-lg border-border bg-muted/40 pl-9 text-xs shadow-inner focus-visible:border-primary focus-visible:ring-primary/20"
 				/>
-			</div>
+			</div> -->
+			<Dialog.Root bind:open>
+			<Dialog.Trigger
+				class="group relative flex flex-row items-center gap-1 rounded-xl px-3 py-2 transition-all duration-300 ease-out hover:scale-110 active:scale-95"
+			>
+				<div
+					class="relative flex h-6 w-6 items-center justify-center transition-all duration-300 {on
+						? 'drop-shadow-lg'
+						: ''}"
+				>
+					<Search class="h-8 w-8" />
+				</div>
+
+				<!-- Label -->
+				</Dialog.Trigger
+			>
+			<Dialog.Content class="pt-8">
+				<div class="relative mt-4 max-w-xs">
+					<Search
+						class="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground/60"
+					/>
+					<Input
+						type="search"
+						placeholder={m.header_search_placeholder()}
+						bind:value={searchQuery}
+						onkeydown={executionDesktopSearch}
+						class="h-8.5 rounded-lg border-border bg-muted/40 pl-9 text-xs shadow-inner focus-visible:border-primary focus-visible:ring-primary/20"
+					/>
+				</div>
+			</Dialog.Content>
+		</Dialog.Root>
 
 			<div class="hidden flex-row items-center justify-end gap-2 lg:flex">
 				{#if data === '' || !data}

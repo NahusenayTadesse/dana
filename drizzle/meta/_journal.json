@@ -8,6 +8,13 @@
       "when": 1783880557863,
       "tag": "0000_jazzy_epoch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1784475849005,
+      "tag": "0001_orange_magdalene",
+      "breakpoints": true
     }
   ]
 }

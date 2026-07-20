@@ -27,10 +27,10 @@
 
 	import Header from '$lib/components/header.svelte';
 	import Footer from '$lib/components/footer.svelte';
-	import Cart from '$lib/components/floating-cart/cart.svelte';
 	import { setCart } from '$lib/hooks/cart.svelte'; // Adjust path
 	import BottomMenu from '$lib/components/bottomMenu.svelte';
 	import FloatingChat from '$lib/components/FloatingChat.svelte';
+	import Cursor from '$lib/cursor.svelte';
 
 	// This initializes the class and puts it into Svelte's context
 	let { data, children } = $props();
@@ -57,8 +57,9 @@
 	});
 </script>
 
-<svelte:head><link rel="icon" href="/favicon.png" /></svelte:head>
+<svelte:head><link rel="icon" href="/logo192.png" /></svelte:head>
 <ModeWatcher />
+<Cursor />
 <Toaster position="bottom-right" richColors closeButton />
 <ProgressBar color="#28b6f6" zIndex={1000} />
 

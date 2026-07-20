@@ -12,6 +12,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { APIError } from 'better-auth';
 import { roles, user, customers } from '$lib/server/db/schema';
+import { saveUploadedFile } from '$lib/server/upload';
 
 export const load: PageServerLoad = async (event) => {
 	if (event.locals.user) {
@@ -47,7 +48,7 @@ export const actions: Actions = {
 			);
 		}
 
-		const { name, email, password, phone } = form.data;
+		const { name, email, password, phone, tinNo, docs } = form.data;
 
 		try {
 			await db.transaction(async (tx) => {
@@ -65,7 +66,9 @@ export const actions: Actions = {
 						roleId: 2
 					})
 					.where(eq(user.id, newCustomer?.user.id));
-				await tx.insert(customers).values({ email, name, phone, userId: newCustomer?.user.id });
+					const imageUrl = docs ? await saveUploadedFile(docs): null;
+					
+				await tx.insert(customers).values({ email, name, phone, userId: newCustomer?.user.id, tinNo, docs: imageUrl });
 			});
 			// const { subject, html } = customerWelcomeTemplate(name);
 

@@ -5,7 +5,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import {
 		ShoppingCartIcon,
-		CreditCardIcon,
+		SendIcon,
 		PackageIcon,
 		ArrowLeftIcon,
 		UserRoundPlusIcon,
@@ -37,12 +37,9 @@
 		dataType: 'json',
 		resetForm: true,
 		onResult: ({ result }) => {
-			if (result.type === 'success' || result.type === 'redirect') {
-				cart.clearCart();
-			}
-
 			if (result.type === 'success') {
-				toast.success(m.checkout_transaction_success());
+				cart.clearCart();
+				toast.success(m.checkout_quote_success());
 			}
 		}
 	});
@@ -96,10 +93,10 @@
 				</div>
 				<div>
 					<h1 class="text-2xl font-extrabold tracking-tight sm:text-3xl">
-						{m.checkout_heading()}
+						{m.checkout_quote_heading()}
 					</h1>
 					<p class="text-sm text-muted-foreground">
-						{m.checkout_description()}
+						{m.checkout_quote_description()}
 					</p>
 				</div>
 			</div>
@@ -107,7 +104,7 @@
 				class="flex items-center gap-2 self-start rounded-xl border border-border/80 bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground sm:self-center"
 			>
 				<ShieldCheckIcon class="size-3.5 text-green-500" />
-				<span>{m.checkout_encrypted_gateway()}</span>
+				<span>{m.checkout_no_payment_note()}</span>
 			</div>
 		</div>
 
@@ -117,7 +114,7 @@
 					class="rounded-2xl border border-border/80 bg-card/40 p-6 shadow-xs backdrop-blur-md"
 				>
 					<div class="mb-6 flex items-center gap-2 border-b border-border/60 pb-4">
-						<CreditCardIcon class="size-4 text-primary" />
+						<SendIcon class="size-4 text-primary" />
 						<h2 class="text-lg font-bold tracking-tight">{m.checkout_customer_verification()}</h2>
 					</div>
 
@@ -173,7 +170,6 @@
 									{form}
 									{errors}
 									placeholder={m.checkout_email_placeholder()}
-									required
 								/>
 								<InputComp
 									label={m.checkout_phone_label()}
@@ -183,6 +179,24 @@
 									{errors}
 									placeholder={m.checkout_phone_placeholder()}
 									required
+								/>
+
+								<InputComp
+									label={m.checkout_tin_label()}
+									name="tinNo"
+									type="number"
+									{form}
+									{errors}
+									placeholder={m.checkout_tin_placeholder()}
+								/>
+
+								<InputComp
+									label={m.checkout_docs_label()}
+									name="docs"
+									type="file"
+									{form}
+									{errors}
+									placeholder={m.checkout_docs_placeholder()}
 								/>
 								<InputComp
 									label=""
@@ -200,29 +214,14 @@
 										class="h-12 w-full rounded-xl text-sm font-semibold tracking-wide shadow-md transition-all duration-300 active:scale-98"
 										disabled={cart.items.length === 0 || $delayed}
 									>
-										{#if $delayed && !$form.payWithChapa}
-											<LoadingBtn name={m.checkout_adding_order_loading()} />
+										{#if $delayed}
+											<LoadingBtn name={m.checkout_submitting_quote_loading()} />
 										{:else}
-											{m.checkout_add_order_with()} &mdash; {formatPrice(cart.totalPrice)}
+											{m.checkout_request_quote()}
 										{/if}
 									</Button>
-									<Button
-										type="submit"
-										form="main"
-										class="h-12 w-full rounded-xl text-sm font-semibold tracking-wide shadow-md transition-all duration-300 active:scale-98"
-										disabled={cart.items.length === 0 || $delayed}
-										onclick={() => ($form.payWithChapa = true)}
-									>
-										{#if $delayed && $form.payWithChapa}
-											<LoadingBtn name={m.checkout_redirecting_chapa_loading()} />
-										{:else}
-											{m.checkout_pay_with_chapa()} &mdash; {formatPrice(cart.totalPrice)}
-										{/if}
-									</Button>
-									<p class="prose-sm max-w-prose rounded-lg border bg-muted text-center text-sm">
-										{m.checkout_chapa_note_prefix()}
-										<a href="https://telebirr.et" target="_blank">Telebirr</a>
-										{m.checkout_chapa_note_suffix()}
+									<p class="prose-sm max-w-prose rounded-lg border bg-muted p-2 text-center text-xs">
+										{m.checkout_quote_followup_note()}
 									</p>
 								</div>
 							</form>
@@ -263,7 +262,7 @@
 								</div>
 								<div class="text-right">
 									<span class="block text-xs text-muted-foreground">
-										{m.checkout_allocation_total()}
+										{m.checkout_estimated_total()}
 									</span>
 									<span class="font-mono text-lg font-bold text-primary">
 										{formatPrice(cart.totalPrice)}
@@ -278,29 +277,14 @@
 									class="h-12 w-full rounded-xl text-sm font-semibold tracking-wide shadow-md transition-all duration-300 active:scale-98"
 									disabled={cart.items.length === 0 || $delayed}
 								>
-									{#if $delayed && !$form.payWithChapa}
-										<LoadingBtn name={m.checkout_adding_order_loading()} />
+									{#if $delayed}
+										<LoadingBtn name={m.checkout_submitting_quote_loading()} />
 									{:else}
-										{m.checkout_add_order_with()} &mdash; {formatPrice(cart.totalPrice)}
+										{m.checkout_request_quote()}
 									{/if}
 								</Button>
-								<Button
-									type="submit"
-									form="main"
-									class="h-12 w-full rounded-xl text-sm font-semibold tracking-wide shadow-md transition-all duration-300 active:scale-98"
-									disabled={cart.items.length === 0 || $delayed}
-									onclick={() => ($form.payWithChapa = true)}
-								>
-									{#if $delayed && $form.payWithChapa}
-										<LoadingBtn name={m.checkout_redirecting_chapa_loading()} />
-									{:else}
-										{m.checkout_pay_with_chapa()} &mdash; {formatPrice(cart.totalPrice)}
-									{/if}
-								</Button>
-								<p class="prose-sm max-w-prose rounded-lg border bg-muted text-center">
-									{m.checkout_chapa_note_prefix()}
-									<a href="https://telebirr.et" target="_blank">Telebirr</a>
-									{m.checkout_chapa_note_suffix()}
+								<p class="prose-sm max-w-prose rounded-lg border bg-muted p-2 text-center text-xs">
+									{m.checkout_quote_followup_note()}
 								</p>
 							</div>
 						</form>
@@ -341,20 +325,15 @@
 									<span class="text-muted-foreground">{m.checkout_subtotal_allocation()}</span>
 									<span class="font-mono font-medium">{formatPrice(cart.totalPrice)}</span>
 								</div>
-								<div class="flex justify-between text-xs sm:text-sm">
-									<span class="text-muted-foreground">{m.checkout_shipping_label()}</span>
-									<span
-										class="rounded-md border border-green-500/20 bg-green-500/10 px-2 py-0.5 font-sans text-xs font-bold tracking-wider text-green-500 uppercase"
-									>
-										{m.checkout_complimentary()}
-									</span>
-								</div>
 								<div
 									class="flex justify-between border-t border-border pt-4 text-base font-bold sm:text-lg"
 								>
-									<span class="tracking-tight">{m.checkout_gross_total_cost()}</span>
+									<span class="tracking-tight">{m.checkout_estimated_total()}</span>
 									<span class="font-mono text-primary">{formatPrice(cart.totalPrice)}</span>
 								</div>
+								<p class="text-[11px] text-muted-foreground">
+									{m.checkout_estimate_disclaimer()}
+								</p>
 							</div>
 						{:else}
 							<div class="py-12 text-center">

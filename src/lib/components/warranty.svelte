@@ -7,7 +7,10 @@
 		WrenchIcon,
 		RefreshCcwIcon,
 		Building2Icon,
-		ArrowRightIcon
+		ArrowRightIcon,
+
+		HelpCircleIcon
+
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 	import * as m from '$lib/paraglide/messages.js';
