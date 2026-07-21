@@ -4,12 +4,25 @@
   // Import your type-safe compiled Paraglide translation functions
   import * as m from '$lib/paraglide/messages.js';
 
-  // Svelte 5 runes for URLs
+  // Svelte 5 runes for URLs & Hero state
   let { 
     exploreUrl = "/shop", 
     quoteUrl = "/checkout", 
-    factoryUrl = "/about" 
+    factoryUrl = "/factory" 
   } = $props();
+
+  // Background gallery images with smooth transition
+  const heroBackgrounds = [
+    { src: "/images/manufacture top view.webp", label: "Manufacturing Hub" },
+    { src: "/images/manufacture.webp", label: "Production Floor" },
+    { src: "/images/front desk.webp", label: "Main Office" }
+  ];
+
+  let currentBgIndex = $state(0);
+
+  function setBackground(index: number) {
+    currentBgIndex = index;
+  }
 </script>
 
 <style>
@@ -45,21 +58,25 @@
   }
 </style>
 
-<section class="relative overflow-hidden border-b border-border bg-background min-h-[640px] flex flex-col justify-center">
+<section class="relative overflow-hidden border-b border-border bg-background min-h-[680px] flex flex-col justify-center">
   
-  <!-- Background Image with Filter / Positioning -->
-  <div 
-    class="absolute inset-0 bg-no-repeat saturate-[0.9] contrast-[1.02] transition-transform duration-1000 ease-out hover:scale-105"
-    style="background-image: url('assets/warehouse.jpg'); background-size: auto 145%; background-position: 32% center;"
-  ></div>
+  <!-- Dynamic Background Image with Smooth Crossfade -->
+  {#key currentBgIndex}
+    <div 
+      in:fade={{ duration: 800 }}
+      out:fade={{ duration: 400 }}
+      class="absolute inset-0 bg-no-repeat bg-cover bg-center saturate-[0.9] contrast-[1.02] transition-transform duration-1000 ease-out hover:scale-105"
+      style="background-image: url('{heroBackgrounds[currentBgIndex].src}');"
+    ></div>
+  {/key}
   
   <!-- Gradient Grids & Overlays -->
-  <div class="absolute inset-0 bg-gradient-to-r from-background/92 via-background/72 to-background/35 pointer-events-none"></div>
-  <div class="absolute inset-0 bg-gradient-to-b from-background/35 via-transparent to-background/90 pointer-events-none"></div>
+  <div class="absolute inset-0 bg-gradient-to-r from-background/95 via-background/80 to-background/40 pointer-events-none"></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-background/40 via-transparent to-background/95 pointer-events-none"></div>
   <div class="absolute inset-0 opacity-50 bg-[linear-gradient(rgba(60,116,255,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(60,116,255,0.07)_1px,transparent_1px)] bg-[size:52px_52px] animate-[pulse_22s_linear_infinite] pointer-events-none"></div>
 
   <!-- Main Container -->
-  <div class="relative max-w-[1320px] w-full mx-auto px-7 py-24 md:py-28 flex flex-col justify-center min-h-[640px]">
+  <div class="relative max-w-[1320px] w-full mx-auto px-7 py-24 md:py-28 flex flex-col justify-center min-h-[640px] z-10">
     
     <!-- Top Badge -->
     <div 
@@ -118,14 +135,32 @@
       </a>
     </div>
 
-    <!-- Drag Hint Footer -->
+    <!-- Background View Switcher Thumbnails -->
     <div 
+      in:fade={{ duration: 800, delay: 550 }}
+      class="mt-10 flex items-center gap-3"
+    >
+      <span class="text-xs font-mono text-muted-foreground uppercase tracking-widest mr-1 hidden sm:inline-block">View:</span>
+      {#each heroBackgrounds as bg, idx}
+        <button
+          type="button"
+          onclick={() => setBackground(idx)}
+          class="group relative h-12 w-20 overflow-hidden rounded-lg border transition-all duration-300 focus:outline-none {currentBgIndex === idx ? 'border-primary ring-2 ring-primary/40 scale-105' : 'border-border/40 opacity-70 hover:opacity-100'}"
+        >
+          <img src={bg.src} alt={bg.label} class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+          <div class="absolute inset-0 bg-black/20"></div>
+        </button>
+      {/each}
+    </div>
+
+    <!-- Drag Hint Footer -->
+    <!-- <div 
       in:fade={{ duration: 800, delay: 600 }}
-      class="mt-13 inline-flex items-center gap-2.5 text-muted-foreground font-mono text-[11.5px] tracking-widest uppercase"
+      class="mt-8 inline-flex items-center gap-2.5 text-muted-foreground font-mono text-[11.5px] tracking-widest uppercase"
     >
       <svg class="w-4.5 h-4.5 animate-[pulse_2s_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8 22 12l-4 4M6 8l-4 4 4 4M2 12h20"/></svg>
       {m.drag_hint()}
-    </div>
+    </div> -->
   </div>
 
   <!-- Floating Glass Stat Chips with Continuous Floating Animation -->
@@ -162,10 +197,19 @@
         </div>
       </div>
     </div>
+
+    <!-- Active Operations Live Image Chip -->
+    <div in:fly={{ x: 30, duration: 700, delay: 700, easing: cubicOut }}>
+      <div class="animate-float-1 overflow-hidden bg-card/55 backdrop-blur-xl border border-border/50 rounded-2xl p-2 min-w-[186px] shadow-2xl shadow-black/40 transition-all duration-300 hover:scale-105">
+        <img src="/images/working.webp" alt="Live operations" class="h-20 w-full rounded-xl object-cover" />
+        <p class="mt-2 text-center text-xs font-bold text-foreground">Facility Operations</p>
+      </div>
+    </div>
   </div>
 
   <!-- 360 Badge Bottom-Right -->
-  <div 
+  <a
+    href="/factory"
     in:fade={{ duration: 600, delay: 700 }}
     class="absolute bottom-6.5 right-7 z-10 flex items-center gap-2 bg-card/60 backdrop-blur-md border border-border/40 rounded-full py-2.5 pr-4 pl-3 transition-all duration-300 hover:scale-105 hover:bg-card/80"
   >
@@ -173,5 +217,5 @@
       <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
     </span>
     <span class="font-mono text-[11px] tracking-wider text-card-foreground">{m.live_badge()}</span>
-  </div>
+  </a>
 </section>

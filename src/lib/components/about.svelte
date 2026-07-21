@@ -4,20 +4,29 @@
 
   // Svelte 5 runes for passing dynamic stats or asset paths if desired
   let { 
-    imageSrc = "assets/factory-gate.jpg"
+    imageSrc = "/images/manufacture top view.webp"
   } = $props();
+
+  // Facility gallery images to cycle through
+  const heroGallery = [
+    { src: "/images/manufacture top view.webp", badgeSub: m.about_badge_sub() },
+    { src: "/images/manufacture.webp", badgeSub: "Production Facility" },
+    { src: "/images/front desk1.webp", badgeSub: "Main Reception" }
+  ];
+
+  let selectedImageIndex = $state(0);
 </script>
 
 <section class="max-w-[1320px] mx-auto px-7 py-26 md:py-28">
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
     
-    <!-- Image Column with Glass Overlay Badge -->
-    <div class="transition-all duration-700 ease-out">
-      <div class="relative rounded-2xl overflow-hidden border border-border shadow-2xl shadow-black/50">
+    <!-- Image Column with Interactive Gallery & Glass Overlay Badge -->
+    <div class="transition-all duration-700 ease-out space-y-4">
+      <div class="relative rounded-2xl overflow-hidden border border-border shadow-2xl shadow-black/50 group">
         <img 
-          src={imageSrc} 
+          src={heroGallery[selectedImageIndex]?.src ?? imageSrc} 
           alt={m.about_img_alt()} 
-          class="w-full h-[520px] object-cover"
+          class="w-full h-[520px] object-cover transition-all duration-500"
         />
         
         <!-- Factory Badge Overlay -->
@@ -26,9 +35,26 @@
             {m.about_badge_native()}
           </div>
           <div class="text-sm font-bold text-foreground mt-1">
-            {m.about_badge_sub()}
+            {heroGallery[selectedImageIndex]?.badgeSub}
           </div>
         </div>
+      </div>
+
+      <!-- Thumbnail Switcher Bar -->
+      <div class="flex items-center gap-3">
+        {#each heroGallery as item, index}
+          <button 
+            type="button"
+            onclick={() => (selectedImageIndex = index)}
+            class="relative h-16 w-24 overflow-hidden rounded-lg border transition-all duration-300 focus:outline-none {selectedImageIndex === index ? 'border-primary ring-2 ring-primary/30 scale-105' : 'border-border/50 opacity-60 hover:opacity-100'}"
+          >
+            <img 
+              src={item.src} 
+              alt="Facility preview" 
+              class="h-full w-full object-cover" 
+            />
+          </button>
+        {/each}
       </div>
     </div>
     
@@ -72,20 +98,43 @@
             <span class="w-2 h-2 bg-primary rounded-sm"></span>
             {m.mission_title()}
           </div>
-          <div class="text-sm text-muted-foregroundComplex leading-relaxed max-w-[34ch]">
+          <div class="text-sm text-muted-foreground leading-relaxed max-w-[34ch]">
             {m.mission_text()}
           </div>
         </div>
         
         <div>
           <div class="font-extrabold text-[15px] text-foreground mb-1.5 flex items-center gap-2">
-            <!-- Custom structural red indicator left from your legacy design -->
+            <!-- Custom structural red indicator left from legacy design -->
             <span class="w-2 h-2 bg-[#E5342A] rounded-sm"></span>
             {m.vision_title()}
           </div>
           <div class="text-sm text-muted-foreground leading-relaxed max-w-[34ch]">
             {m.vision_text()}
           </div>
+        </div>
+      </div>
+
+      <!-- Contextual Team & Operations Cards -->
+      <div class="mt-8.5 grid grid-cols-2 gap-4 pt-4 border-t border-border/40">
+        <div class="relative overflow-hidden rounded-xl border border-border/50 group h-28">
+          <img 
+            src="/images/working.webp" 
+            alt="Workplace operations" 
+            class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+          <span class="absolute bottom-2 left-3 text-xs font-semibold text-white">Daily Operations</span>
+        </div>
+
+        <div class="relative overflow-hidden rounded-xl border border-border/50 group h-28">
+          <img 
+            src="/images/client.webp" 
+            alt="Client Relations" 
+            class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+          <span class="absolute bottom-2 left-3 text-xs font-semibold text-white">Client Partnerships</span>
         </div>
       </div>
       

@@ -4,7 +4,7 @@ export const add = z.object({
 	name: z.string().optional(),
 	email: z.email().optional(),
 	phone: z.string().optional(), // quote_requests.phone is NOT NULL
-	tinNo: z.string().min(10).max(10).optional(),
+	tinNo: z.coerce.string().min(10).max(10).optional(),
 	docs: z.file().max(10000000).optional(), // not needed to request a quote — keep optional
 	selectedProducts: z
 		.object({

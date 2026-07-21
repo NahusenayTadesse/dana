@@ -730,5 +730,46 @@
 	"legal": "የደረጃዎች ተገዢነት",
 	"procurement": "የጥሬ ዕቃ ምደባ",
 	"brand": "የኢንዱስትሪ መሠረተ ልማት",
-	"cta": "የምርት መስመሮቻችንን ያስሱ"
+	"cta": "የምርት መስመሮቻችንን ያስሱ",
+
+
+	  "lang_english": "እንግሊዝኛ",
+  "lang_amharic": "አማርኛ",
+
+
+	  "breadcrumb_home": "መነሻ",
+  "breadcrumb_factory": "ፋብሪካ",
+  "hero_eyebrow": "የፋብሪካ ጉብኝት",
+  "hero_desc": "ተቋማችንን በ360° ይቃኙ። ዙሪያውን ለማየት ይጎትቱ፣ እያንዳንዱ የብረት ጥቅል እንዴት ተጠናቆ ወደ ቀለም የተቀባ ሉህ እንደሚለወጥ ለማየት የሚያበሩትን ነጥቦች ይንኩ።",
+  "pano_cursor": "ይጎትቱ",
+  "pano_control": "ለማሰስ ይጎትቱ",
+  "hotspot_station": "ጣቢያ 02",
+  "hotspot_title": "የመቅረጫ መስመር",
+  "hotspot_desc": "ጠፍጣፋ ጥቅልን ወደ ቆርቆሮና የጣሪያ ንጣፍ ቅርጾች ይቀርጻል።",
+  "process_heading": "የማምረት ሂደት",
+
+  "gallery_eyebrow": "ማሽነሪና ተቋም",
+  "gallery_heading": "ለብዛትና ለትክክለኛነት የተገነባ",
+  "machine_1_title": "የመቅረጫ ማሽን",
+  "machine_1_sub": "ስድስት-ቅርጽ አውቶማቲክ መስመር",
+  "machine_2_title": "የሽፋን መስመር",
+  "machine_2_sub": "ተከታታይ የቀለም ሽፋን ሂደት",
+  "machine_3_title": "የመሰንጠቂያ ጣቢያ",
+  "machine_3_sub": "ትክክለኛ የስፋት መቁረጥ",
+  "machine_4_title": "የጥቅል ማከማቻ",
+  "machine_4_sub": "የአየር ንብረት ቁጥጥር ማከማቻ",
+  "machine_5_title": "የመጫኛ ስፍራ",
+  "machine_5_sub": "በዕለቱ ማድረስ",
+  "qc_eyebrow": "የጥራት ቁጥጥር",
+  "qc_heading": "እያንዳንዱ ጥቅል ከመላኩ በፊት ይመረመራል",
+  "qc_desc": "የሽፋን ውፍረት፣ የቀለም ወጥነት፣ የመሠረት-ብረት ውፍረትና የቅርጽ ልኬት በእያንዳንዱ ደረጃ ከመስፈርቱ ጋር ይመሳከራሉ። በISO 9001 የተረጋገጠ በመሆኑ ከበራችን የሚወጣው በትክክል እርስዎ ያዘዙት ነው።",
+  "stat_inspection_value": "100%",
+  "stat_inspection_label": "የጥቅል ምርመራ",
+  "stat_gauge_value": "±2%",
+  "stat_gauge_label": "የውፍረት ልዩነት",
+  "stat_warranty_value": "10 ዓመት",
+  "stat_warranty_label": "የሽፋን ዋስትና",
+  "stat_iso_value": "ISO",
+  "stat_iso_label": "9001 የተረጋገጠ"
+
 }
