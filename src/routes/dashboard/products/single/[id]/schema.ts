@@ -1,20 +1,22 @@
 import { z } from 'zod/v4';
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 5MB limit
-const ACCEPTED_FILE_TYPES = [
-	'image/jpeg', // Common for both platforms
-	'image/png', // Common for both platforms (and screenshots)
-	'image/webp', // Common modern format (often Android screenshots/exports)
-	'image/heic', // High Efficiency Image File (iOS default)
-	'image/heif', // High Efficiency Image File (related to HEIC)
-	'application/pdf' // Document format, kept from original
-];
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ACCEPTED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/avif'];
+
+const imageFile = z
+	.instanceof(File)
+	.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
+	.refine((file) => ACCEPTED_FILE_TYPES.includes(file.type), 'Invalid file type.');
 
 export const edit = z.object({
 	productName: z.string().min(1, { message: 'Product Name is required.' }),
 	brand: z.string().min(1, { message: 'Brand is required.' }),
 	category: z.number('Category cannot be empty. Please select a Category').array(),
 	tag: z.number('Tag cannot be empty. Please select a Tag').array().optional(),
-
+	commission: z.coerce
+		.number()
+		.nonnegative({ message: 'Commission must be zero or more.' })
+		.default(0),
 	description: z
 		.string()
 		.max(500, { message: "Product description can't be more than 500 characters." })
@@ -22,21 +24,15 @@ export const edit = z.object({
 	quantity: z.coerce
 		.number()
 		.int({ message: 'Quantity can only be full numbers, no decimals.' })
-		.positive({ message: 'Quantity must be a positive number.' })
+		.nonnegative({ message: 'Quantity cannot be negative.' })
 		.default(0),
-
 	supplier: z.coerce.number('Supplier is required'),
 	reorderLevel: z.coerce
 		.number()
 		.int({ message: 'Reorder Level can only be full numbers, no decimals.' })
-		.positive({ message: 'Reorder Level must be a positive number.' })
+		.nonnegative({ message: 'Reorder Level cannot be negative.' })
 		.default(0),
-
-	image: z
-		.instanceof(File)
-		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
-		.refine((file) => ACCEPTED_FILE_TYPES.includes(file.type), 'Invalid file type.')
-		.optional()
+	image: imageFile.optional()
 });
 
 export const adjust = z.object({

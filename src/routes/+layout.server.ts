@@ -42,7 +42,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			brand: products.brand,
 			productName: products.name,
 			price: sql<number>`min(${prices.price})`,
-			amount: sql<number>`min(${prices.amount})`,
+			amount: sql<number>`min(${prices.variant})`,
 			image: products.featuredImage,
 			category: productCategories.name
 		})
@@ -74,12 +74,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	}));
 
 	const testimonialList = await db
-		.select({
-			name: testimonials.name,
-			position: testimonials.position,
-			testimonial: testimonials.message,
-			avatar: testimonials.avatar
-		})
+		.select()
 		.from(testimonials);
 
 	const blogItems = await db

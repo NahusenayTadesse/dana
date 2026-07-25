@@ -52,7 +52,7 @@
     {@html `<script type="application/ld+json">${JSON.stringify(jsonLd)}<\/script>`}
 </svelte:head>
 
-<div class="min-h-screen w-full bg-[#0B0E13] pb-16 antialiased selection:bg-primary/20">
+<div class="min-h-screen w-full pb-16 antialiased">
     <!-- Main Detailed Product Container Layout Component -->
     <section>
         <ProductDetail
@@ -64,7 +64,7 @@
     </section>
 
     <!-- Fallback Additional Gallery Display Base Structure -->
-    {#if data?.images && data.images.length > 0}
+    <!-- {#if data?.images && data.images.length > 0}
         <div class="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <div class="mb-8 flex items-end justify-between border-b border-white/10 pb-5">
                 <div>
@@ -84,5 +84,5 @@
                 <Gallery images={data.images} title={productName} />
             </div>
         </div>
-    {/if}
+    {/if} -->
 </div>

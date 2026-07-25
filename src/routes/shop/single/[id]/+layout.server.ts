@@ -63,8 +63,9 @@ export const load: LayoutServerLoad = async ({ params }) => {
     // 3. Extract pricing structural matrix variations
     const priceList = await db
         .select({
-            amount: prices.amount,
-            price: sql<number>`CAST(${prices.price} AS DOUBLE)`
+            amount: prices.variant,
+            price: sql<number>`CAST(${prices.price} AS DOUBLE)`,
+            imageUrl: prices.imageUrl,
         })
         .from(prices)
         .where(eq(prices.productId, numericId));

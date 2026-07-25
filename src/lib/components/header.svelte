@@ -2,20 +2,18 @@
 	import {
 		MenuIcon,
 		XIcon,
-		SearchIcon,
 		House as HomeIcon,
 		ShoppingBagIcon,
 		InfoIcon,
 		ContactIcon,
 		LogInIcon,
 		UserPlusIcon,
-
-		Search
-
+		Search,
+		ArrowRight,
+		SlidersHorizontal
 	} from '@lucide/svelte';
 	import DarkMode from './DarkMode.svelte';
 	import AvatarSettings from './AvatarSettings.svelte';
-
 	import { Sheet, SheetContent, SheetTrigger } from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -25,10 +23,11 @@
 	import LanguageSelector from './LanguageSelector.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import * as Popover from '$lib/components/ui/popover/index.js';
+	import { cn } from '$lib/utils.js';
 
 	let { data } = $props();
 	let isOpen = $state(false);
-
 	let searchQuery = $state(page.url.searchParams.get('search') ?? '');
 
 	const handleMenuClick = () => {
@@ -42,10 +41,9 @@
 		{ label: m.header_nav_blog, href: '/blogs', icon: InfoIcon },
 		{ label: m.header_nav_contact_us, href: '/contact-us', icon: ContactIcon }
 	];
+
 	import { afterNavigate } from '$app/navigation';
-
-	let open = $state(false)
-
+	let open = $state(false);
 	afterNavigate(() => {
 		open = false;
 	});
@@ -65,94 +63,100 @@
 			isOpen = false;
 		}
 	});
-	const on = 'text-primary shadow-lg shadow-primary/20 bg-primary/10';
-	const off = 'text-muted-foreground hover:text-foreground hover:bg-muted/50';
-
 </script>
 
 <header
-	class="sticky top-0 z-50 w-full border-b border-border/80 bg-background/60 px-2 py-1.5 backdrop-blur-md transition-all duration-300 lg:px-12"
+	class="sticky top-0 z-50 w-full border-b border-brand/10 bg-background/70 px-2 py-1.5 backdrop-blur-xl transition-all duration-300 lg:px-12"
 >
-	<div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
-		<div class="flex shrink-0 items-center gap-6">
-			<a href="/" class="transition-transform duration-200 active:scale-95">
-				<img
-					src="/logo.png"
-					class="h-6 w-auto object-contain dark:brightness-110"
-					alt={m.header_logo_alt()}
-					fetchpriority="high"
-				/>
-			</a>
+	<div class="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4">
+		<!-- Logo — Dana white/card chip -->
+		<a
+			href="/"
+			class="flex shrink-0 items-center rounded-2xl bg-card px-3.5 py-2 shadow-lg shadow-brand/10 ring-1 ring-brand/5 transition-transform duration-200 active:scale-95"
+		>
+			<img
+				src="/logo.png"
+				class="h-7 w-auto object-contain dark:brightness-110"
+				alt={m.header_logo_alt()}
+				fetchpriority="high"
+			/>
+		</a>
 
-			<nav class="hidden items-center gap-1 md:flex">
-				{#each menuItems as item (item.href)}
-					{@const isActive = page.url.pathname === item.href}
-					<Button
-						variant={isActive ? 'default' : 'ghost'}
-						size="sm"
-						href={item.href}
-						class="h-9 rounded-lg text-xs font-semibold tracking-wide uppercase transition-all"
-					>
-						{item.label()}
-					</Button>
-				{/each}
-			</nav>
-		</div>
-
-		<div class="flex flex-row items-center gap-4">
-			<!-- <div class="relative hidden max-w-xs sm:block md:w-48 lg:w-64">
-				<SearchIcon
-					class="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground/60"
-				/>
-				<Input
-					type="text"
-					placeholder={m.header_search_placeholder()}
-					bind:value={searchQuery}
-					onkeydown={executionDesktopSearch}
-					class="h-8.5 rounded-lg border-border bg-muted/40 pl-9 text-xs shadow-inner focus-visible:border-primary focus-visible:ring-primary/20"
-				/>
-			</div> -->
-			<Dialog.Root bind:open>
-			<Dialog.Trigger
-				class="group relative flex flex-row items-center gap-1 rounded-xl px-3 py-2 transition-all duration-300 ease-out hover:scale-110 active:scale-95"
-			>
-				<div
-					class="relative flex h-6 w-6 items-center justify-center transition-all duration-300 {on
-						? 'drop-shadow-lg'
-						: ''}"
+		<!-- Center nav -->
+		<nav class="mx-auto hidden items-center gap-1 md:flex">
+			{#each menuItems as item (item.href)}
+				{@const isActive = page.url.pathname === item.href}
+				<Button
+					variant="ghost"
+					size="sm"
+					href={item.href}
+					class={cn(
+						'h-9 rounded-full px-4 text-sm font-semibold transition-colors',
+						isActive
+							? 'bg-brand/10 text-brand hover:bg-brand/15 hover:text-brand'
+							: 'text-muted-foreground hover:bg-brand/5 hover:text-brand'
+					)}
 				>
-					<Search class="h-8 w-8" />
-				</div>
+					{item.label()}
+				</Button>
+			{/each}
+		</nav>
 
-				<!-- Label -->
-				</Dialog.Trigger
-			>
-			<Dialog.Content class="pt-8">
-				<div class="relative mt-4 max-w-xs">
-					<Search
-						class="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground/60"
-					/>
-					<Input
-						type="search"
-						placeholder={m.header_search_placeholder()}
-						bind:value={searchQuery}
-						onkeydown={executionDesktopSearch}
-						class="h-8.5 rounded-lg border-border bg-muted/40 pl-9 text-xs shadow-inner focus-visible:border-primary focus-visible:ring-primary/20"
-					/>
-				</div>
-			</Dialog.Content>
-		</Dialog.Root>
+		<div class="flex flex-row items-center gap-2">
+			<!-- Search -->
+			<Dialog.Root bind:open>
+				<Dialog.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon"
+							aria-label={m.header_search_placeholder()}
+							class="size-9 rounded-full text-muted-foreground hover:bg-brand/5 hover:text-brand"
+						>
+							<Search class="size-4" />
+						</Button>
+					{/snippet}
+				</Dialog.Trigger>
+				<Dialog.Content class="rounded-2xl pt-8">
+					<div class="relative mt-4 max-w-xs">
+						<Search class="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+						<Input
+							type="search"
+							placeholder={m.header_search_placeholder()}
+							bind:value={searchQuery}
+							onkeydown={executionDesktopSearch}
+							class="h-9 rounded-full border-border bg-muted/40 pl-9 text-xs shadow-inner focus-visible:border-brand focus-visible:ring-brand/20"
+						/>
+					</div>
+				</Dialog.Content>
+			</Dialog.Root>
 
+			<!-- Desktop cluster -->
 			<div class="hidden flex-row items-center justify-end gap-2 lg:flex">
 				{#if data === '' || !data}
 					<div class="flex items-center gap-1.5">
-						<Button href="/login" variant="ghost" size="sm" class="h-9 text-xs font-medium">
-							<LogInIcon class="mr-1.5 size-3.5" />
+						<Button
+							href="/login"
+							variant="ghost"
+							size="sm"
+							class="h-10 gap-1.5 rounded-full px-4 text-sm font-semibold text-foreground/80 hover:bg-brand/5 hover:text-brand"
+						>
+							<LogInIcon class="size-4" />
 							{m.header_sign_in()}
 						</Button>
-						<Button href="/signup" size="sm" class="h-9 rounded-lg text-xs font-semibold shadow-xs">
-							<UserPlusIcon class="mr-1.5 size-3.5" />
+						<!-- Dana signature pill -->
+						<Button
+							href="/signup"
+							size="sm"
+							class="group h-10 gap-2 rounded-full bg-gradient-to-br from-brand-bright to-brand pr-1.5 pl-5 text-sm font-bold text-white shadow-lg shadow-brand/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand/40"
+						>
 							{m.header_sign_up()}
+							<span class="flex size-7 items-center justify-center rounded-full bg-white/95">
+								<ArrowRight
+									class="size-3.5 text-brand transition-transform group-hover:translate-x-0.5"
+								/>
+							</span>
 						</Button>
 					</div>
 				{:else}
@@ -160,25 +164,56 @@
 						<AvatarSettings data={data.name} />
 					</div>
 				{/if}
-				<div class="ml-1 border-l border-border/60 pl-2">
-					<DarkMode />
-				</div>
-				<div class="ml-1 border-l border-border/60 pl-2">
-					<LanguageSelector />
-				</div>
+
+				<!-- Subtle settings popover: dark mode + language -->
+				<Popover.Root>
+					<Popover.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon"
+								aria-label={m.header_settings_label()}
+								class="size-9 rounded-full text-muted-foreground hover:bg-brand/5 hover:text-brand"
+							>
+								<SlidersHorizontal class="size-4" />
+							</Button>
+						{/snippet}
+					</Popover.Trigger>
+					<Popover.Content
+						align="end"
+						sideOffset={10}
+						class="w-56 rounded-2xl border-brand/10 p-2 shadow-xl shadow-brand/10"
+					>
+						<div class="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5">
+							<span class="text-xs font-semibold text-muted-foreground">
+								{m.header_appearance()}
+							</span>
+							<DarkMode />
+						</div>
+						<div class="my-1 h-px bg-border/70"></div>
+						<div class="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5">
+							<span class="text-xs font-semibold text-muted-foreground">
+								{m.header_language()}
+							</span>
+							<LanguageSelector />
+						</div>
+					</Popover.Content>
+				</Popover.Root>
+
 				<Cart header={true} />
 			</div>
 
+			<!-- Mobile cluster -->
 			<div class="flex items-center gap-2 md:hidden">
-				<DarkMode />
-				<LanguageSelector />
+				<Cart header={true} />
 				<Sheet bind:open={isOpen}>
 					<SheetTrigger>
 						{#snippet child({ props: triggerProps })}
 							<Button
 								variant="outline"
 								size="icon"
-								class="size-9 rounded-xl border-border bg-card/50"
+								class="size-9 rounded-full border-brand/15 bg-card/60"
 								{...triggerProps}
 							>
 								{#if isOpen}
@@ -189,12 +224,11 @@
 							</Button>
 						{/snippet}
 					</SheetTrigger>
-
 					<SheetContent
 						side="right"
-						class="flex w-80 flex-col border-l border-border bg-background/95 p-0 backdrop-blur-md"
+						class="flex w-80 flex-col border-l border-brand/10 bg-background/95 p-0 backdrop-blur-xl"
 					>
-						<div class="border-b border-border/60 bg-muted/30 p-6">
+						<div class="border-b border-brand/10 bg-muted/30 p-6">
 							{#if data === '' || !data}
 								<div class="space-y-1.5">
 									<h2 class="text-base font-bold tracking-tight text-foreground">
@@ -206,9 +240,7 @@
 								</div>
 							{:else}
 								<div class="flex items-center gap-3.5">
-									<div
-										class="rounded-full border bg-background p-1 shadow-xs ring-2 ring-primary/5"
-									>
+									<div class="rounded-full border border-brand/10 bg-card p-1 shadow-xs ring-2 ring-brand/5">
 										<AvatarSettings data={data.name} />
 									</div>
 									<div class="flex flex-col overflow-hidden">
@@ -229,33 +261,45 @@
 								<Button
 									variant={isMobileActive ? 'secondary' : 'ghost'}
 									href={item.href}
-									class="w-full justify-start gap-3.5 rounded-xl px-3.5 py-5.5 text-sm font-semibold tracking-wide transition-all active:scale-[0.98]"
+									class={cn(
+										'w-full justify-start gap-3.5 rounded-2xl px-3.5 py-5.5 text-sm font-semibold tracking-wide transition-all active:scale-[0.98]',
+										isMobileActive && 'bg-brand/10 text-brand'
+									)}
 									onclick={handleMenuClick}
 								>
-									<item.icon class="h-4 w-4 text-primary opacity-70" />
+									<item.icon class="h-4 w-4 text-brand opacity-80" />
 									{item.label()}
 								</Button>
 							{/each}
 						</nav>
 
-						<div class="space-y-4 border-t border-border bg-muted/10 p-5">
-							<div class="flex w-auto flex-row gap-1">
+						<div class="space-y-4 border-t border-brand/10 bg-muted/10 p-5">
+							<div class="flex flex-row items-center justify-between gap-2 rounded-2xl bg-card/60 px-3 py-2 ring-1 ring-brand/5">
+								<span class="text-xs font-semibold text-muted-foreground">
+									{m.header_appearance()}
+								</span>
 								<DarkMode />
+							</div>
+							<div class="flex flex-row items-center justify-between gap-2 rounded-2xl bg-card/60 px-3 py-2 ring-1 ring-brand/5">
+								<span class="text-xs font-semibold text-muted-foreground">
+									{m.header_language()}
+								</span>
 								<LanguageSelector />
 							</div>
+
 							{#if data === '' || !data}
 								<div class="grid grid-cols-2 gap-2.5">
 									<Button
 										onclick={handleMenuClick}
 										variant="outline"
-										class="h-10 rounded-xl border-border text-xs font-medium"
+										class="h-10 rounded-full border-brand/15 text-xs font-semibold"
 										href="/login"
 									>
 										{m.header_log_in()}
 									</Button>
 									<Button
 										onclick={handleMenuClick}
-										class="h-10 rounded-xl text-xs font-semibold shadow-xs"
+										class="h-10 rounded-full bg-gradient-to-br from-brand-bright to-brand text-xs font-bold text-white shadow-lg shadow-brand/30"
 										href="/signup"
 									>
 										{m.header_join_store()}

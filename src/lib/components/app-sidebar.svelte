@@ -50,7 +50,7 @@
 						{ title: 'All Products', url: '/dashboard/products' },
 						{ title: 'Add Product', url: '/dashboard/products/add-products' },
 						{ title: 'Suppliers', url: '/dashboard/products/suppliers' },
-						{ title: 'Add Supplier', url: '/dashboard/products/add-supplier' }
+						{ title: 'Add Supplier', url: '/dashboard/products/add-suppliers' }
 					]
 				},
 				{

@@ -85,7 +85,7 @@ export const columns = [
 		cell: ({ row }) => {
 			// You can pass whatever you need from `row.original` to the component
 			return renderComponent(DataTableActions, {
-				id: row.original.extraSettings,
+				id: row.original.id,
 				phone: row.original.phone,
 				createdBy: row.original.createdBy,
 				createdById: row.original.bookedById,

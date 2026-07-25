@@ -185,7 +185,7 @@
     <meta property="og:image" content="https://dana.et/og-about.jpg" />
 </svelte:head>
 
-<div class="relative min-h-screen overflow-hidden bg-background text-foreground">
+<div class="relative min-h-screen overflow-hidden  text-foreground">
     <div
         class="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_35%)]"
     ></div>
@@ -304,7 +304,7 @@
 
     <!-- Tabs Feature Section with Image Sidecar -->
     <section
-        class="border-y border-primary/10 bg-card/20 px-4 py-20 backdrop-blur-xl sm:px-6 lg:px-8"
+        class="border-y border-primary/10  px-4 py-20 backdrop-blur-xl sm:px-6 lg:px-8"
     >
         <div class="mx-auto max-w-6xl">
             <div class="mb-10 text-center">

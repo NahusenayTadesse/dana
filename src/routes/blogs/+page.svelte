@@ -54,7 +54,7 @@
 	<link rel="canonical" href="https://dana.et/blog" />
 </svelte:head>
 
-<div class="min-h-dvh bg-background text-foreground">
+<div class="min-h-dvh  text-foreground">
 	<PortfolioHero />
 
 	<main class="mx-auto mt-10 max-w-7xl px-4 pb-20">

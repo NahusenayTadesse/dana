@@ -24,6 +24,7 @@
 	import ProductSeparator from '$lib/components/productSeparator.svelte';
 	import WaneSection from '$lib/components/waneSection.svelte';
 	import WhyChooseUs from '$lib/components/whyChooseUs.svelte';
+	import Home from '$lib/files/Home.svelte';
 
 	// Keeps setLocale available without changing this page UI.
 	void setLocale;
@@ -32,12 +33,11 @@
 <svelte:head>
 	<title>{m.home_meta_title()}</title>
 </svelte:head>
+<Hero />
 
-<Hero  />
+<Home testimonials={data?.testimonialList}>
 
 
-<About />
-<WhyChooseUs />
 
 
 <section
@@ -113,13 +113,13 @@
 	</section>
 {/if}
   
-<WaneSection />
+</Home>
 
-{#if data?.imagesList?.length > 0}
+<!-- {#if data?.imagesList?.length > 0}
 	<Slider imagesList={data?.imagesList} />
-{/if}
+{/if} -->
 
 
-		<Testimonial  />
+
 
 

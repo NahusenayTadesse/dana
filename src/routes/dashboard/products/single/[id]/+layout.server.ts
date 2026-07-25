@@ -16,11 +16,13 @@ import {
 	productTags,
 	categoriesProducts
 } from '$lib/server/db/schema';
-import { eq, and, sql, isNotNull, desc, min } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ params }) => {
 	const { id } = params;
+	const productId = Number(id);
+
 	const form = await superValidate(zod4(edit));
 	const adjustForm = await superValidate(zod4(adjust));
 	const damagedForm = await superValidate(zod4(damaged));
@@ -36,73 +38,65 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		})
 		.from(productCategories)
 		.where(eq(productCategories.isActive, true));
+
 	const allTags = await db
-		.select({
-			value: tags.id,
-			name: tags.name
-		})
+		.select({ value: tags.id, name: tags.name })
 		.from(tags);
 
 	const supplierList = await db
-		.select({
-			value: suppliers.id,
-			name: suppliers.name
-		})
+		.select({ value: suppliers.id, name: suppliers.name })
 		.from(suppliers)
 		.where(eq(suppliers.isActive, true));
 
 	const result = await db
-		.select({
-			url: productImages.imageUrl
-		})
+		.select({ url: productImages.imageUrl })
 		.from(productImages)
-		.where(eq(productImages.productId, Number(id)));
+		.where(eq(productImages.productId, productId));
 
 	const images = result.map((img) => img.url);
 
+	// Aggregates (min price, delivered sales) are computed as scalar subqueries
+	// so the joins below don't fan out and inflate the SUM / MIN.
 	const product = await db
 		.select({
 			id: products.id,
 			name: products.name,
-			price: min(prices.price),
+			price: sql<number | null>`(
+				SELECT MIN(${prices.price}) FROM ${prices}
+				WHERE ${prices.productId} = ${products.id}
+			)`,
 			brand: products.brand,
 			description: products.description,
 			quantity: products.quantity,
 			reorderLevel: products.reorderLevel,
+			commission: products.commissionAmount,
 			supplier: suppliers.name,
 			supplierId: suppliers.id,
 			image: products.featuredImage,
-			saleCount: sql<number>`SUM(${orderItems.quantity})`,
+			saleCount: sql<number>`(
+				SELECT COALESCE(SUM(${orderItems.quantity}), 0)
+				FROM ${orderItems}
+				JOIN ${orders} ON ${orders.id} = ${orderItems.orderId}
+				WHERE ${orderItems.productId} = ${products.id}
+				AND ${orders.status} = 'delivered'
+			)`,
 			createdBy: user.name,
 			createdAt: sql<string>`DATE_FORMAT(${products.createdAt}, '%Y-%m-%d')`
 		})
 		.from(products)
-		.leftJoin(prices, eq(prices.productId, products.id))
 		.leftJoin(suppliers, eq(suppliers.id, products.supplierId))
-		.leftJoin(orderItems, eq(products.id, orderItems.productId))
-		.leftJoin(orders, and(eq(orderItems.orderId, orders.id), eq(orders.status, 'delivered')))
 		.leftJoin(user, eq(products.createdBy, user.id))
-		.where(eq(products.id, Number(id)))
-		.groupBy(
-			products.id,
-			products.name,
-			prices.price,
-			orderItems.quantity,
-			products.description,
-			products.quantity,
-			suppliers.name,
-			products.reorderLevel
-		)
+		.where(eq(products.id, productId))
 		.then((rows) => rows[0]);
 
 	const priceList = await db
 		.select({
 			id: prices.id,
-			amount: prices.amount,
+			amount: prices.variant,
 			price: sql<number>`CAST(${prices.price} AS DOUBLE)`
 		})
 		.from(prices)
-		.where(eq(prices.productId, Number(id)));
+		.where(eq(prices.productId, productId));
 
 	const categories = await db
 		.select({
@@ -112,13 +106,17 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		})
 		.from(productCategories);
 
+	// FIXED: join predicate now links the join table back to tags.id /
+	// productCategories.id — previously it only filtered on productId, which
+	// returned every tag/category for any product that had at least one.
 	const tagged = await db
-		.selectDistinct({
-			value: tags.id,
-			name: tags.name
-		})
+		.selectDistinct({ value: tags.id, name: tags.name })
 		.from(tags)
-		.innerJoin(productTags, eq(productTags.productId, Number(id)));
+		.innerJoin(
+			productTags,
+			and(eq(productTags.tagId, tags.id), eq(productTags.productId, productId))
+		);
+
 	const categorized = await db
 		.selectDistinct({
 			value: productCategories.id,
@@ -126,7 +124,13 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			description: productCategories.description
 		})
 		.from(productCategories)
-		.innerJoin(categoriesProducts, eq(categoriesProducts.productId, Number(id)));
+		.innerJoin(
+			categoriesProducts,
+			and(
+				eq(categoriesProducts.categoryId, productCategories.id),
+				eq(categoriesProducts.productId, productId)
+			)
+		);
 
 	return {
 		product,

@@ -6,7 +6,7 @@
 	import { dropdownClass } from "$lib/global.svelte";
 
  let { id, phone,  customerName, createdById, createdBy }:
-  { id: string, phone: string, customerName: string, createdById: string, createdBy: string} = $props();
+  { id: string | number, phone: string, customerName: string, createdById: string, createdBy: string} = $props();
 
 
 </script>
@@ -35,6 +35,5 @@
       <Copy />  Copy Phone Number
       </DropdownMenu.Item>
   <DropdownMenu.Item><a href="/dashboard/customers/{id}" target="_blank" class={dropdownClass}><ExternalLink /> View {customerName}'s Details</a></DropdownMenu.Item>
-  <DropdownMenu.Item><a href="/dashboard/user/{createdById}" target="_blank" class={dropdownClass}><ExternalLink /> View {createdBy}'s Details</a></DropdownMenu.Item>
  </DropdownMenu.Content>
 </DropdownMenu.Root>

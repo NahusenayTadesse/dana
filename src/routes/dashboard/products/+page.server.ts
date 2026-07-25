@@ -13,6 +13,7 @@ import type { PageServerLoad, Actions } from '../$types';
 import { message, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { schema } from './schema';
+
 export const load: PageServerLoad = async () => {
 	const form = await superValidate(zod4(schema));
 
@@ -39,7 +40,14 @@ export const load: PageServerLoad = async () => {
 
 	// 2. Fetch related data CONCURRENTLY and FILTERED by productIds
 	const [rawPrices, rawCategories, rawTags] = await Promise.all([
-		db.select().from(prices).where(inArray(prices.productId, productIds)),
+		db
+			.select({
+				productId: prices.productId,
+				amount: prices.variant,
+				price: prices.price
+			})
+			.from(prices)
+			.where(inArray(prices.productId, productIds)),
 		db
 			.selectDistinct({
 				productId: categoriesProducts.productId,
@@ -58,47 +66,43 @@ export const load: PageServerLoad = async () => {
 			.where(inArray(productTags.productId, productIds))
 	]);
 
-	// 3. Group data into Dictionaries for O(1) lookup speed
-	const pricesMap: Record<string, typeof rawPrices> = {};
-	const categoriesMap: Record<string, Array<{ name: string }>> = {};
-	const tagsMap: Record<string, Array<{ name: string }>> = {};
+	// 3. Group data into dictionaries for O(1) lookup
+	const pricesMap: Record<number, Array<{ amount: string; price: string }>> = {};
+	const categoriesMap: Record<number, string[]> = {};
+	const tagsMap: Record<number, string[]> = {};
 
 	for (const price of rawPrices) {
-		if (!pricesMap[price.productId]) pricesMap[price.productId] = [];
-		pricesMap[price.productId].push(price);
+		if (price.productId == null) continue;
+		(pricesMap[price.productId] ??= []).push({ amount: price.amount, price: price.price });
 	}
 
 	for (const cat of rawCategories) {
-		if (!categoriesMap[cat.productId]) categoriesMap[cat.productId] = [];
-		categoriesMap[cat.productId].push({ name: cat.name });
+		if (cat.productId == null) continue;
+		(categoriesMap[cat.productId] ??= []).push(cat.name);
 	}
 
 	for (const tag of rawTags) {
-		if (!tagsMap[tag.productId]) tagsMap[tag.productId] = [];
-		tagsMap[tag.productId].push({ name: tag.name });
+		if (tag.productId == null) continue;
+		(tagsMap[tag.productId] ??= []).push(tag.name);
 	}
 
-	// 4. Merge data instantly using the maps
+	// 4. Merge data using the maps
 	const productList = productsData.map((p) => ({
 		...p,
-		priceList: (pricesMap[p.id] || []).map((price) => ({
+		priceList: (pricesMap[p.id] ?? []).map((price) => ({
 			amount: `${price.amount} Pieces`,
 			price: `ETB ${price.price}`
 		})),
-		category: Object.values(categoriesMap[p.id] || {}).map((cat) => cat.name),
-		tag: Object.values(tagsMap[p.id] || {}).map((tag) => tag.name)
+		category: categoriesMap[p.id] ?? [],
+		tag: tagsMap[p.id] ?? []
 	}));
 
-	return {
-		productList,
-		form
-	};
+	return { productList, form };
 };
 
 export const actions: Actions = {
 	addDiscount: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(schema));
-		console.log(form);
 
 		if (!form.valid) {
 			return message(form, { type: 'error', text: 'Please check your form data.' });
@@ -108,16 +112,18 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx) => {
+				// Clear any existing discounts on the selected products, then reinsert
 				await tx.delete(discounts).where(inArray(discounts.productId, ids));
+
 				if (amount > 0) {
-					const priceRecords = ids.map((p) => ({
+					const discountRecords = ids.map((p) => ({
 						productId: p,
-						name: name,
-						description: description,
-						amount: amount,
+						name,
+						description,
+						amount: String(amount), // decimal column -> string
 						createdBy: locals?.user?.id
 					}));
-					await tx.insert(discounts).values(priceRecords);
+					await tx.insert(discounts).values(discountRecords);
 				}
 			});
 
@@ -126,10 +132,7 @@ export const actions: Actions = {
 			console.error(err);
 			return message(
 				form,
-				{
-					type: 'error',
-					text: 'An error occurred while adding the Discount.' + err?.message
-				},
+				{ type: 'error', text: 'An error occurred while adding the Discount. ' + err?.message },
 				{ status: 500 }
 			);
 		}

@@ -33,6 +33,7 @@
 		{ name: 'Price', value: data.product?.price },
 		{ name: 'Available Quantity', value: data.product?.quantity },
 		{ name: 'Product Description', value: data.product?.description },
+		{ name: 'Commission', value: data.product?.commission },
 		{ name: 'Reorder Notification Quantity', value: data.product?.reorderLevel },
 		{ name: 'Product Supplier', value: data?.product?.supplier },
 		{ name: 'Added On', value: data.product?.createdAt },
@@ -40,7 +41,7 @@
 		{
 			name: 'Number of Sells',
 			value:
-				data.product?.saleCount === null
+				data.product?.saleCount === null || data.product?.saleCount === undefined
 					? '0 Pieces Sold'
 					: data.product?.saleCount + ' Pieces Sold'
 		}
@@ -59,17 +60,13 @@
 		($form.brand = data.product.brand),
 		($form.category = data.categorized.map((c) => c.value)),
 		($form.tag = data.tagged.map((c) => c.value)),
-		($form.commission = data.product.commission),
+		($form.commission = Number(data.product.commission ?? 0)),
 		($form.description = data.product.description),
-		($form.productId = data.product.id),
-		($form.prices = data?.priceList),
 		($form.quantity = data.product.quantity),
 		($form.reorderLevel = data.product.reorderLevel),
-		($form.supplier = data.product.supplier));
+		($form.supplier = data.product.supplierId));
 
 	export const snapshot: Snapshot = { capture, restore };
-
-	//   let date = $derived(dateProxy(editForm, 'appointmentDate', { format: 'date'}));
 
 	let editForm = $state(false);
 	let editGallery = $state(false);
@@ -100,7 +97,6 @@
 			cell: (info) => info.row.index + 1,
 			sortable: false
 		},
-
 		{
 			accessorKey: 'amount',
 			header: ({ column }) =>
@@ -110,7 +106,6 @@
 				}),
 			sortable: true
 		},
-
 		{
 			accessorKey: 'Price',
 			header: ({ column }) =>
@@ -120,7 +115,6 @@
 				}),
 			sortable: true,
 			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
 				return renderComponent(EditPrice, {
 					id: row.original.id,
 					price: row.original.price,
@@ -138,7 +132,6 @@
 				}),
 			sortable: true,
 			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
 				return renderComponent(DeletePrice, {
 					id: row.original.id,
 					price: row.original.price,
@@ -164,7 +157,6 @@
 				Edit
 			{:else}
 				<ArrowLeft class="h-4 w-4" />
-
 				Back
 			{/if}
 		</Button>
@@ -279,7 +271,6 @@
 					name="image"
 					label="Product Image"
 					placeholder="Upload Product Image"
-					required
 					image={String(data?.product?.image)}
 				/>
 				<InputComp
@@ -306,7 +297,7 @@
 					type="checkbox"
 					name="category"
 					label="Product Category"
-					placeholder="Enter Product Name"
+					placeholder="Select Product Categories"
 					required
 					items={data?.allCategories}
 				/>
@@ -316,8 +307,7 @@
 					type="checkbox"
 					name="tag"
 					label="Product Tags"
-					placeholder="Enter Product Name"
-					required
+					placeholder="Select Product Tags"
 					items={data?.allTags}
 				/>
 
@@ -326,8 +316,17 @@
 					{errors}
 					type="textarea"
 					name="description"
-					label="Product Discription"
+					label="Product Description"
 					placeholder="Enter Product Description"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="number"
+					name="commission"
+					label="Commission Amount"
+					placeholder="Enter commission earned per sale"
 					required
 				/>
 
@@ -346,8 +345,8 @@
 					{errors}
 					type="select"
 					name="supplier"
-					label="Product Category"
-					placeholder="Enter Product Name"
+					label="Product Supplier"
+					placeholder="Select Supplier"
 					required
 					items={data?.supplierList}
 				/>
@@ -416,7 +415,6 @@
 					Edit
 				{:else}
 					<ArrowLeft class="h-4 w-4" />
-
 					Back
 				{/if}
 			</Button>

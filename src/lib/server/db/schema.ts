@@ -6,7 +6,9 @@ import {
 	mysqlEnum,
 	decimal,
 	text,
-	timestamp
+	timestamp,
+	uniqueIndex,
+	date
 } from 'drizzle-orm/mysql-core';
 import { secureFields, user } from './auth.schema';
 
@@ -123,7 +125,7 @@ export const prices = mysqlTable('prices', {
 	id: int('id').primaryKey().autoincrement(),
 	productId: int('product_id').references(() => products.id, { onDelete: 'cascade' }),
 	price: decimal('price', { precision: 10, scale: 2 }).notNull(),
-	amount: varchar('variant', { length: 255 }).notNull(),
+	variant: varchar('variant', { length: 255 }).notNull(),
 	imageUrl: varchar('image_url', { length: 255 })	
 });
 
@@ -135,10 +137,88 @@ export const productImages = mysqlTable('product_images', {
 	imageUrl: varchar('image_url', { length: 255 }).notNull()
 });
 
+
+ 
+export const colors = mysqlTable('colors', {
+	id: int('id').primaryKey().autoincrement(),
+	name: varchar('name', { length: 100 }).notNull().unique(), // e.g. "Signal Red"
+	code: varchar('code', { length: 50 }), // e.g. RAL 3001 / manufacturer color code
+	hexValue: varchar('hex_value', { length: 7 }), // for swatch rendering, e.g. #C1121F
+	swatchImage: varchar('swatch_image', { length: 255 }),
+	...secureFields
+});
+ 
+export const widths = mysqlTable('widths', {
+	id: int('id').primaryKey().autoincrement(),
+	value: decimal('value', { precision: 10, scale: 2 }).notNull(), // numeric so it sorts/filters correctly
+	unit: mysqlEnum('unit', ['mm', 'cm', 'm', 'in', 'ft']).notNull().default('mm'),
+	label: varchar('label', { length: 50 }), // optional display override, e.g. "Standard 1000mm"
+	isActive: boolean('is_active').default(true)
+}, (table) => ({
+	uniqueValue: uniqueIndex('widths_value_unit_unique').on(table.value, table.unit)
+}));
+
+
+
+ 
+export const thicknesses = mysqlTable('thicknesses', {
+	id: int('id').primaryKey().autoincrement(),
+	value: decimal('value', { precision: 10, scale: 3 }).notNull(), // 3dp: gauges like 0.425mm matter
+	unit: mysqlEnum('unit', ['mm', 'gauge']).notNull().default('mm'),
+	label: varchar('label', { length: 50 }),
+	isActive: boolean('is_active').default(true)
+}, (table) => ({
+	uniqueValue: uniqueIndex('thicknesses_value_unit_unique').on(table.value, table.unit)
+}));
+ 
+
+
+export const productVariants = mysqlTable('product_variants', {
+	id: int('id').primaryKey().autoincrement(),
+	productId: int('product_id')
+		.notNull()
+		.references(() => products.id, { onDelete: 'cascade' }),
+ 
+	colorId: int('color_id').references(() => colors.id, { onDelete: 'set null' }),
+	widthId: int('width_id').references(() => widths.id, { onDelete: 'set null' }),
+	thicknessId: int('thickness_id').references(() => thicknesses.id, { onDelete: 'set null' }),
+	lengthId: int('length_id').references(() => lengths.id, { onDelete: 'set null' }),
+ 
+	sku: varchar('sku', { length: 100 }).unique(),
+	price: decimal('price', { precision: 10, scale: 2 }), // nullable: bulk/quote-only variants may not have a listed retail price
+	quantity: int('quantity').notNull().default(0), // stock at this exact spec, not just the parent product
+	reorderLevel: int('reorder_level'),
+	imageUrl: varchar('image_url', { length: 255 }), // e.g. this color/finish specifically
+ 
+	...secureFields
+}, (table) => [ uniqueIndex('product_variant_spec_unique').on(
+		table.productId,
+		table.colorId,
+		table.widthId,
+		table.thicknessId,
+		table.lengthId
+	)
+]);
+ 
+
+
+export const lengths = mysqlTable('lengths', {
+	id: int('id').primaryKey().autoincrement(),
+	value: decimal('value', { precision: 10, scale: 2 }).notNull(),
+	unit: mysqlEnum('unit', ['mm', 'm', 'ft']).notNull().default('m'),
+	label: varchar('label', { length: 50 }), // e.g. "Custom cut" for made-to-order lengths
+	isCustom: boolean('is_custom').default(false), // flag for "cut to order" rather than a fixed stock length
+	isActive: boolean('is_active').default(true)
+}, (table) => [
+	 uniqueIndex('lengths_value_unit_unique').on(table.value, table.unit)
+]);
+
+
 export const customers = mysqlTable('customers', {
 	id: int('id').primaryKey().autoincrement(),
 	name: varchar('name', { length: 100 }).notNull(),
 	email: varchar('email', { length: 100 }).notNull().unique(),
+	type: mysqlEnum('type', ['individual', 'company'] ).default('individual'),
 	phone: varchar('phone', { length: 20 }),
 	tinNo: varchar('tin_no', { length: 10 }),
 	docs: varchar('docs', { length: 255 }),
@@ -204,8 +284,9 @@ export const orderItems = mysqlTable('order_items', {
 	orderId: int('order_id').references(() => orders.id),
 	productId: int('product_id').references(() => products.id),
 	quantity: int('quantity').notNull(),
-	price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+	price: decimal('price', { precision: 10, scale: 2 }),
 	amount: varchar('amount', { length: 255 }).notNull(),
+	variantId: int('variant_id').references(() => productVariants.id),
 	...secureFields
 });
 
@@ -220,9 +301,91 @@ export const damagedProducts = mysqlTable('damaged_products', {
 	...secureFields
 });
 
-// Lead-gen quote request — sits ALONGSIDE the retail order flow, since Dana
-// Steel's site converts on "Request a Quote" for bulk/project buyers, while
-// the retail system above still handles direct purchases/orders.
+
+
+export const warehouses = mysqlTable('warehouses', {
+	id: int('id').primaryKey().autoincrement(),
+	name: varchar('name', { length: 150 }).notNull(),
+	location: varchar('location', { length: 255 }),
+	isDefault: boolean('is_default').default(false),
+	...secureFields
+});
+ 
+export const stockLevels = mysqlTable('stock_levels', {
+	id: int('id').primaryKey().autoincrement(),
+	variantId: int('variant_id')
+		.notNull()
+		.references(() => productVariants.id, { onDelete: 'cascade' }),
+	warehouseId: int('warehouse_id')
+		.notNull()
+		.references(() => warehouses.id, { onDelete: 'cascade' }),
+	quantity: int('quantity').notNull().default(0)
+});
+ 
+export const staff = mysqlTable('staff', {
+	id: int('id').primaryKey().autoincrement(),
+	name: varchar('name', { length: 150 }).notNull(),
+	role: varchar('role', { length: 100 }), // e.g. "Warehouse Supervisor", "Machine Operator"
+	phone: varchar('phone', { length: 20 }),
+	userId: varchar('user_id', { length: 255 }), // nullable FK to auth.user, only if/when they get login access
+	...secureFields
+});
+
+ 
+export const rawMaterials = mysqlTable('raw_materials', {
+	id: int('id').primaryKey().autoincrement(),
+	name: varchar('name', { length: 150 }).notNull(), // e.g. "Cold Rolled Coil"
+	supplierId: int('supplier_id').references(() => productSuppliers.id),
+	unit: mysqlEnum('unit', ['kg', 'ton', 'm', 'coil']).notNull().default('ton'),
+	quantityOnHand: decimal('quantity_on_hand', { precision: 12, scale: 3 }).notNull().default('0'),
+	reorderLevel: decimal('reorder_level', { precision: 12, scale: 3 }),
+	...secureFields
+});
+ 
+export const productionBatches = mysqlTable('production_batches', {
+	id: int('id').primaryKey().autoincrement(),
+	batchNumber: varchar('batch_number', { length: 100 }).notNull().unique(), // for traceability / mill certs
+	variantId: int('variant_id')
+		.notNull()
+		.references(() => productVariants.id),
+	rawMaterialId: int('raw_material_id').references(() => rawMaterials.id),
+	rawMaterialConsumed: decimal('raw_material_consumed', { precision: 12, scale: 3 }),
+	quantityProduced: int('quantity_produced').notNull(),
+	scrapQuantity: decimal('scrap_quantity', { precision: 12, scale: 3 }), // waste/offcuts — matters for cost + reporting
+	producedBy: int('produced_by').references(() => staff.id),
+	warehouseId: int('warehouse_id').references(() => warehouses.id), // where output landed
+	productionDate: date('production_date').notNull(),
+	...secureFields
+});
+
+ 
+export const purchaseOrders = mysqlTable('purchase_orders', {
+	id: int('id').primaryKey().autoincrement(),
+	supplierId: int('supplier_id')
+		.notNull()
+		.references(() => productSuppliers.id),
+	status: mysqlEnum('status', ['draft', 'ordered', 'in_transit', 'received', 'cancelled'])
+		.default('draft'),
+	expectedDate: date('expected_date'),
+	receivedDate: date('received_date'),
+	raisedBy: int('raised_by').references(() => staff.id),
+	notes: text('notes'),
+	...secureFields
+});
+ 
+export const purchaseOrderItems = mysqlTable('purchase_order_items', {
+	id: int('id').primaryKey().autoincrement(),
+	purchaseOrderId: int('purchase_order_id')
+		.notNull()
+		.references(() => purchaseOrders.id, { onDelete: 'cascade' }),
+	rawMaterialId: int('raw_material_id').references(() => rawMaterials.id),
+	variantId: int('variant_id').references(() => productVariants.id), // for buying finished goods too, not just raw coil
+	quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull(),
+	unitCost: decimal('unit_cost', { precision: 10, scale: 2 })
+});
+
+
+
 export const quoteRequests = mysqlTable('quote_requests', {
 	id: int('id').primaryKey().autoincrement(),
 	name: varchar('name', { length: 255 }).notNull(),

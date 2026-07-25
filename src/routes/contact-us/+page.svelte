@@ -88,7 +88,7 @@
 </svelte:head>
 
 <div
-	class="relative min-h-dvh w-full overflow-hidden bg-background px-4 py-20 text-foreground transition-colors duration-300 sm:px-6 lg:px-8"
+	class="relative min-h-dvh w-full overflow-hidden px-4 py-20 text-foreground transition-colors duration-300 sm:px-6 lg:px-8"
 >
 	<div
 		class="absolute top-0 left-1/4 -z-10 h-96 w-96 animate-pulse rounded-full bg-primary/10 opacity-70 blur-3xl duration-4000 dark:bg-primary/5"

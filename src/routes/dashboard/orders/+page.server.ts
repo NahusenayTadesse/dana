@@ -30,11 +30,11 @@ export const load: PageServerLoad = async () => {
 
 	const fetchedPrices = await db
 		.select({
-			value: sql<string>`CONCAT(${prices.price}, ' ', ${prices.amount})`,
-			name: sql<string>`CONCAT(${prices.price}, ' ', ${prices.amount}, ' pieces')`,
+			value: sql<string>`CONCAT(${prices.price}, ' ', ${prices.variant})`,
+			name: sql<string>`CONCAT(${prices.price}, ' ', ${prices.variant}, ' pieces')`,
 			productId: prices.productId,
 			price: prices.price,
-			amount: prices.amount
+			amount: prices.variant
 		})
 		.from(prices);
 

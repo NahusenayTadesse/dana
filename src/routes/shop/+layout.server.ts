@@ -70,7 +70,7 @@ export const load: LayoutServerLoad = async ({ url }) => {
             categoryName: productCategories.name,
             // Sub-query references for base metrics
             minPrice: sql<number>`min(${prices.price})`,
-            minAmount: sql<number>`min(${prices.amount})`
+            minAmount: sql<number>`min(${prices.variant})`
         })
         .from(products)
         .leftJoin(productCategories, eq(productCategories.id, products.categoryId))

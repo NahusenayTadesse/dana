@@ -15,6 +15,13 @@
       "when": 1784475849005,
       "tag": "0001_orange_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1784965343843,
+      "tag": "0002_clever_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }

@@ -26,7 +26,7 @@
 	}
 
 	import Header from '$lib/components/header.svelte';
-	import Footer from '$lib/components/footer.svelte';
+	import Footer from '$lib/files/Footer.svelte';
 	import { setCart } from '$lib/hooks/cart.svelte'; // Adjust path
 	import BottomMenu from '$lib/components/bottomMenu.svelte';
 	import FloatingChat from '$lib/components/FloatingChat.svelte';
@@ -61,7 +61,7 @@
 
 <svelte:head><link rel="icon" href="/logo192.png" /></svelte:head>
 <ModeWatcher />
-<Cursor />
+
 <Toaster position="bottom-right" richColors closeButton />
 <ProgressBar color="#28b6f6" zIndex={1000} />
 
@@ -71,6 +71,7 @@
 	<Footer />
 	<!-- <Cart header={true} /> -->
 	<BottomMenu />
+	<Cursor />
 	<FloatingChat />
 		<Stars />
 	<Spins />

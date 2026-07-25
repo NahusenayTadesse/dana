@@ -105,7 +105,7 @@
 				<div class="flex">
 					<div class="size-10 rounded-full bg-gradient-to-br from-brand-bright to-brand ring-[3px] ring-background"></div>
 					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand-red to-[#a51f18] ring-[3px] ring-background"></div>
-					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand to-brand-ink ring-[3px] ring-background"></div>
+					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand to-[#0c1b34] ring-[3px] ring-background"></div>
 					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand-green to-[#2f6e39] ring-[3px] ring-background"></div>
 				</div>
 				<div class="leading-tight">

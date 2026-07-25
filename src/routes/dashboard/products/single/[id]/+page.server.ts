@@ -10,9 +10,11 @@ import {
 	productAdjustments,
 	damagedProducts,
 	prices as priceList,
-	transactions
+	transactions,
+	categoriesProducts,
+	productTags
 } from '$lib/server/db/schema';
-import { eq, sql, } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { fail, message } from 'sveltekit-superforms';
 import { setFlash } from 'sveltekit-flash-message/server';
 
@@ -23,56 +25,75 @@ export const actions: Actions = {
 	editProduct: async ({ request, cookies, locals, params }) => {
 		const { id } = params;
 		const form = await superValidate(request, zod4(edit));
-		console.log(form.data);
 
 		if (!form.valid) {
-			// Stay on the same page and set a flash message
 			setFlash({ type: 'error', message: 'Please check your form data.' }, cookies);
 			return fail(400, { form });
 		}
 
-		const { productName, brand, category, description, quantity, supplier, reorderLevel, image } =
-			form.data;
+		const {
+			productName,
+			brand,
+			category,
+			tag,
+			commission,
+			description,
+			quantity,
+			supplier,
+			reorderLevel,
+			image
+		} = form.data;
 
 		try {
-			if (image) {
-				const featuredImage = await saveUploadedFile(image);
+			const featuredImage = image ? await saveUploadedFile(image) : undefined;
 
-				await db
+			await db.transaction(async (tx) => {
+				await tx
 					.update(products)
 					.set({
 						name: productName,
 						description,
 						brand,
 						quantity,
+						commissionAmount: String(commission),
 						supplierId: supplier ? supplier : null,
 						reorderLevel,
 						updatedBy: locals?.user?.id,
-						featuredImage
+						...(featuredImage ? { featuredImage } : {})
 					})
 					.where(eq(products.id, Number(id)));
-			} else {
-				await db
-					.update(products)
-					.set({
-						name: productName,
-						description,
-						brand,
-						quantity,
-						supplierId: supplier ? supplier : null,
-						reorderLevel,
-						updatedBy: locals?.user?.id
-					})
-					.where(eq(products.id, Number(id)));
-			}
+
+				// Re-sync categories (wipe + reinsert)
+				await tx.delete(categoriesProducts).where(eq(categoriesProducts.productId, Number(id)));
+				if (category && category.length > 0) {
+					await tx.insert(categoriesProducts).values(
+						category.map((categoryId) => ({
+							productId: Number(id),
+							categoryId,
+							createdBy: locals?.user?.id
+						}))
+					);
+				}
+
+				// Re-sync tags (wipe + reinsert)
+				await tx.delete(productTags).where(eq(productTags.productId, Number(id)));
+				if (tag && tag.length > 0) {
+					await tx.insert(productTags).values(
+						tag.map((tagId) => ({
+							productId: Number(id),
+							tagId
+						}))
+					);
+				}
+			});
 
 			return message(form, { type: 'success', text: 'Product Updated Successfully' });
 		} catch (err) {
 			console.error(err?.message);
-
-			return message(form, { type: 'error', text: 'Product Update Failed' + err?.message });
+			return message(form, { type: 'error', text: 'Product Update Failed ' + err?.message });
 		}
 	},
+
 	adjust: async ({ request, cookies, params, locals }) => {
 		const { id } = params;
 		const form = await superValidate(request, zod4(adjust));
@@ -81,9 +102,10 @@ export const actions: Actions = {
 
 		try {
 			if (!id) {
-				setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
-				return fail(400);
+				setFlash({ type: 'error', message: 'Unexpected Error: Product ID not provided' }, cookies);
+				return fail(400, { form });
 			}
+
 			const adjustment = intent === 'add' ? Number(quantity) : -Number(quantity);
 
 			if (reciept) {
@@ -92,7 +114,7 @@ export const actions: Actions = {
 				const [transactionId] = await db
 					.insert(transactions)
 					.values({
-						amount: adjustment,
+						amount: String(adjustment), // decimal column -> string
 						recieptLink,
 						createdBy: locals.user?.id
 					})
@@ -105,41 +127,35 @@ export const actions: Actions = {
 					transactionId: transactionId.id,
 					createdBy: locals.user?.id
 				});
-				await db
-					.update(products)
-					.set({
-						quantity: sql`quantity + ${adjustment}`,
-						updatedBy: locals.user?.id
-					})
-					.where(eq(products.id, Number(id)));
 			} else {
 				await db.insert(productAdjustments).values({
-					productsId: id,
+					productsId: Number(id), // was `id` (string) -> int column
 					adjustment,
 					reason,
 					createdBy: locals.user?.id
 				});
-
-				await db
-					.update(products)
-					.set({
-						quantity: sql`quantity + ${adjustment}`,
-						updatedBy: locals?.user?.id
-					})
-					.where(eq(products.id, Number(id)));
 			}
+
+			await db
+				.update(products)
+				.set({
+					quantity: sql`quantity + ${adjustment}`,
+					updatedBy: locals.user?.id
+				})
+				.where(eq(products.id, Number(id)));
 
 			return message(form, { type: 'success', text: 'Product Updated Successfully' });
 		} catch (err) {
 			return message(form, { type: 'error', text: 'Unexpected Error' + err?.message });
 		}
 	},
+
 	delete: async ({ cookies, params }) => {
 		const { id } = params;
 
 		try {
 			if (!id) {
-				setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
+				setFlash({ type: 'error', message: 'Unexpected Error: Product ID not provided' }, cookies);
 				return fail(400);
 			}
 
@@ -152,6 +168,7 @@ export const actions: Actions = {
 			return fail(400);
 		}
 	},
+
 	damaged: async ({ params, locals, request }) => {
 		const { id } = params;
 		const form = await superValidate(request, zod4(damaged));
@@ -164,7 +181,6 @@ export const actions: Actions = {
 			}
 
 			await db.transaction(async (tx) => {
-				// 1. Update damaged products record
 				await tx.insert(damagedProducts).values({
 					productId: Number(id),
 					quantity: Number(quantity),
@@ -173,7 +189,6 @@ export const actions: Actions = {
 					reason
 				});
 
-				// 2. Decrement the main product inventory
 				await tx
 					.update(products)
 					.set({
@@ -185,10 +200,11 @@ export const actions: Actions = {
 
 			return message(form, { type: 'success', text: 'Damaged supply added Successfully!' });
 		} catch (err) {
-			console.error('Error marking adding damaged supply:', err);
+			console.error('Error adding damaged supply:', err);
 			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
 		}
 	},
+
 	editGallery: async ({ params, locals, request }) => {
 		const { id } = params;
 		const form = await superValidate(request, zod4(editGallery));
@@ -201,42 +217,36 @@ export const actions: Actions = {
 			}
 
 			await db.transaction(async (tx) => {
-				let galleryImages = [];
+				let galleryImages: string[] = [];
 
-				// 1. Upload new files if they exist
 				if (gallery && gallery.length > 0) {
 					galleryImages = await uploadGallery(gallery);
 				}
-				const old = existing.split(',');
-				// 2. Combine existing (edited) strings with newly uploaded URLs
-				// We filter out empty strings/nulls to ensure data integrity
+
+				const old = existing ? existing.split(',') : [];
 				const finalList = [...new Set([...old, ...galleryImages])].filter(
 					(item) => item && item.trim() !== ''
 				);
 
-				// 3. ALWAYS sync if the final list is valid,
-				// even if galleryImages.length is 0 (e.g., you just deleted an old photo)
-				if (finalList.length > 0) {
-					const imageRecords = finalList.map((url) => ({
-						productId: Number(id),
-						imageUrl: url
-					}));
+				await tx.delete(productImages).where(eq(productImages.productId, Number(id)));
 
-					// Wipe the old associations and replace with the new "finalList"
-					await tx.delete(productImages).where(eq(productImages.productId, Number(id)));
-					await tx.insert(productImages).values(imageRecords);
-				} else {
-					// Handle the case where all images were removed
-					await tx.delete(productImages).where(eq(productImages.productId, Number(id)));
+				if (finalList.length > 0) {
+					await tx.insert(productImages).values(
+						finalList.map((url) => ({
+							productId: Number(id),
+							imageUrl: url
+						}))
+					);
 				}
 			});
 
 			return message(form, { type: 'success', text: 'Product Gallery added Successfully!' });
 		} catch (err) {
-			console.error('Error marking adding product gallery:', err);
+			console.error('Error adding product gallery:', err);
 			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
 		}
 	},
+
 	editPrice: async ({ request }) => {
 		const form = await superValidate(request, zod4(editPrice));
 
@@ -247,30 +257,17 @@ export const actions: Actions = {
 		const { id, price, amount, image } = form.data;
 
 		try {
-			if(image) {
-			const imageUrl = await saveUploadedFile(image);
-
-
-			await db
-				.update(priceList)
-				.set({
-					id,
-					price: String(price),
-					amount,
-					imageUrl
-				})
-				.where(eq(priceList.id, id));
-
-
+			if (image) {
+				const imageUrl = await saveUploadedFile(image);
+				await db
+					.update(priceList)
+					.set({ price: String(price), amount, imageUrl })
+					.where(eq(priceList.id, id));
 			} else {
-				 	await db
-				.update(priceList)
-				.set({
-					id,
-					price: String(price),
-					amount
-				})
-				.where(eq(priceList.id, id));
+				await db
+					.update(priceList)
+					.set({ price: String(price), amount })
+					.where(eq(priceList.id, id));
 			}
 
 			return message(form, { type: 'success', text: 'Product Price updated Successfully!' });
@@ -279,6 +276,7 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
 		}
 	},
+
 	addPrice: async ({ request, params }) => {
 		const form = await superValidate(request, zod4(addPrice));
 		const { id } = params;
@@ -290,7 +288,7 @@ export const actions: Actions = {
 		const { price, amount, image } = form.data;
 
 		try {
-			 const imageUrl = image ? await saveUploadedFile(image): null;
+			const imageUrl = image ? await saveUploadedFile(image) : null;
 			await db.insert(priceList).values({
 				productId: Number(id),
 				price: String(price),
@@ -304,6 +302,7 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
 		}
 	},
+
 	deletePrice: async ({ request }) => {
 		const form = await superValidate(request, zod4(editPrice));
 
@@ -327,20 +326,10 @@ export const actions: Actions = {
 	}
 };
 
-const uploadGallery = async (gallery: File[] | undefined) => {
+const uploadGallery = async (gallery: File[]): Promise<string[]> => {
 	try {
-		// 1. Map each file to the upload promise
-		const uploadPromises = gallery.map(async (file) => {
-			const address = await saveUploadedFile(file);
-			return address; // This is the string returned by your function
-		});
-
-		// 2. Wait for all uploads to complete and store results in an array
-		const uploadedAddresses: string[] = await Promise.all(uploadPromises);
-
-		console.log('All files uploaded:', uploadedAddresses);
-
-		return uploadedAddresses;
+		const uploadPromises = gallery.map((file) => saveUploadedFile(file));
+		return await Promise.all(uploadPromises);
 	} catch (error) {
 		console.error('Error uploading gallery:', error);
 		throw error;

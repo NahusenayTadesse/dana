@@ -4,7 +4,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 </script>
 
-<section class="relative mb-10 overflow-hidden bg-background px-4 py-24 text-foreground sm:py-32">
+<section class="relative mb-10 overflow-hidden  px-4 py-24 text-foreground sm:py-32">
 	<div
 		class="absolute top-0 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
 	></div>

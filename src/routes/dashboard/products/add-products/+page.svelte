@@ -50,6 +50,7 @@
 </svelte:head>
 
 <FormCard
+   className="w-full!"
     title="Add A Product Item"
     description="Add New Inventory Items to track specifications and stock levels"
 >

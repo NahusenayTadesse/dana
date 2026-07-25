@@ -108,7 +108,7 @@ export async function searchProductsForAi(input: SearchProductsForAiInput) {
         .select({
             productId: prices.productId,
             price: prices.price,
-            variant: prices.amount
+            variant: prices.variant
         })
         .from(prices)
         .where(inArray(prices.productId, productIds));
