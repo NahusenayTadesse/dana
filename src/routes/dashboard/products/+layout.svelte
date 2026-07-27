@@ -18,6 +18,26 @@
 		variant={page.url.pathname === '/dashboard/products/add-products' ? 'default' : 'outline'}
 		><Plus /> Add Products</Button
 	>
+	<Button
+		href="/dashboard/products/colors"
+		variant={page.url.pathname === '/dashboard/products/colors' ? 'default' : 'outline'}
+		><Sheet /> Colors</Button
+	>
+		<Button
+		href="/dashboard/products/widths"
+		variant={page.url.pathname === '/dashboard/products/widths' ? 'default' : 'outline'}
+		><Sheet /> Widths</Button
+	>
+		<Button
+		href="/dashboard/products/thickness"
+		variant={page.url.pathname === '/dashboard/products/thickness' ? 'default' : 'outline'}
+		><Sheet /> Thickness</Button
+	>
+			<Button
+		href="/dashboard/products/lengths"
+		variant={page.url.pathname === '/dashboard/products/lengths' ? 'default' : 'outline'}
+		><Sheet /> Lengths</Button
+	>
 
 	<Button
 		href="/dashboard/products/categories"

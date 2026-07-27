@@ -175,7 +175,7 @@
 	>
 		<ScrollArea orientation="vertical" class="w-full rounded-lg p-2">
 			<div class="flex min-w-full flex-col gap-2 rounded-md border-0 px-1">
-				{#if search}
+				
 					<ScrollArea
 						orientation="horizontal"
 						class="flex w-full flex-row rounded-md border whitespace-nowrap"
@@ -184,6 +184,7 @@
 							class="flex w-full space-x-4 p-4
 						"
 						>
+						{#if search}
 							<Input
 								type="search"
 								placeholder="Search Table..."
@@ -191,6 +192,7 @@
 								bind:value={globalFilter}
 								oninput={() => table.setGlobalFilter(globalFilter)}
 							/>
+							{/if}
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger>
 									{#snippet child({ props })}
@@ -249,8 +251,8 @@
 							</Button>
 						</div>
 					</ScrollArea>
-				{/if}
-				<div class="max-h-96 rounded-md border">
+				
+				<div class="rounded-md border">
 					<Table.Root id={uniqueTableId} class="relative max-h-96">
 						<Table.Header>
 							{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}

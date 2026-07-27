@@ -3,6 +3,7 @@ import DataTableLinks from '$lib/components/Table/data-table-links.svelte';
 import Copy from '$lib/Copy.svelte';
 import DataTableActions from './data-table-actions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
+import { Eye } from '@lucide/svelte';
 
 export const columns = [
 	{
@@ -36,10 +37,35 @@ export const columns = [
 		cell: ({ row }) => renderComponent(Copy, { data: row.original.phone })
 	},
 	{
-		accessorKey: 'email',
+		accessorKey: 'Email',
 		header: 'email',
 		sortable: true,
 		cell: ({ row }) => renderComponent(Copy, { data: row.original.email })
+	},
+	{
+		accessorKey: 'tinNo',
+		header: 'Tin Number',
+		sortable: true,
+		cell: ({ row }) => renderComponent(Copy, { data: row.original.tinNo })
+	},
+		{
+		accessorKey: 'docs',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Trade Licenece',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: ({ row }) => {
+			// You can pass whatever you need from `row.original` to the component
+			return row.original.docs ? renderComponent(DataTableLinks, {
+				id: row.original.docs,
+				name:  "View Trade Licence",
+				link: '/files',
+				target: '_blank',
+				IconComp: Eye
+			}) : 'No Trade Licence';
+		}
 	},
 
 	{

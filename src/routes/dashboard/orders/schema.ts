@@ -1,47 +1,59 @@
 import { z } from 'zod/v4';
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 5MB limit
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPTED_FILE_TYPES = [
-	'image/jpeg', // Common for both platforms
-	'image/png', // Common for both platforms (and screenshots)
-	'image/webp', // Common modern format (often Android screenshots/exports)
-	'image/heic', // High Efficiency Image File (iOS default)
-	'image/heif', // High Efficiency Image File (related to HEIC)
-	'application/pdf' // Document format, kept from original
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+	'image/heic',
+	'image/heif',
+	'application/pdf'
 ];
-export const add = z.object({
-	customer: z.coerce.number('Customer is required'),
-	selectedProducts: z
-		.object({
-			product: z.number({ message: 'Product is required' }).int().positive('Product is required'),
-			quantity: z.number().int().positive('Number of products must be at least 1'),
-			amount: z.string('Variation is required')
-		})
-		.array(),
 
-	status: z
-		.enum(['pending', 'delivered', 'cancelled'], { message: 'Status is required' })
-		.default('pending')
+const emptyToNull = (v: unknown) => (v === '' || v === undefined ? null : v);
+
+const orderLine = z.object({
+	productId: z.coerce.number().int().positive('Select a product.'),
+	variantId: z.coerce.number().int().positive('Select a variant.'),
+	quantity: z.coerce.number().int().positive('Quantity must be at least 1.')
 });
 
-export const edit = z.object({
-	id: z.coerce.number(),
-	customer: z.coerce.number('Customer is required'),
-	selectedProducts: z
-		.object({
-			product: z.number({ message: 'Product is required' }).int().positive('Product is required'),
-			quantity: z.number().int().positive('Number of products must be at least 1'),
-			amount: z.string('Amount is required')
-		})
-		.array(),
+const receipt = z
+	.instanceof(File)
+	.refine((f) => f.size <= MAX_FILE_SIZE, 'Max file size is 10MB.')
+	.refine((f) => f.size === 0 || ACCEPTED_FILE_TYPES.includes(f.type), 'Invalid file type.')
+	.optional()
+	.nullable();
 
-	status: z
-		.enum(['pending', 'delivered', 'cancelled'], { message: 'Status is required' })
-		.default('pending'),
-	reciept: z
-		.instanceof(File)
-		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
-		.refine((file) => ACCEPTED_FILE_TYPES.includes(file.type), 'Invalid file type.')
-		.optional(),
-	paymentMethod: z.number().optional()
-});
+const base = {
+	customer: z.coerce.number().int().positive('Select a customer.'),
+	status: z.enum(['pending', 'delivered', 'cancelled']).default('pending'),
+	items: z.array(orderLine).min(1, 'Add at least one product.'),
+	paymentMethod: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()),
+	reciept: receipt,
+	// Set by the client when the order was already settled by the gateway.
+	// The server re-verifies against the DB — this only relaxes validation.
+	gatewayPaid: z.boolean().default(false)
+};
+
+// Delivered orders need a payment method UNLESS the gateway already settled it.
+const requirePaymentWhenDelivered = (
+	val: { status: string; paymentMethod: number | null; gatewayPaid?: boolean },
+	ctx: z.RefinementCtx
+) => {
+	if (val.status === 'delivered' && !val.gatewayPaid && !val.paymentMethod) {
+		ctx.addIssue({
+			code: 'custom',
+			path: ['paymentMethod'],
+			message: 'Payment method is required for delivered orders.'
+		});
+	}
+};
+
+export const add = z.object(base).superRefine(requirePaymentWhenDelivered);
+export const edit = z
+	.object({ ...base, id: z.coerce.number().int().positive() })
+	.superRefine(requirePaymentWhenDelivered);
+
+export type Add = z.infer<typeof add>;
 export type Edit = z.infer<typeof edit>;

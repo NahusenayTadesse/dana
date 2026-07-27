@@ -14,23 +14,35 @@
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { ArrowLeft, Pencil, Save, History, X, Plus, ArrowDown, Tag } from '@lucide/svelte';
 	import type { Snapshot } from '@sveltejs/kit';
-	import { getCurrentMonthRange } from '$lib/global.svelte';
+	import { getCurrentMonthRange, formatETB } from '$lib/global.svelte';
 	import Delete from '$lib/forms/Delete.svelte';
 	import SingleView from '$lib/components/SingleView.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import Adjustment from '$lib/forms/Adjustment.svelte';
 	import Damaged from '$lib/forms/Damaged.svelte';
 
-	function scrollToPrices() {
-		const element = document.getElementById('price-section-anchor');
+	function scrollToVariants() {
+		const element = document.getElementById('variant-section-anchor');
 		if (element) {
 			element.scrollIntoView({ behavior: 'smooth' });
 		}
 	}
 
+	// Products no longer carry a single price — derive a range from the variants.
+	let priceRange = $derived.by(() => {
+		const priced = (data?.variants ?? [])
+			.map((v) => Number(v.price))
+			.filter((n) => !Number.isNaN(n) && n > 0);
+		if (priced.length === 0) return 'Quote only';
+		const min = Math.min(...priced);
+		const max = Math.max(...priced);
+		return min === max ? formatETB(min) : `${formatETB(min)} – ${formatETB(max)}`;
+	});
+
 	let singleTable = $derived([
 		{ name: 'Name', value: data.product?.name },
-		{ name: 'Price', value: data.product?.price },
+		{ name: 'Price Range', value: priceRange },
+		{ name: 'Variants', value: `${(data?.variants ?? []).length} variant(s)` },
 		{ name: 'Available Quantity', value: data.product?.quantity },
 		{ name: 'Product Description', value: data.product?.description },
 		{ name: 'Commission', value: data.product?.commission },
@@ -86,9 +98,16 @@
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
 	import { renderComponent } from '$lib/components/ui/data-table/index.js';
-	import EditPrice from './editPrice.svelte';
-	import AddPrice from './addPrice.svelte';
-	import DeletePrice from './deletePrice.svelte';
+	import EditVariant from './EditVariant.svelte';
+	import AddVariant from './AddVariant.svelte';
+	import ImageViewer from '$lib/components/Table/image-viewer.svelte';
+
+	// Sortable column header helper (keeps the column defs tidy).
+	const sortableHeader = (name: string) => ({ column }: { column: any }) =>
+		renderComponent(DataTableSort, {
+			name,
+			onclick: column.getToggleSortingHandler()
+		});
 
 	const columns = [
 		{
@@ -98,47 +117,83 @@
 			sortable: false
 		},
 		{
-			accessorKey: 'amount',
-			header: ({ column }) =>
-				renderComponent(DataTableSort, {
-					name: 'Amount',
-					onclick: column.getToggleSortingHandler()
-				}),
-			sortable: true
+			accessorKey: 'imageUrl',
+			header: "Image",
+			sortable: true,
+			cell: ({ row }) =>
+				renderComponent(ImageViewer, {
+					 src: row.original.imageUrl,
+					 alt: row.original.sku
+				})
+		
 		},
 		{
-			accessorKey: 'Price',
-			header: ({ column }) =>
-				renderComponent(DataTableSort, {
-					name: 'Price',
-					onclick: column.getToggleSortingHandler()
-				}),
+			accessorKey: 'sku',
+			header: sortableHeader('SKU'),
 			sortable: true,
-			cell: ({ row }) => {
-				return renderComponent(EditPrice, {
-					id: row.original.id,
-					price: row.original.price,
-					amount: row.original.amount,
-					data: data?.priceEdit
-				});
-			}
+			cell: ({ row }) => row.original.sku ?? '—'
 		},
 		{
-			accessorKey: 'delete',
-			header: ({ column }) =>
-				renderComponent(DataTableSort, {
-					name: 'Delete',
-					onclick: column.getToggleSortingHandler()
-				}),
+			accessorKey: 'colorName',
+			header: sortableHeader('Colour'),
 			sortable: true,
-			cell: ({ row }) => {
-				return renderComponent(DeletePrice, {
-					id: row.original.id,
-					price: row.original.price,
-					amount: row.original.amount,
-					data: data?.priceEdit
-				});
-			}
+			cell: ({ row }) => row.original.colorName ?? '—'
+		},
+		{
+			id: 'width',
+			accessorFn: (row) => (row.width != null ? Number(row.width) : null),
+			header: sortableHeader('Width'),
+			sortable: true,
+			cell: ({ row }) =>
+				row.original.width ? `${Number(row.original.width)}${row.original.widthUnit}` : '—'
+		},
+		{
+			id: 'thickness',
+			accessorFn: (row) => (row.thickness != null ? Number(row.thickness) : null),
+			header: sortableHeader('Thickness'),
+			sortable: true,
+			cell: ({ row }) =>
+				row.original.thickness
+					? `${Number(row.original.thickness)}${
+							row.original.thicknessUnit === 'gauge' ? ' ga' : row.original.thicknessUnit
+						}`
+					: '—'
+		},
+		{
+			id: 'length',
+			accessorFn: (row) => (row.length != null ? Number(row.length) : null),
+			header: sortableHeader('Length'),
+			sortable: true,
+			cell: ({ row }) =>
+				row.original.length ? `${Number(row.original.length)}${row.original.lengthUnit}` : '—'
+		},
+		{
+			id: 'price',
+			accessorFn: (row) => (row.price != null ? Number(row.price) : null),
+			header: sortableHeader('Price'),
+			sortable: true,
+			cell: ({ row }) =>
+				row.original.price ? formatETB(Number(row.original.price)) : 'Quote only'
+		},
+		{
+			accessorKey: 'quantity',
+			header: sortableHeader('Qty'),
+			sortable: true,
+			cell: ({ row }) => row.original.quantity
+		},
+		{
+			accessorKey: 'actions',
+			header: 'Edit',
+			sortable: false,
+			cell: ({ row }) =>
+				renderComponent(EditVariant, {
+					data: data?.editVariantForm,
+					variant: row.original,
+					colorItems: data?.colorItems,
+					widthItems: data?.widthItems,
+					thicknessItems: data?.thicknessItems,
+					lengthItems: data?.lengthItems
+				})
 		}
 	];
 
@@ -173,7 +228,7 @@
 
 		<Delete redirect="/dashboard/products" />
 	</div>
-	{#if data.priceList.length === 0}
+	{#if data.variants.length === 0}
 		<div
 			class="mx-auto my-12 flex w-1/2 flex-col items-center rounded-xl border border-destructive p-8 text-center text-destructive backdrop-blur-sm"
 		>
@@ -181,15 +236,15 @@
 				<Tag class="h-6 w-6" />
 			</div>
 
-			<h3 class="text-lg font-bold">Pricing Required</h3>
+			<h3 class="text-lg font-bold">Variant Required</h3>
 			<p class="mx-auto mt-2 max-w-sm text-sm leading-relaxed">
-				This product is currently hidden from customers. Add at least one price to enable
+				This product is currently hidden from customers. Add at least one variant to enable
 				purchasing.
 			</p>
 
-			<Button variant="default" class="mt-4" onclick={scrollToPrices}>
+			<Button variant="default" class="mt-4" onclick={scrollToVariants}>
 				<Plus class="mr-2 h-4 w-4" />
-				Add Pricing Structure
+				Add Product Variant
 			</Button>
 		</div>
 	{/if}
@@ -373,19 +428,27 @@
 		</div>
 	{/if}
 </SingleView>
-<div id="price-section-anchor" class="mx-auto my-12 px-4 pt-12 sm:px-6 lg:px-4">
-	{#key data?.priceList}
+<div id="variant-section-anchor" class="mx-auto my-12 px-4 pt-12 sm:px-6 lg:px-4">
+	{#key data?.variants}
 		<div class="mb-6 flex flex-col gap-4 border-b border-gray-100 pb-4">
-			<h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Price List</h1>
-			<div class="w-sm"><AddPrice data={data?.priceAdd} /></div>
-			{#if data.priceList.length === 0}
-				<p class="animate-pulse text-destructive">No prices available for this product.</p>
+			<h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Variants &amp; Pricing</h1>
+			<div class="w-sm">
+				<AddVariant
+					data={data?.addVariantForm}
+					colorItems={data?.colorItems}
+					widthItems={data?.widthItems}
+					thicknessItems={data?.thicknessItems}
+					lengthItems={data?.lengthItems}
+				/>
+			</div>
+			{#if data.variants.length === 0}
+				<p class="animate-pulse text-destructive">No variants available for this product.</p>
 			{:else}
 				<DataTable
 					{columns}
-					data={data?.priceList}
+					data={data?.variants}
 					class="w-6xl!"
-					fileName="{data?.product?.name} - Price List"
+					fileName="{data?.product?.name} - Variants"
 					search={true}
 				/>
 			{/if}

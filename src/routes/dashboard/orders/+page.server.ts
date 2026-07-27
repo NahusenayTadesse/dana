@@ -1,273 +1,363 @@
-import { superValidate, message, setError } from 'sveltekit-superforms';
+import { eq, and, or, like, sql, inArray, desc } from 'drizzle-orm';
+import { superValidate, message, fail } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq, and, sql } from 'drizzle-orm';
-import { sendEmail, customerDeliveredTemplate, adminDeliveredTemplate } from '$lib/server/email';
-import { USER } from '$env/static/private';
 
-import { add, edit } from './schema';
 import { db } from '$lib/server/db';
 import {
 	orders,
 	orderItems,
 	products,
+	productVariants,
 	customers,
-	prices,
-	transactions
+	transactions,
+	paymentMethods,
+	colors,
+	widths,
+	thicknesses,
+	lengths
 } from '$lib/server/db/schema';
-import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile } from '$lib/server/upload';
+import { add, edit } from './schema';
+import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-	const form = await superValidate(zod4(add));
-	const editForm = await superValidate(zod4(edit));
+const STATUSES = ['pending', 'delivered', 'cancelled'] as const;
+type Status = (typeof STATUSES)[number];
 
-	const fetchedProducts = await db
+const PER_PAGE = 20;
+
+const spec = (value: string | number | null, unit: string | null) =>
+	value != null ? `${Number(value)}${unit === 'gauge' ? 'ga' : unit}` : null;
+
+export const load: PageServerLoad = async ({ url }) => {
+	const raw = url.searchParams.get('status');
+	const status: Status | null = STATUSES.includes(raw as Status) ? (raw as Status) : null;
+	const q = (url.searchParams.get('q') ?? '').trim();
+
+	// Per-order total, summed in SQL so it's searchable / sortable.
+	const itemTotals = db
 		.select({
-			value: products.id,
-			name: products.name
+			orderId: orderItems.orderId,
+			total: sql<number>`SUM(${orderItems.quantity} * ${orderItems.price})`.as('total')
 		})
-		.from(products);
+		.from(orderItems)
+		.groupBy(orderItems.orderId)
+		.as('item_totals');
 
-	const fetchedPrices = await db
-		.select({
-			value: sql<string>`CONCAT(${prices.price}, ' ', ${prices.variant})`,
-			name: sql<string>`CONCAT(${prices.price}, ' ', ${prices.variant}, ' pieces')`,
-			productId: prices.productId,
-			price: prices.price,
-			amount: prices.variant
-		})
-		.from(prices);
+	// Build the WHERE from status + free-text search across everything an
+	// order touches: customer, order id, token, payment status, total.
+	const conditions = [];
+	if (status) conditions.push(eq(orders.status, status));
+	if (q) {
+		const pattern = `%${q}%`;
+		conditions.push(
+			or(
+				like(customers.name, pattern),
+				like(customers.phone, pattern),
+				like(transactions.txnRef, pattern),
+				like(transactions.paymentStatus, pattern),
+				like(orders.status, pattern),
+				sql`CAST(${orders.id} AS CHAR) LIKE ${pattern}`,
+				sql`CAST(COALESCE(${itemTotals.total}, 0) AS CHAR) LIKE ${pattern}`,
+				sql`CAST(${transactions.amount} AS CHAR) LIKE ${pattern}`
+			)
+		);
+	}
+	const whereClause = conditions.length ? and(...conditions) : undefined;
 
-	const fetchedCustomers = await db
-		.select({
-			value: customers.id,
-			name: sql<string>`CONCAT(${customers.name}, ' ', ${customers.phone})`
-		})
-		.from(customers);
+	// Count (same joins/filter) to size the pager.
+	const [{ count }] = await db
+		.select({ count: sql<number>`count(*)`.mapWith(Number) })
+		.from(orders)
+		.leftJoin(customers, eq(orders.customerId, customers.id))
+		.leftJoin(transactions, eq(orders.transactionId, transactions.id))
+		.leftJoin(itemTotals, eq(orders.id, itemTotals.orderId))
+		.where(whereClause);
 
-	const allData = await db
+	const totalPages = Math.max(1, Math.ceil(count / PER_PAGE));
+	const requested = Number(url.searchParams.get('page')) || 1;
+	const currentPage = Math.min(Math.max(1, requested), totalPages);
+	const offset = (currentPage - 1) * PER_PAGE;
+
+	const allOrders = await db
 		.select({
 			id: orders.id,
 			name: customers.name,
-			customerId: customers.id,
 			phone: customers.phone,
-			status: orders.status
+			customerId: customers.id,
+			paymentMethod: transactions.paymentMethodId,
+			recieptLink: transactions.recieptLink,
+			txnRef: transactions.txnRef, // gateway token
+			paymentStatus: transactions.paymentStatus,
+			status: orders.status,
+			createdAt: orders.createdAt,
+			total: sql<number>`COALESCE(${itemTotals.total}, 0)`.mapWith(Number)
 		})
 		.from(orders)
 		.leftJoin(customers, eq(orders.customerId, customers.id))
-		.where(eq(orders.status, 'pending'));
+		.leftJoin(transactions, eq(orders.transactionId, transactions.id))
+		.leftJoin(itemTotals, eq(orders.id, itemTotals.orderId))
+		.where(whereClause)
+		.orderBy(desc(orders.id))
+		.limit(PER_PAGE)
+		.offset(offset);
 
-	const allItems = await db
+	const pageOrderIds = allOrders.map((o) => o.id);
+	const allItems = pageOrderIds.length
+		? await db
+				.select({
+					id: orderItems.id,
+					orderId: orderItems.orderId,
+					product: products.name,
+					productId: orderItems.productId,
+					variantId: orderItems.variantId,
+					quantity: orderItems.quantity,
+					amount: orderItems.amount,
+					price: orderItems.price,
+					total: sql<number>`${orderItems.quantity} * ${orderItems.price}`.mapWith(Number)
+				})
+				.from(orderItems)
+				.leftJoin(products, eq(orderItems.productId, products.id))
+				.where(inArray(orderItems.orderId, pageOrderIds))
+		: [];
+
+	const customerList = await db.select({ value: customers.id, name: customers.name }).from(customers);
+	const productList = await db.select({ value: products.id, name: products.name }).from(products);
+	const paymentMethodList = await db
+		.select({ value: paymentMethods.id, name: paymentMethods.name })
+		.from(paymentMethods);
+
+	const variantRows = await db
 		.select({
-			id: orderItems.id,
-			orderId: orderItems.orderId,
-			product: products.name,
-			amount: orderItems.amount,
-			quantity: orderItems.quantity,
-			productId: orderItems.productId,
-			price: orderItems.price,
-			total: sql<number>`${orderItems.quantity} * ${orderItems.price}`.mapWith(Number)
+			id: productVariants.id,
+			productId: productVariants.productId,
+			sku: productVariants.sku,
+			price: productVariants.price,
+			colorName: colors.name,
+			width: widths.value,
+			widthUnit: widths.unit,
+			thickness: thicknesses.value,
+			thicknessUnit: thicknesses.unit,
+			length: lengths.value,
+			lengthUnit: lengths.unit
 		})
-		.from(orderItems)
-		.leftJoin(orders, and(eq(orders.id, orderItems.orderId), eq(orders.status, 'pending')))
-		.leftJoin(products, eq(orderItems.productId, products.id));
+		.from(productVariants)
+		.leftJoin(colors, eq(productVariants.colorId, colors.id))
+		.leftJoin(widths, eq(productVariants.widthId, widths.id))
+		.leftJoin(thicknesses, eq(productVariants.thicknessId, thicknesses.id))
+		.leftJoin(lengths, eq(productVariants.lengthId, lengths.id));
+
+	const variantList = variantRows.map((v) => {
+		const label =
+			[v.sku, v.colorName, spec(v.width, v.widthUnit), spec(v.thickness, v.thicknessUnit), spec(v.length, v.lengthUnit)]
+				.filter(Boolean)
+				.join(' · ') || `Variant #${v.id}`;
+		const priceText = v.price != null ? ` — ETB ${Number(v.price).toLocaleString()}` : ' — quote';
+		return { value: v.id, productId: v.productId, price: v.price, name: label + priceText };
+	});
+
+	const addForm = await superValidate(zod4(add));
+	const editForm = await superValidate(zod4(edit));
 
 	return {
-		form,
-		editForm,
-		allData,
+		activeStatus: status ?? 'all',
+		q,
+		allOrders,
 		allItems,
-		fetchedProducts,
-		fetchedCustomers,
-		fetchedPrices
+		customerList,
+		productList,
+		variantList,
+		paymentMethodList,
+		addForm,
+		editForm,
+		page: currentPage,
+		perPage: PER_PAGE,
+		totalOrders: count,
+		totalPages
 	};
 };
+
+async function resolveLines(items: { productId: number; variantId: number; quantity: number }[]) {
+	const rows = await db
+		.select({
+			id: productVariants.id,
+			productId: productVariants.productId,
+			price: productVariants.price,
+			sku: productVariants.sku
+		})
+		.from(productVariants)
+		.where(inArray(productVariants.id, items.map((i) => i.variantId)));
+
+	const map = new Map(rows.map((r) => [r.id, r]));
+
+	for (const line of items) {
+		const v = map.get(line.variantId);
+		if (!v || v.productId !== line.productId) {
+			return { error: 'A selected variant does not match its product.' as const };
+		}
+	}
+
+	const total = items.reduce(
+		(sum, line) => sum + Number(map.get(line.variantId)?.price ?? 0) * line.quantity,
+		0
+	);
+
+	const values = (orderId: number, userId?: string) =>
+		items.map((line) => {
+			const v = map.get(line.variantId)!;
+			return {
+				orderId,
+				productId: line.productId,
+				variantId: line.variantId,
+				quantity: line.quantity,
+				price: v.price ?? '0',
+				amount: v.sku ?? `variant-${line.variantId}`,
+				createdBy: userId
+			};
+		});
+
+	return { total, values };
+}
 
 export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(add));
-		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Please check the form for Errors' });
-		}
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' });
 
-		const { selectedProducts, customer, status } = form.data;
+		const { customer, status, items, paymentMethod, reciept } = form.data;
+		const resolved = await resolveLines(items);
+		if ('error' in resolved) return message(form, { type: 'error', text: resolved.error });
+
+		const recieptLink = reciept && reciept.size > 0 ? await saveUploadedFile(reciept) : null;
 
 		try {
 			await db.transaction(async (tx) => {
-				const [orderId] = await tx
-					.insert(orders)
-					.values({ customerId: customer, status })
-					.$returningId();
-
-				if (selectedProducts.length) {
-					await tx.insert(orderItems).values(
-						selectedProducts.map((product) => ({
-							orderId: orderId.id,
-							productId: Number(product.product),
-							amount: splitNumbers(product.amount).amount,
-							quantity: Number(product.quantity),
-							price: splitNumbers(product.amount).price,
-							createdBy: locals?.user?.id
-						}))
-					);
-				}
-			});
-
-			return message(form, { type: 'success', text: 'Order Successfully Added' });
-		} catch (err) {
-			return message(form, {
-				type: 'error',
-				text: 'Error Adding Orders: ' + err?.message
-			});
-		}
-	},
-	edit: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(edit));
-
-		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Please check the form for Errors' });
-		}
-		console.log(form);
-
-		const { id, selectedProducts, customer, status, reciept, paymentMethod } = form.data;
-
-		try {
-			const result = await db.transaction(async (tx) => {
-				if (status === 'delivered' && !paymentMethod) {
-					setError(form, 'paymentMethod', 'Payment Method Error is required for Delivered Orders');
-					return message(
-						form,
-						{ type: 'error', text: 'Payment Method Error is required for Delivered Orders' },
-						{
-							status: 500
-						}
-					);
-				}
-
-				const recieptLink = reciept ? await saveUploadedFile(reciept) : null;
-				let transactionId: number;
-
-				const [existingTransaction] = await tx
-					.select({
-						transactionId: orders.transactionId
-					})
-					.from(orders)
-					.where(eq(orders.id, id))
-					.limit(1);
-
-				if (existingTransaction.transactionId) {
-					await tx
-						.update(transactions)
-						.set({
-							paymentMethodId: paymentMethod,
-							amount: String(getTotal(selectedProducts)),
-							recieptLink,
-							updatedBy: locals?.user?.id
-						})
-						.where(eq(transactions.id, existingTransaction.transactionId));
-
-					transactionId = existingTransaction.transactionId;
-				} else {
-					const [newTransaction] = await tx
+				let transactionId: number | null = null;
+				if (status === 'delivered') {
+					const [txn] = await tx
 						.insert(transactions)
 						.values({
-							paymentMethodId: paymentMethod,
-							amount: String(getTotal(selectedProducts)),
+							amount: String(resolved.total),
+							paymentStatus: 'paid',
+							paymentMethodId: paymentMethod ?? null,
 							recieptLink,
-							updatedBy: locals?.user?.id
+							createdBy: locals?.user?.id
 						})
 						.$returningId();
+					transactionId = txn.id;
+				}
 
-					transactionId = newTransaction.id;
+				const [order] = await tx
+					.insert(orders)
+					.values({ customerId: customer, status, transactionId, createdBy: locals?.user?.id })
+					.$returningId();
+
+				await tx.insert(orderItems).values(resolved.values(order.id, locals?.user?.id));
+			});
+
+			return message(form, { type: 'success', text: 'Order created successfully.' });
+		} catch (err) {
+			console.error('Create order failed:', err);
+			return message(form, { type: 'error', text: 'Could not create the order.' }, { status: 500 });
+		}
+	},
+
+	edit: async ({ request, locals }) => {
+		const form = await superValidate(request, zod4(edit));
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' });
+
+		const { id, customer, status, items, paymentMethod, reciept } = form.data;
+		const resolved = await resolveLines(items);
+		if ('error' in resolved) return message(form, { type: 'error', text: resolved.error });
+
+		const recieptLink = reciept && reciept.size > 0 ? await saveUploadedFile(reciept) : null;
+
+		try {
+			await db.transaction(async (tx) => {
+				const [ord] = await tx
+					.select({ transactionId: orders.transactionId })
+					.from(orders)
+					.where(eq(orders.id, id));
+				let transactionId = ord?.transactionId ?? null;
+
+				let existingTxn:
+					| { txnRef: string | null; paymentStatus: string | null; paymentMethodId: number | null }
+					| undefined;
+				if (transactionId) {
+					[existingTxn] = await tx
+						.select({
+							txnRef: transactions.txnRef,
+							paymentStatus: transactions.paymentStatus,
+							paymentMethodId: transactions.paymentMethodId
+						})
+						.from(transactions)
+						.where(eq(transactions.id, transactionId));
+				}
+
+				// The gateway is the source of truth: if it settled this order,
+				// never overwrite its token / status / method — only refresh amount.
+				const gatewaySettled = !!existingTxn?.txnRef && existingTxn?.paymentStatus === 'paid';
+
+				if (status === 'delivered') {
+					if (transactionId) {
+						if (gatewaySettled) {
+							await tx
+								.update(transactions)
+								.set({ amount: String(resolved.total) })
+								.where(eq(transactions.id, transactionId));
+						} else {
+							await tx
+								.update(transactions)
+								.set({
+									amount: String(resolved.total),
+									paymentStatus: 'paid',
+									paymentMethodId: paymentMethod ?? existingTxn?.paymentMethodId ?? null,
+									...(recieptLink ? { recieptLink } : {})
+								})
+								.where(eq(transactions.id, transactionId));
+						}
+					} else {
+						const [txn] = await tx
+							.insert(transactions)
+							.values({
+								amount: String(resolved.total),
+								paymentStatus: 'paid',
+								paymentMethodId: paymentMethod ?? null,
+								recieptLink,
+								createdBy: locals?.user?.id
+							})
+							.$returningId();
+						transactionId = txn.id;
+					}
 				}
 
 				await tx
 					.update(orders)
-					.set({ customerId: customer, status, transactionId, updatedBy: locals?.user?.id })
-					.where(eq(orders.id, Number(id)));
+					.set({ customerId: customer, status, transactionId })
+					.where(eq(orders.id, id));
 
-				if (selectedProducts.length) {
-					await tx.delete(orderItems).where(eq(orderItems.orderId, Number(id)));
-					await tx.insert(orderItems).values(
-						selectedProducts.map((product) => ({
-							orderId: Number(id),
-							productId: Number(product.product),
-							amount: splitNumbers(product.amount).amount,
-							quantity: Number(product.quantity),
-							price: splitNumbers(product.amount).price
-						}))
-					);
-				}
+				await tx.delete(orderItems).where(eq(orderItems.orderId, id));
+				await tx.insert(orderItems).values(resolved.values(id, locals?.user?.id));
 			});
 
-			if (result) {
-				return message(form, { type: 'success', text: 'Order Successfully Updated' });
-			}
-
-			if (status === 'delivered') {
-				const customerId = await db
-					.select({
-						id: orders.customerId
-					})
-					.from(orders)
-					.where(eq(orders.id, id))
-					.then((rows) => rows[0]);
-
-				const customerInfo = await db
-					.select({
-						name: customers.name,
-						email: customers.email
-					})
-					.from(customers)
-					.where(eq(customers.id, customerId.id))
-					.then((rows) => rows[0]);
-
-				const total = getTotal(selectedProducts);
-
-				sendEmail(
-					customerInfo.email,
-					customerDeliveredTemplate(id, selectedProducts, total).subject,
-					customerDeliveredTemplate(id, selectedProducts, total).html
-				).catch((err) => console.error('Email Error (Customer):', err));
-
-				sendEmail(
-					USER,
-					adminDeliveredTemplate(id, selectedProducts, total).subject,
-					adminDeliveredTemplate(id, selectedProducts, total).html
-				).catch((err) => console.error('Email Error (Admin):', err));
-			}
-			return message(form, { type: 'success', text: 'Order Successfully Updated' });
+			return message(form, { type: 'success', text: 'Order updated successfully.' });
 		} catch (err) {
-			console.error(err?.message);
-			return message(form, {
-				type: 'error',
-				text: 'Error Updating Orders: ' + err?.message
-			});
+			console.error('Update order failed:', err);
+			return message(form, { type: 'error', text: 'Could not update the order.' }, { status: 500 });
+		}
+	},
+
+	delete: async ({ request }) => {
+		const data = await request.formData();
+		const id = Number(data.get('id'));
+		if (!id) return fail(400, { deleted: false });
+
+		try {
+			await db.delete(orderItems).where(eq(orderItems.orderId, id));
+			await db.delete(orders).where(eq(orders.id, id));
+			return { deleted: true };
+		} catch (err) {
+			console.error('Delete order failed:', err);
+			return fail(500, { deleted: false });
 		}
 	}
 };
-
-function getPrice(list: Array<{ value: number; price: string }>, value: number): number {
-	const item = list.find((i) => i.value === value);
-	return item ? Number(item.price) : 0;
-}
-function splitNumbers(input: string) {
-	const [first, second] = input.split(' ');
-	return {
-		price: Number(first),
-		amount: second
-	};
-}
-
-type SelectedProduct = {
-	product: number;
-	quantity: number;
-	amount: string; // e.g. "200.00 50g"
-};
-
-function getTotal(selectedProducts: SelectedProduct[] = []): number {
-	return selectedProducts.reduce((total, item) => {
-		const price = parseFloat(item?.amount?.split(' ')[0] ?? '0');
-		return total + price * (item.quantity ?? 0);
-	}, 0);
-}

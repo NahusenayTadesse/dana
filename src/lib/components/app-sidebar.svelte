@@ -40,13 +40,7 @@
 					title: 'Orders',
 					url: '/dashboard/orders',
 					icon: ListOrdered,
-					counter: ordersNumber,
-					items: [
-						{ title: 'All Orders', url: '/dashboard/orders/all-orders' },
-						{ title: 'Pending', url: '/dashboard/orders' },
-						{ title: 'Delivered', url: '/dashboard/orders/delivered' },
-						{ title: 'Cancelled', url: '/dashboard/orders/cancelled' }
-					]
+					counter: ordersNumber
 				},
 				{
 					title: 'Products',

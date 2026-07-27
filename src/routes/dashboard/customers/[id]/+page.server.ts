@@ -31,6 +31,8 @@ export const load: PageServerLoad = async ({ params }) => {
 				email: customers.email,
 				address: customers.address,
 				status: customers.isActive,
+						tinNo: customers.tinNo,
+							docs: customers.docs,
 				daysSinceJoined: sql<number>`DATEDIFF(CURRENT_DATE, ${customers.createdAt})`,
 				createdBy: user.name,
 				createdById: user.id,

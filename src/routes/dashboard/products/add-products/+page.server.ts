@@ -4,176 +4,203 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { add } from './schema';
 import { db } from '$lib/server/db';
 import {
-    products as inventory,
-    productCategories,
-    categoriesProducts,
-    productTags,
-    tags,
-    productImages,
-    productSuppliers as suppliers
+    colors,
+	products as inventory,
+	lengths,
+	productCategories,
+	productImages,
+	productSuppliers as suppliers,
+    thicknesses,
+    widths
 } from '$lib/server/db/schema';
 import type { Actions } from './$types';
 import type { PageServerLoad } from './$types.js';
 import { redirect, setFlash } from 'sveltekit-flash-message/server';
 import { eq } from 'drizzle-orm';
-
-export const load: PageServerLoad = async () => {
-    const allCategories = await db
-        .select({
-            value: productCategories.id,
-            name: productCategories.name,
-            description: productCategories.description
-        })
-        .from(productCategories)
-        .where(eq(productCategories.isActive, true));
-        
-    const allTags = await db
-        .select({
-            value: tags.id,
-            name: tags.name
-        })
-        .from(tags);
-        
-    const form = await superValidate(zod4(add));
-
-    const supplierList = await db
-        .select({
-            value: suppliers.id,
-            name: suppliers.name
-        })
-        .from(suppliers)
-        .where(eq(suppliers.isActive, true));
-
-    return {
-        form,
-        allCategories,
-        supplierList,
-        allTags
-    };
-};
-
 import { saveUploadedFile } from '$lib/server/upload.js';
 
-export const actions: Actions = {
-    addProduct: async ({ request, cookies, locals }) => {
-        const form = await superValidate(request, zod4(add));
-        console.log(form);
+export const load: PageServerLoad = async () => {
+	const allCategories = await db
+		.select({
+			value: productCategories.id,
+			name: productCategories.name,
+			description: productCategories.description
+		})
+		.from(productCategories)
+		.where(eq(productCategories.isActive, true));
 
-        if (!form.valid) {
-            setFlash({ type: 'error', message: 'Please check your form data.' }, cookies);
-            return message(form, { type: 'error', text: 'Please check your form data.' });
-        }
 
-        // Destructure all updated schema elements
-        const {
-            name,
-            slug,
-            brand,
-            categoryId,
-            description,
-            overview,
-            quantity,
-            commissionAmount,
-            supplierId,
-            reorderLevel,
-            thickness,
-            width,
-            coatingType,
-            colorOptions,
-            sizeRange,
-            finish,
-            performanceFeatures,
-            advantages,
-            applications,
-            isFeaturedOnHome,
-            image,
-            gallery
-        } = form.data;
+	const widthList = await db
+		.select({
+			value: widths.id,
+			name: widths.label
+        		})
+		.from(widths)
+		.where(eq(widths.isActive, true));
 
-        // Process file uploads outside the transaction block to minimize open connection locks
-        const featuredImage = image ? await saveUploadedFile(image) : null;
-        let galleryImages: string[] = [];
-        if (gallery) galleryImages = await uploadGallery(gallery);
+      const thicknessList = await db
+       .select({
+           value: thicknesses.id,
+           name: thicknesses.label
+               })
+       .from(thicknesses)
+       .where(eq(thicknesses.isActive, true));
+       
+  
+          const lengthList = await db
+       .select({
+           value: lengths.id,
+           name: lengths.label
+               })
+       .from(lengths)
+       .where(eq(lengths.isActive, true));
 
-        const result = await db.transaction(async (tx) => {
-            // Insert the main product record matching Drizzle schema architecture keys
-            const [product] = await tx
-                .insert(inventory)
-                .values({
-                    name,
-                    slug,
-                    brand,
-                    categoryId,
-                    description,
-                    overview,
-                    quantity,
-                    commissionAmount,
-                    supplierId: supplierId || null,
-                    reorderLevel,
-                    thickness,
-                    width,
-                    coatingType,
-                    colorOptions,
-                    sizeRange,
-                    finish,
-                    performanceFeatures,
-                    advantages,
-                    applications,
-                    isFeaturedOnHome,
-                    featuredImage,
-                    // Destructure hook for fields packed inside your database schema ...secureFields
-                    createdBy: locals?.user?.id 
-                })
-                .$returningId();
 
-            const newProductId = product.id;
+    	const supplierList = await db
+		.select({
+			value: suppliers.id,
+			name: suppliers.name
+		})
+		.from(suppliers)
+		.where(eq(suppliers.isActive, true));
 
-            // Optional structural fallback to link junctions if tags are processed elsewhere in the future
-            // (Keeping image gallery attachments bound properly to productImages table below)
-            if (galleryImages.length > 0) {
-                const imageRecords = galleryImages.map((url) => ({
-                    productId: newProductId,
-                    imageUrl: url
-                }));
+    const colorList = await db.select({
+         value: colors.id,
+         name: colors.name
+    }).from(colors);
 
-                await tx.insert(productImages).values(imageRecords);
-            }
+	const form = await superValidate(zod4(add));
 
-            return newProductId;
-        });
-
-        if (!result) {
-            return message(
-                form,
-                {
-                    type: 'error',
-                    text: 'An error occurred while adding the product.'
-                },
-                { status: 500 }
-            );
-        } else {
-            redirect(
-                `/dashboard/products/single/${result}`,
-                { type: 'success', message: 'New Product Successfully Added' },
-                cookies
-            );
-        }
-    }
+	return {
+		form,
+		allCategories,
+		supplierList,
+        colorList,
+        thicknessList,
+        lengthList,
+        widthList
+	};
 };
 
-const uploadGallery = async (gallery: File[] | undefined) => {
-    if (!gallery) return [];
-    try {
-        const uploadPromises = gallery.map(async (file) => {
-            const address = await saveUploadedFile(file);
-            return address;
-        });
+export const actions: Actions = {
+	addProduct: async ({ request, cookies, locals }) => {
+		const form = await superValidate(request, zod4(add));
 
-        const uploadedAddresses: string[] = await Promise.all(uploadPromises);
-        console.log('All gallery files uploaded:', uploadedAddresses);
-        return uploadedAddresses;
-    } catch (error) {
-        console.error('Error uploading gallery:', error);
-        throw error;
-    }
+		if (!form.valid) {
+			setFlash({ type: 'error', message: 'Please check your form data.' }, cookies);
+			return message(form, { type: 'error', text: 'Please check your form data.' });
+		}
+
+		const {
+			name,
+			slug,
+			brand,
+			categoryId,
+			description,
+			overview,
+			quantity,
+			commissionAmount,
+			supplierId,
+			reorderLevel,
+			thickness,
+			width,
+			coatingType,
+			colorOptions,
+			sizeRange,
+			finish,
+			performanceFeatures,
+			advantages,
+			applications,
+			isFeaturedOnHome,
+			image,
+			gallery
+		} = form.data;
+
+		// Process uploads outside the transaction to keep DB locks short.
+		// Guard against empty (0-byte) File objects that empty inputs can produce.
+		const featuredImage = image && image.size > 0 ? await saveUploadedFile(image) : null;
+		const galleryImages = await uploadGallery(gallery);
+
+		let newProductId: number;
+		try {
+			newProductId = await db.transaction(async (tx) => {
+				const [product] = await tx
+					.insert(inventory)
+					.values({
+						name,
+						slug,
+						brand: brand ?? null,
+						categoryId,
+						description: description ?? null,
+						overview: overview ?? null,
+						quantity,
+						commissionAmount,
+						supplierId: supplierId ?? null,
+						reorderLevel: reorderLevel ?? null,
+						thickness: thickness ?? null,
+						width: width ?? null,
+						coatingType: coatingType ?? null,
+						colorOptions: colorOptions ?? null,
+						sizeRange: sizeRange ?? null,
+						finish: finish ?? null,
+						performanceFeatures: performanceFeatures ?? null,
+						advantages: advantages ?? null,
+						applications: applications ?? null,
+						isFeaturedOnHome,
+						featuredImage,
+						// createdBy is part of ...secureFields
+						createdBy: locals?.user?.id
+					})
+					.$returningId();
+
+				if (galleryImages.length > 0) {
+					await tx.insert(productImages).values(
+						galleryImages.map((url) => ({
+							productId: product.id,
+							imageUrl: url
+						}))
+					);
+				}
+
+				return product.id;
+			});
+		} catch (e: unknown) {
+			console.error('Add product failed:', e);
+
+			// Friendly message for the most common cause: the unique slug clashing.
+			const err = e as { code?: string; message?: string };
+			const duplicate =
+				err?.code === 'ER_DUP_ENTRY' || /duplicate entry/i.test(err?.message ?? '');
+
+			return message(
+				form,
+				{
+					type: 'error',
+					text: duplicate
+						? 'A product with that slug already exists — choose a different slug.'
+						: 'An error occurred while adding the product.'
+				},
+				{ status: duplicate ? 409 : 500 }
+			);
+		}
+
+		// redirect() throws, so it must live outside the try/catch above.
+		redirect(
+			`/dashboard/products/single/${newProductId}`,
+			{ type: 'success', message: 'New Product Successfully Added' },
+			cookies
+		);
+	}
+};
+
+const uploadGallery = async (gallery: File[] | undefined): Promise<string[]> => {
+	const files = (gallery ?? []).filter((file) => file && file.size > 0);
+	if (files.length === 0) return [];
+
+	try {
+		return await Promise.all(files.map((file) => saveUploadedFile(file)));
+	} catch (error) {
+		console.error('Error uploading gallery:', error);
+		throw error;
+	}
 };

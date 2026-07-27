@@ -7,7 +7,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { superForm } from 'sveltekit-superforms/client';
 
-	import { ArrowLeft, History, Pencil, Save } from '@lucide/svelte';
+	import { ArrowLeft, Eye, History, Pencil, Save } from '@lucide/svelte';
 	import type { Snapshot } from '@sveltejs/kit';
 
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
@@ -21,6 +21,7 @@
 		{ name: 'Name', value: data.customer?.customerName },
 		{ name: 'Phone', value: data.customer?.phone },
 		{ name: 'Email', value: data.customer?.email },
+		{ name: 'Tin No', value: data.customer?.tinNo },
 		{ name: 'Address', value: data.customer?.address },
 		{ name: 'Status', value: data.customer?.status ? 'Active' : 'Inactive' },
 
@@ -127,6 +128,11 @@
 			<Button href="{page.url.pathname}/history">
 				<History /> Order History
 			</Button>
+			{#if data?.customer?.docs}
+				<Button target="_blank" href="/files/{data?.customer?.docs}">
+				<Eye /> Trade Licence
+			</Button>
+			{/if}
 			<Delete redirect="/dashboard/customers" />
 		</div>
 		{#if editCus === false}

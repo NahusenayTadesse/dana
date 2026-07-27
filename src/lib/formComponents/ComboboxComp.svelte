@@ -1,4 +1,23 @@
 <script lang="ts">
+	/**
+	 * ComboboxComp — drop-in replacement for the old combobox.
+	 *
+	 * Backward-compatible behavior kept:
+	 * - Placeholder / search / empty text auto-derived from `name`
+	 *   ("paymentMethod" → "Select payment Method") unless overridden.
+	 * - `capitalize` on the trigger label.
+	 * - `selectItem` class from global.svelte applied to items.
+	 * - Hidden input carrying name/value/required for native form posts.
+	 *
+	 * New fixes:
+	 * - Trigger truncates long names (full name via `title` tooltip)
+	 *   instead of clipping or blowing out the layout.
+	 * - Dropdown width is anchored to the trigger and portalled, so it
+	 *   works inside dialogs/sheets without clipping or mushing.
+	 * - Option rows wrap so long names stay fully readable in the list.
+	 * - String-coerced matching everywhere (check icon included).
+	 * - Optional `disabled` + `placeholder` props.
+	 */
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import { tick } from 'svelte';
@@ -8,91 +27,104 @@
 	import { cn } from '$lib/utils.js';
 	import { selectItem } from '$lib/global.svelte';
 
-	let {
-		items,
-		name,
-		value = $bindable(),
-		required = false
-	}: {
-		items: Item[];
-		name: string;
-		value: string | number | undefined;
-		required: boolean;
-	} = $props();
-	let open = $state(false);
-	let triggerRef = $state<HTMLButtonElement>(null!);
 	type Item = {
 		value: string | number;
 		name: string;
 	};
 
-	const selectedValue = $derived(items.find((f) => f.value === value)?.name);
+	let {
+		items = [],
+		name = '',
+		value = $bindable(),
+		required = false,
+		disabled = false,
+		placeholder,
+		searchPlaceholder,
+		emptyText
+	}: {
+		items?: Item[];
+		name?: string;
+		value?: string | number | undefined;
+		required?: boolean;
+		disabled?: boolean;
+		placeholder?: string;
+		searchPlaceholder?: string;
+		emptyText?: string;
+	} = $props();
 
-	// const triggerContent = $derived(
-	// 	items.find((f: Item) => f.value === value)?.name ??
-	// 		'Select ' + name.replace(/([a-z])([A-Z])/g, '$1 $2')
-	// );
-	//
-	const triggerContent = $derived(
-		// Use String coercion to ensure "1" matches 1
-		items.find((f: Item) => String(f.value) === String(value))?.name ??
-			'Select ' + name.replace(/([a-z])([A-Z])/g, '$1 $2')
-	);
+	let open = $state(false);
+	let triggerRef = $state<HTMLButtonElement>(null!);
 
-	function getNameByValue(items: Item[], value: string | number): string | undefined {
-		return items.find((item) => item.value === value)?.name.replace(/([a-z])([A-Z])/g, '$1 $2');
-	}
-	// We want to refocus the trigger button when the user selects
-	// an item from the list so users can continue navigating the
-	// rest of the form with the keyboard.
-	function closeAndFocusTrigger() {
+	// "paymentMethod" → "payment Method" (same regex as before)
+	const prettyName = $derived(name.replace(/([a-z0-9])([A-Z])/g, '$1 $2'));
+	const titleName = $derived(prettyName.replace(/\b\w/g, (c) => c.toUpperCase()));
+
+	const selected = $derived(items.find((f) => String(f.value) === String(value)));
+	const triggerContent = $derived(selected?.name ?? placeholder ?? `Select ${prettyName}`);
+
+	// Refocus the trigger after selecting so keyboard users can keep
+	// navigating the rest of the form.
+	function select(item: Item) {
+		value = item.value;
 		open = false;
-		tick().then(() => {
-			triggerRef.focus();
-		});
+		tick().then(() => triggerRef?.focus());
 	}
-	$inspect(value, items);
 </script>
 
 <Popover.Root bind:open>
-	<Popover.Trigger bind:ref={triggerRef}>
+	<Popover.Trigger bind:ref={triggerRef} {disabled}>
 		{#snippet child({ props })}
 			<Button
 				{...props}
 				variant="outline"
-				class="w-full justify-between capitalize"
 				role="combobox"
 				aria-expanded={open}
+				title={selected?.name ?? ''}
+				class="h-10 w-full min-w-0 justify-between font-normal"
 			>
-				{triggerContent}
-				<ChevronsUpDownIcon class="opacity-50" />
+				<span class={cn('truncate text-left capitalize', !selected && 'text-muted-foreground')}>
+					{triggerContent}
+				</span>
+				<ChevronsUpDownIcon class="ml-2 size-4 shrink-0 opacity-50" />
 			</Button>
 		{/snippet}
 	</Popover.Trigger>
-	<input type="hidden" bind:value {name} {required} />
 
-	<Popover.Content class="w-full p-0">
+	{#if name}
+		<input type="hidden" {name} value={value ?? ''} {required} />
+	{/if}
+
+	<Popover.Content
+		align="start"
+		sideOffset={4}
+		class="w-[var(--bits-popover-anchor-width)] min-w-[var(--bits-popover-anchor-width)] p-0"
+	>
 		<Command.Root>
-			<Command.Input
-				placeholder="Search {name
-					.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-					.replace(/\b\w/g, (char) => char.toUpperCase())}..."
-			/>
-			<Command.List>
-				<Command.Empty>No {name.replace(/([a-z])([A-Z])/g, '$1 $2')} found.</Command.Empty>
+			<Command.Input placeholder={searchPlaceholder ?? `Search ${titleName}...`} class="h-9" />
+			<Command.List
+				class="max-h-[min(280px,var(--bits-popover-content-available-height,280px))] overflow-y-auto"
+			>
+				<Command.Empty class="py-4 text-center text-sm text-muted-foreground">
+					{emptyText ?? `No ${prettyName} found.`}
+				</Command.Empty>
 				<Command.Group>
-					{#each items as item}
+					{#each items as item (item.value)}
 						<Command.Item
 							value={item.name}
 							keywords={[item.name]}
-							onSelect={() => {
-								value = item.value;
-								closeAndFocusTrigger();
-							}}
-							class={selectItem}
+							onSelect={() => select(item)}
+							class={cn(selectItem, 'items-start gap-2 py-2')}
 						>
-							<CheckIcon class={cn(value !== item.value && 'text-transparent')} />
-							{item.name}
+							<CheckIcon
+								class={cn(
+									'mt-0.5 size-4 shrink-0',
+									String(item.value) !== String(value) && 'text-transparent'
+								)}
+							/>
+							<!-- Wrap, don't clip: full names always readable in the list. -->
+							<span class="min-w-0 flex-1 whitespace-normal break-words leading-snug capitalize">
+								{item.name}
+							</span>
 						</Command.Item>
 					{/each}
 				</Command.Group>
