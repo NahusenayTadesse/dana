@@ -1,17 +1,19 @@
 import { setContext, getContext } from 'svelte';
 
+// A cart line is now anchored to a specific productVariant — that's the
+// atomic sellable unit (a fixed color+width+thickness+length combo with its
+// own price/sku), replacing the old loose "amount" string.
 export type CartItem = {
+	variantId: number;
 	productId: number;
 	productName: string;
-	amount: number | string; // e.g., "6-pack", "12-pack", or 500
+	sku: string | null;
 	price: number;
+	// Human-readable spec summary for display, e.g. "Signal Red · 1000mm · 0.45mm"
+	specLabel: string;
+	imageUrl?: string | null;
 	quantity: number;
 };
-
-export interface ProductPrice {
-	amount: string | number; // e.g., "10 Pieces"
-	price: string | number; // e.g., "ETB 500"
-}
 
 const CART_STORAGE_KEY = 'dana';
 
@@ -39,8 +41,17 @@ class UseCart {
 			const stored = localStorage.getItem(CART_STORAGE_KEY);
 			if (stored) {
 				const parsed = JSON.parse(stored);
-				if (Array.isArray(parsed)) {
+				// Old carts were keyed by productId+amount and have no variantId —
+				// that shape is incompatible with the new variant-based model, so
+				// discard rather than risk mismatched items/prices.
+				const isValidShape =
+					Array.isArray(parsed) && parsed.every((i) => typeof i?.variantId === 'number');
+
+				if (isValidShape) {
 					this.items = parsed;
+				} else if (Array.isArray(parsed) && parsed.length > 0) {
+					console.warn('Discarding incompatible cart from a previous version.');
+					localStorage.removeItem(CART_STORAGE_KEY);
 				}
 			}
 		} catch (e) {
@@ -61,13 +72,17 @@ class UseCart {
 	open = () => (this.isOpen = true);
 	close = () => (this.isOpen = false);
 
-	/** * Add item to cart
-	 * Now checks BOTH productId and amount to determine if it's a new line item
+	/**
+	 * Add item to cart. A variantId is now a unique enough key on its own —
+	 * each variant already represents one exact sellable spec combination.
 	 */
 	addItem = (item: Omit<CartItem, 'quantity'>, quantity: number = 1) => {
-		const existingIndex = this.items.findIndex(
-			(i) => i.productId === item.productId && i.amount === item.amount
-		);
+		if (item.price == null) {
+			console.error('Refusing to add a quote-only variant (no price) to the cart:', item);
+			return;
+		}
+
+		const existingIndex = this.items.findIndex((i) => i.variantId === item.variantId);
 
 		if (existingIndex >= 0) {
 			this.items[existingIndex].quantity += quantity;
@@ -76,21 +91,19 @@ class UseCart {
 		}
 	};
 
-	/** Remove specific variation from cart */
-	removeItem = (productId: number, amount: number | string) => {
-		this.items = this.items.filter(
-			(item) => !(item.productId === productId && item.amount === amount)
-		);
+	/** Remove a specific variant line from cart */
+	removeItem = (variantId: number) => {
+		this.items = this.items.filter((item) => item.variantId !== variantId);
 	};
 
-	/** Update quantity for a specific variation */
-	updateQuantity = (productId: number, amount: number | string, quantity: number) => {
+	/** Update quantity for a specific variant line */
+	updateQuantity = (variantId: number, quantity: number) => {
 		if (quantity <= 0) {
-			this.removeItem(productId, amount);
+			this.removeItem(variantId);
 			return;
 		}
 
-		const index = this.items.findIndex((i) => i.productId === productId && i.amount === amount);
+		const index = this.items.findIndex((i) => i.variantId === variantId);
 
 		if (index >= 0) {
 			this.items[index].quantity = quantity;

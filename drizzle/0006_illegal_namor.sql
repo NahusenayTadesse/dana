@@ -1,0 +1,1 @@
+ALTER TABLE `customers` MODIFY COLUMN `user_id` varchar(255);

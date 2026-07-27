@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT } from '$env/static/private';
+import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT, SMS_KEY } from '$env/static/private';
 
 const transporter = nodemailer.createTransport({
 	host: SMTP_HOST,
@@ -12,13 +12,144 @@ const transporter = nodemailer.createTransport({
 	}
 });
 
-export const sendEmail = async (to: string, subject: string, html: string) => {
+// --- SMS (GeezSMS) ---
+const SMS_API_URL = 'https://api.geezsms.com/api/v1/sms/send';
+
+/**
+ * Strips HTML down to plain text for SMS readers (which don't render markup):
+ * - drops script/style blocks entirely (incl. their content)
+ * - turns block-level tags into line breaks so text doesn't run together
+ * - removes remaining tags
+ * - decodes the handful of HTML entities used in these templates
+ * - collapses whitespace and trims to GeezSMS's 335-char limit
+ */
+const stripHtml = (html: string) => {
+	const text = html
+		.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+		.replace(/<\/(p|div|tr|table|h[1-6]|li)>/gi, '\n')
+		.replace(/<br\s*\/?>/gi, '\n')
+		.replace(/<[^>]+>/g, '')
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&amp;/g, '&')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/[ \t]+/g, ' ')
+		.replace(/\n\s*\n+/g, '\n')
+		.trim();
+
+	return text.length > 335 ? text.slice(0, 335) : text;
+};
+
+/**
+ * Sends an SMS via GeezSMS.
+ * - phone must start with 2519 (per GeezSMS requirements)
+ * - msg must be < 335 characters
+ * Failures are logged but never thrown, so SMS issues never break email flows.
+ */
+
+
+
+interface PhoneValidationResult {
+    isValid: boolean;
+    formattedPhone: string | null;
+    error?: string;
+}
+
+/**
+ * Normalizes Ethiopian phone numbers into '251...' format and validates length/prefix.
+ *
+ * Handles inputs like:
+ * - '0912345678'  -> '251912345678'
+ * - '0712345678'  -> '251712345678'
+ * - '+251912345678' -> '251912345678'
+ * - '251912345678'  -> '251912345678'
+ * - '912345678'   -> '251912345678'
+ */
+export const formatAndValidateEthPhone = (phone: string): PhoneValidationResult => {
+    if (!phone) {
+        return { isValid: false, formattedPhone: null, error: 'Phone number is empty' };
+    }
+
+    // Remove all non-numeric characters (spaces, +, -, etc.)
+    let cleaned = phone.replace(/\D/g, '');
+
+    // Convert local prefix (09... or 07...) -> 2519... or 2517...
+    if (cleaned.startsWith('0')) {
+        cleaned = '251' + cleaned.slice(1);
+    }
+    // Convert 9-digit local input missing leading zero (e.g., 912345678)
+    else if (cleaned.length === 9 && (cleaned.startsWith('9') || cleaned.startsWith('7'))) {
+        cleaned = '251' + cleaned;
+    }
+
+    // Ethiopian mobile numbers must be 12 digits long in international format (251 + 9 digits)
+    // and must start with either 2519 (Ethio Telecom) or 2517 (Safaricom)
+    const ethMobileRegex = /^251(9|7)\d{8}$/;
+
+    if (!ethMobileRegex.test(cleaned)) {
+        return {
+            isValid: false,
+            formattedPhone: null,
+            error: 'Invalid Ethiopian mobile number (must start with 2519 or 2517 and be 12 digits total)'
+        };
+    }
+
+    return {
+        isValid: true,
+        formattedPhone: cleaned
+    };
+};
+export const sendSms = async (phone: string, msg: string) => {
+	try {
+		if (!phone) return { success: false, message: 'No phone number provided' };
+
+		const body = new URLSearchParams();
+		body.append('token', SMS_KEY);
+		body.append('phone', phone);
+		body.append('msg', msg);
+
+		const res = await fetch(SMS_API_URL, {
+			method: 'POST',
+			body
+		});
+
+		const data = await res.json();
+
+		if (data.message_status !== 'success') {
+			console.error('SMS send failed:', data);
+			return { success: false, message: data };
+		} 
+
+        console.log(data)
+
+		return { success: true, message: data };
+	} catch (err) {
+		console.error('SMS send error:', err);
+		return { success: false, message: err };
+	}
+};
+
+export const sendEmail = async (to: string, subject: string, html: string, phone?: string) => {
 	await transporter.sendMail({
 		from: `"Support Team" <${SMTP_USER}>`,
 		to,
 		subject,
 		html
 	});
+
+
+	// Optionally also send an SMS if a phone number was provided — reuses the
+	// same html, stripped down to plain text, so callers only need to pass phone.
+
+      console.log(phone)
+	if (phone) {
+         const newPhone = formatAndValidateEthPhone(phone)
+         console.log(newPhone)
+        
+		 if(newPhone.isValid) await sendSms(String(newPhone?.formattedPhone), stripHtml(html));
+	}
 };
 
 // --- Brand constants ---
@@ -426,7 +557,7 @@ export const customerContactTemplate = (name: string, subject: string) => ({
     `
 });
 
-export async function sendResetPasswordEmail(toEmail: string, newPassword: string) {
+export async function sendResetPasswordEmail(toEmail: string, newPassword: string, phone?: string) {
 	// Create transporter
 	const transporter = nodemailer.createTransport({
 		host: SMTP_HOST, // e.g smtp.gmail.com
@@ -457,6 +588,11 @@ export async function sendResetPasswordEmail(toEmail: string, newPassword: strin
 	};
 
 	await transporter.sendMail(mailOptions);
+
+	// Optionally also send an SMS if a phone number was provided.
+	if (phone) {
+		await sendSms(phone, stripHtml(mailOptions.html));
+	}
 
 	return { success: true, message: 'Reset email sent successfully' };
 }
@@ -519,6 +655,303 @@ export const customerResetPasswordTemplate = (url: string) => ({
             <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
                 ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
             </div>
+        </div>
+    `
+});
+
+
+
+// Variant-aware item table: renders each item's actual color/width/thickness
+// spec instead of the old free-text "amount" field. Used for confirmed-price
+// emails (quote payment link, payment confirmation) — NOT for quote requests
+// still awaiting a price, which should keep using generateQuoteTable.
+const generateVariantOrderTable = (items) => {
+	const specLabel = (item) => {
+		const parts = [];
+		if (item.colorName) parts.push(item.colorName);
+		const widthPart =
+			item.widthLabel || (item.widthValue ? `${item.widthValue}${item.widthUnit ?? ''}` : null);
+		if (widthPart) parts.push(widthPart);
+		const thicknessPart = item.thicknessValue
+			? `${item.thicknessValue}${item.thicknessUnit ?? ''}`
+			: null;
+		if (thicknessPart) parts.push(thicknessPart);
+		return parts.join(' · ');
+	};
+
+	const rows = items
+		.map((item) => {
+			const spec = specLabel(item);
+			const unitPrice = Number(item.price ?? 0);
+			const lineTotal = unitPrice * item.quantity;
+			return `
+                 <tr style="border-bottom: 1px solid #eee;">
+                     <td style="padding: 10px; text-align: left;">
+                         ${item.productName}${spec ? `<br/><span style="color:#888; font-size: 12px;">${spec}</span>` : ''}
+                     </td>
+                     <td style="padding: 10px; text-align: center;">
+                         ${item.quantity}
+                     </td>
+                     <td style="padding: 10px; text-align: right;">
+                         ${unitPrice.toLocaleString()} ETB
+                     </td>
+                     <td style="padding: 10px; text-align: right;">
+                         ${lineTotal.toLocaleString()} ETB
+                     </td>
+                 </tr>
+             `;
+		})
+		.join('');
+
+	return `
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif;">
+            <thead>
+                <tr style="background: ${BRAND_HEADER_BG}; color: white;">
+                    <th style="padding: 10px; text-align: left;">Item</th>
+                    <th style="padding: 10px; text-align: center;">Qty</th>
+                    <th style="padding: 10px; text-align: right;">Unit Price</th>
+                    <th style="padding: 10px; text-align: right;">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>
+    `;
+};
+
+// --- Quote → payment link (the "quote reply" email/SMS) ---
+
+export const quotePaymentLinkTemplate = (orderId, items, total, payUrl) => ({
+	subject: `Your Quote is Ready — ${BRAND_NAME} (#${orderId})`,
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Your Quote is Ready</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>Good news — we've priced your request <strong>#${orderId}</strong>. Review the details below and pay securely to confirm your order.</p>
+                ${generateVariantOrderTable(items)}
+                <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
+                    Total: ${Number(total).toLocaleString()} ETB
+                </div>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${payUrl}"
+                       style="background: ${BRAND_HEADER_BG}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">
+                        Pay Now
+                    </a>
+                </div>
+                <p style="font-size: 12px; color: #888;">
+                    This link is unique to your order and expires in 14 days. If the button doesn't work, copy this link into your browser:<br/>
+                    <span style="word-break: break-all; color: ${BRAND_PRIMARY};">${payUrl}</span>
+                </p>
+                <p style="margin-top: 20px;">No account or sign-in needed — just click and pay.</p>
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+// Deliberately short and link-first — see note above on why this isn't derived from the HTML.
+export const quotePaymentLinkSms = (orderId, total, payUrl) => {
+	const msg = `${BRAND_NAME}: Your quote #${orderId} is ready (${Number(total).toLocaleString()} ETB). Pay securely: ${payUrl} (expires in 14 days, no login needed)`;
+	return msg.length > 335 ? msg.slice(0, 335) : msg;
+};
+
+// --- Payment confirmation ---
+
+export const paymentConfirmedTemplate = (orderId, items, total) => ({
+	subject: `Payment Confirmed - ${BRAND_NAME} (#${orderId})`,
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Payment Confirmed ✅</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>We've received your payment for order <strong>#${orderId}</strong>. Thank you! Our team is now preparing your order.</p>
+                ${generateVariantOrderTable(items)}
+                <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
+                    Total Paid: ${Number(total).toLocaleString()} ETB
+                </div>
+                <p style="margin-top: 20px;">We'll be in touch with delivery/pickup details shortly.</p>
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+export const adminPaymentConfirmedTemplate = (orderId, items, total) => ({
+	subject: `Payment Received: Order #${orderId}`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Payment Confirmed</h2>
+            <p>Payment has been confirmed via Chapa for <strong>Order #${orderId}</strong>.</p>
+            ${generateVariantOrderTable(items)}
+            <p style="font-size: 18px;"><strong>Total Paid: ${Number(total).toLocaleString()} ETB</strong></p>
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               View in Dashboard
+            </a>
+        </div>
+    `
+});
+
+export const paymentConfirmedSms = (orderId, total) => {
+	const msg = `${BRAND_NAME}: Payment of ${Number(total).toLocaleString()} ETB confirmed for order #${orderId}. Thank you! We'll contact you about delivery.`;
+	return msg.length > 335 ? msg.slice(0, 335) : msg;
+};
+
+export const quoteReplyTemplate = (name: string, message: string) => ({
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Message from ${BRAND_NAME}</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>Hi ${name},</p>
+                <div>${message}</div>
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+const escapeHtml = (str: string | null | undefined) =>
+	(str ?? '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+
+// Builds a "Product Name · Color · Width · Thickness (cut to order)" style label
+// from a joined product+variant row. Duplicated in a couple of places now
+// (client components, generateVariantOrderTable) — worth extracting to a shared
+// util if it grows again, but kept local here to avoid a cross-cutting refactor.
+const buildQuoteItemLabel = (details: {
+	productName?: string | null;
+	categoryName?: string | null;
+	colorName?: string | null;
+	widthValue?: string | number | null;
+	widthUnit?: string | null;
+	widthLabel?: string | null;
+	thicknessValue?: string | number | null;
+	thicknessUnit?: string | null;
+	lengthValue?: string | number | null;
+	lengthUnit?: string | null;
+	lengthLabel?: string | null;
+	isCustomLength?: boolean | null;
+}) => {
+	if (!details.productName) {
+		return details.categoryName ? `General inquiry — ${escapeHtml(details.categoryName)} category` : 'General inquiry';
+	}
+
+	const specParts: string[] = [];
+	if (details.colorName) specParts.push(escapeHtml(details.colorName));
+
+	const widthPart =
+		details.widthLabel || (details.widthValue ? `${details.widthValue}${details.widthUnit ?? ''}` : null);
+	if (widthPart) specParts.push(escapeHtml(widthPart));
+
+	const thicknessPart = details.thicknessValue
+		? `${details.thicknessValue}${details.thicknessUnit ?? ''}`
+		: null;
+	if (thicknessPart) specParts.push(escapeHtml(thicknessPart));
+
+	const lengthPart =
+		details.lengthLabel || (details.lengthValue ? `${details.lengthValue}${details.lengthUnit ?? ''}` : null);
+	if (lengthPart) specParts.push(escapeHtml(details.isCustomLength ? `${lengthPart} (cut to order)` : lengthPart));
+
+	const spec = specParts.join(' · ');
+	return `${escapeHtml(details.productName)}${spec ? ` (${spec})` : ''}`;
+};
+
+export const quoteRequestReceivedTemplate = (quoteId: number, details: {
+	name: string;
+	companyName?: string | null;
+	quantityEstimate?: string | null;
+	message?: string | null;
+	itemLabel: string;
+}) => ({
+	subject: `Quote Request Received - ${BRAND_NAME} (#${quoteId})`,
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Quote Request Received</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>Hi ${escapeHtml(details.name)},</p>
+                <p>Thanks for reaching out to <strong>${BRAND_NAME}</strong>. We've received your quote request <strong>#${quoteId}</strong>:</p>
+                <div style="background: #f9f9f9; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                    <p style="margin: 0 0 8px 0;"><strong>Item:</strong> ${details.itemLabel}</p>
+                    ${details.quantityEstimate ? `<p style="margin: 0 0 8px 0;"><strong>Estimated quantity:</strong> ${escapeHtml(details.quantityEstimate)}</p>` : ''}
+                    ${details.companyName ? `<p style="margin: 0 0 8px 0;"><strong>Company:</strong> ${escapeHtml(details.companyName)}</p>` : ''}
+                    ${details.message ? `<p style="margin: 0;"><strong>Your message:</strong> ${escapeHtml(details.message)}</p>` : ''}
+                </div>
+                <p>Our sales team will review your request and follow up shortly with confirmed pricing and availability.</p>
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+export const adminNewQuoteRequestTemplate = (quoteId: number, details: {
+	name: string;
+	email?: string | null;
+	phone: string;
+	whatsapp?: string | null;
+	companyName?: string | null;
+	quantityEstimate?: string | null;
+	message?: string | null;
+	itemLabel: string;
+}) => ({
+	subject: `New Quote Request: #${quoteId}`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">New Quote Request Received</h2>
+            <p><strong>Request ID:</strong> #${quoteId}</p>
+            <div style="background: #f9f9f9; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                <p style="margin: 0 0 8px 0;"><strong>Item:</strong> ${details.itemLabel}</p>
+                ${details.quantityEstimate ? `<p style="margin: 0 0 8px 0;"><strong>Estimated quantity:</strong> ${escapeHtml(details.quantityEstimate)}</p>` : ''}
+                <p style="margin: 0 0 8px 0;"><strong>Name:</strong> ${escapeHtml(details.name)}</p>
+                ${details.companyName ? `<p style="margin: 0 0 8px 0;"><strong>Company:</strong> ${escapeHtml(details.companyName)}</p>` : ''}
+                <p style="margin: 0 0 8px 0;"><strong>Phone:</strong> ${escapeHtml(details.phone)}</p>
+                ${details.whatsapp ? `<p style="margin: 0 0 8px 0;"><strong>WhatsApp:</strong> ${escapeHtml(details.whatsapp)}</p>` : ''}
+                ${details.email ? `<p style="margin: 0 0 8px 0;"><strong>Email:</strong> ${escapeHtml(details.email)}</p>` : ''}
+                ${details.message ? `<p style="margin: 0;"><strong>Message:</strong> ${escapeHtml(details.message)}</p>` : ''}
+            </div>
+            <a href="${BRAND_URL}dashboard/quotes"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               View in Dashboard
+            </a>
         </div>
     `
 });

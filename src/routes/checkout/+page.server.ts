@@ -3,7 +3,7 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq } from 'drizzle-orm';
 // import { sendEmail, customerQuoteTemplate, adminQuoteTemplate } from '$lib/server/email';
 
-import { USER } from '$env/static/private';
+import { SMTP_USER as USER } from '$env/static/private';
 
 import { addUser, loginSchema } from '$lib/ZodSchema';
 import { add } from './schema';

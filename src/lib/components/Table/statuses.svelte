@@ -13,6 +13,7 @@
 		/* confirmed / paid */
 		confirmed: { icon: BadgeCheck, colour: 'bg-green-400' },
 		paid: { icon: BadgeCheck, colour: 'bg-green-400' },
+		quoted: { icon: BadgeCheck, colour: 'bg-green-400' },
 
 		complete: { icon: BadgeCheck, colour: 'bg-green-400' },
 		incomplete: { icon: OctagonMinus, colour: 'bg-red-500' },
@@ -40,6 +41,7 @@
 
 		out: { icon: OctagonMinus, colour: 'bg-red-500' },
 		low: { icon: Loader, colour: 'bg-yellow-500' },
+		new: { icon: Loader, colour: 'bg-yellow-500' },
 		live: { icon: BadgeCheck, colour: 'bg-green-400' },
 
 		/* fallback */

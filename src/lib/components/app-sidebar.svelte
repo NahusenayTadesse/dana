@@ -9,7 +9,10 @@
 		ListOrdered,
 		Star,
 		Building2,
-		Book
+		Book,
+
+		Quote
+
 	} from '@lucide/svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import type { ComponentProps } from 'svelte';
@@ -30,6 +33,9 @@
 		{
 			section: 'Operations',
 			items: [
+								{ title: 'Quotes', url: '/dashboard/quotes', icon: Quote, 					counter: ordersNumber,
+ },
+
 				{
 					title: 'Orders',
 					url: '/dashboard/orders',

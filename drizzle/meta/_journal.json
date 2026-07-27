@@ -22,6 +22,34 @@
       "when": 1784965343843,
       "tag": "0002_clever_ezekiel_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1785106415603,
+      "tag": "0003_peaceful_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1785107461067,
+      "tag": "0004_modern_lester",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1785109857086,
+      "tag": "0005_stiff_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1785113663223,
+      "tag": "0006_illegal_namor",
+      "breakpoints": true
     }
   ]
 }

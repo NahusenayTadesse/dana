@@ -1,0 +1,2 @@
+ALTER TABLE `quote_requests` ADD `variant_id` int;--> statement-breakpoint
+ALTER TABLE `quote_requests` ADD CONSTRAINT `quote_requests_variant_id_product_variants_id_fk` FOREIGN KEY (`variant_id`) REFERENCES `product_variants`(`id`) ON DELETE set null ON UPDATE no action;

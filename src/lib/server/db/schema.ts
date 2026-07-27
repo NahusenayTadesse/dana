@@ -154,9 +154,9 @@ export const widths = mysqlTable('widths', {
 	unit: mysqlEnum('unit', ['mm', 'cm', 'm', 'in', 'ft']).notNull().default('mm'),
 	label: varchar('label', { length: 50 }), // optional display override, e.g. "Standard 1000mm"
 	isActive: boolean('is_active').default(true)
-}, (table) => ({
-	uniqueValue: uniqueIndex('widths_value_unit_unique').on(table.value, table.unit)
-}));
+}, (table) => [
+ uniqueIndex('widths_value_unit_unique').on(table.value, table.unit)
+]);
 
 
 
@@ -223,7 +223,7 @@ export const customers = mysqlTable('customers', {
 	tinNo: varchar('tin_no', { length: 10 }),
 	docs: varchar('docs', { length: 255 }),
 	userId: varchar('user_id', { length: 255 })
-		.notNull()
+
 		.references(() => user.id),
 	address: varchar('address', { length: 255 }),
 	...secureFields
@@ -402,14 +402,40 @@ export const quoteRequests = mysqlTable('quote_requests', {
 	quantityEstimate: varchar('quantity_estimate', { length: 100 }),
 	message: text('message'),
 
+
 	status: mysqlEnum('status', ['new', 'contacted', 'quoted', 'converted', 'lost']).default(
 		'new'
 	),
 	orderId: int('order_id').references(() => orders.id, { onDelete: 'set null' }), // set once quote converts into a real order
 	seen: boolean('seen').default(false),
+	
+	variantId: int('variant_id').references(() => productVariants.id, { onDelete: 'set null' }), 
 	...secureFields
 });
 
+
+export const quoteReplies = mysqlTable('quote_replies', {
+	id: int('id').primaryKey().autoincrement(),
+	quoteRequestId: int('quote_request_id')
+		.notNull()
+		.references(() => quoteRequests.id, { onDelete: 'cascade' }),
+	subject: varchar('subject', { length: 255 }).notNull(),
+	message: text('message').notNull(), // the rich-text email body sent to the customer
+
+	// Nullable — not every reply is a price quote (e.g. "we're reviewing your request").
+	// Both need to be present together to actually finalize an order.
+	quotedUnitPrice: decimal('quoted_unit_price', { precision: 10, scale: 2 }),
+	quotedQuantity: int('quoted_quantity'),
+
+	// Set once this reply's price results in a real order + payment link being sent
+	orderId: int('order_id').references(() => orders.id, { onDelete: 'set null' }),
+
+	// Optional — who on staff sent it. Nullable since your reference project's
+	// reply form doesn't track this either; adjust/drop if you don't need it.
+	repliedByUserId: varchar('replied_by_user_id', { length: 255 }).references(() => user.id),
+
+	...secureFields
+});
 export const contactMessages = mysqlTable('contact_messages', {
 	id: int('id').primaryKey().autoincrement(),
 	name: varchar('name', { length: 255 }).notNull(),
@@ -439,3 +465,15 @@ export const testimonials = mysqlTable('testimonials', {
 });
 
 export * from './auth.schema';
+
+
+export const paymentLinks = mysqlTable('payment_links', {
+	id: int('id').primaryKey().autoincrement(),
+	orderId: int('order_id')
+		.notNull()
+		.references(() => orders.id, { onDelete: 'cascade' }),
+	tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(), // sha256 hex digest
+	expiresAt: timestamp('expires_at').notNull(),
+	usedAt: timestamp('used_at'), // set only once payment is CONFIRMED via server-to-server verify
+	createdAt: timestamp('created_at').defaultNow().notNull()
+});

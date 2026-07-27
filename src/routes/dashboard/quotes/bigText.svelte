@@ -6,7 +6,7 @@
 	/**
 	 * Truncate text to a maximum length
 	 */
-	const truncateText = (text: string | number, maxLength: number = 10): string => {
+	const truncateText = (text: string | number, maxLength: number = 30): string => {
 		const str = String(text);
 		return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
 	};

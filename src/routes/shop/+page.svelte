@@ -13,6 +13,7 @@
         SlidersHorizontal,
         Layers,
         Paintbrush,
+        Ruler,
         CheckCircle2
     } from '@lucide/svelte';
     import Label from '$lib/components/ui/label/label.svelte';
@@ -22,15 +23,15 @@
     import { isMobile } from '$lib/global.svelte.js';
     import { fly } from 'svelte/transition';
     import * as m from '$lib/paraglide/messages.js';
-    import { getColorName } from './color-name';
+    // color-name.ts is no longer needed — colors now come straight from the DB with real name + hex
 
     let { data } = $props();
 
     let searchQuery = $state(sveltePage.url.searchParams.get('search') ?? '');
 
-    // Thickness slider bounds - adjust to match your actual product data range
-    const THICKNESS_MIN = 0;
-    const THICKNESS_MAX = 5;
+    // Thickness bounds now come from the DB (real mm range) instead of a guessed hardcode
+    const THICKNESS_MIN = $derived(data?.thicknessBounds?.min ?? 0);
+    const THICKNESS_MAX = $derived(data?.thicknessBounds?.max ?? 5);
 
     let minThick = $state(
         Number(sveltePage.url.searchParams.get('minThick')) || THICKNESS_MIN
@@ -39,7 +40,12 @@
         Number(sveltePage.url.searchParams.get('maxThick')) || THICKNESS_MAX
     );
 
-    let selectedColor = $state(sveltePage.url.searchParams.get('color') ?? '');
+    let selectedColorIds = $state(
+        sveltePage.url.searchParams.get('colors')?.split(',').filter(Boolean).map(Number) ?? []
+    );
+    let selectedWidthIds = $state(
+        sveltePage.url.searchParams.get('widths')?.split(',').filter(Boolean).map(Number) ?? []
+    );
     let isAvailableOnly = $state(sveltePage.url.searchParams.get('available') === 'true');
 
     let selectedCategories = $state(
@@ -52,7 +58,8 @@
     );
 
     const categories = $derived(data?.categoriesList ?? []);
-    const availableColors = $derived(data?.uniqueColors ?? []);
+    const availableColors = $derived(data?.colorsList ?? []);
+    const availableWidths = $derived(data?.widthsList ?? []);
     const isAllCategoriesSelected = $derived(selectedCategories.length === 0);
 
     const minPct = $derived(((minThick - THICKNESS_MIN) / (THICKNESS_MAX - THICKNESS_MIN)) * 100);
@@ -105,9 +112,24 @@
         });
     }
 
-    function toggleColorFilter(color: string) {
-        selectedColor = selectedColor === color ? '' : color;
-        updateFilters({ color: selectedColor || undefined, page: 1 });
+    function toggleColorFilter(id: number) {
+        selectedColorIds = selectedColorIds.includes(id)
+            ? selectedColorIds.filter((c) => c !== id)
+            : [...selectedColorIds, id];
+        updateFilters({
+            colors: selectedColorIds.length > 0 ? selectedColorIds.join(',') : undefined,
+            page: 1
+        });
+    }
+
+    function toggleWidthFilter(id: number) {
+        selectedWidthIds = selectedWidthIds.includes(id)
+            ? selectedWidthIds.filter((w) => w !== id)
+            : [...selectedWidthIds, id];
+        updateFilters({
+            widths: selectedWidthIds.length > 0 ? selectedWidthIds.join(',') : undefined,
+            page: 1
+        });
     }
 
     function handleAvailabilityChange(checked: boolean) {
@@ -124,7 +146,8 @@
         searchQuery = '';
         minThick = THICKNESS_MIN;
         maxThick = THICKNESS_MAX;
-        selectedColor = '';
+        selectedColorIds = [];
+        selectedWidthIds = [];
         isAvailableOnly = false;
         selectedCategories = [];
         goto(sveltePage.url.pathname);
@@ -135,10 +158,8 @@
     let showFilter = $state(mobile ? false : true);
     const Icon = $derived(showFilter ? X : SlidersHorizontal);
 
-    function isColorName(colorStr: string) {
-        if (!colorStr) return false;
-        // Basic check for hex hash codes or common alphanumeric names
-        return colorStr.startsWith('#') || colorStr.length > 2;
+    function widthLabel(w: { value: string; unit: string; label: string | null }) {
+        return w.label || `${w.value}${w.unit}`;
     }
 </script>
 
@@ -156,7 +177,7 @@
                         {m.shop_heading()}
                     </h1>
                     <p class="mt-1 text-xs text-muted-foreground sm:text-sm">
-                        Total items: {Number(data?.totalCount || data?.productList?.length || 0)}
+                        Total items: {data?.pagination?.totalCount ?? 0}
                     </p>
                 </div>
 
@@ -205,21 +226,19 @@
                             </h3>
                         </div>
 
-                        <!-- Thickness Range Slider Block -->
+                        <!-- Thickness Range Slider (mm only — see caveat below) -->
                         <div class="space-y-3 border-b border-border/60 pb-4">
                             <div class="flex items-center justify-between">
                                 <h4 class="text-xs font-bold tracking-wider text-muted-foreground uppercase">
-                                    Thickness Bounds
+                                    Thickness Bounds (mm)
                                 </h4>
                                 <span class="font-mono text-xs text-foreground/80">
-                                    {minThick.toFixed(2)}&nbsp;–&nbsp;{maxThick.toFixed(2)}&nbsp;mm
+                                    {minThick}&nbsp;–&nbsp;{maxThick}&nbsp;mm
                                 </span>
                             </div>
 
                             <div class="relative h-5 select-none">
-                                <!-- Track -->
                                 <div class="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-muted"></div>
-                                <!-- Active range fill -->
                                 <div
                                     class="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary"
                                     style:left="{minPct}%"
@@ -251,7 +270,7 @@
                             </div>
                         </div>
 
-                        <!-- Unified Categories Section -->
+                        <!-- Categories -->
                         <div class="max-h-55 scrollbar-none space-y-2.5 overflow-y-auto border-b border-border/60 pb-4">
                             <div class="flex items-center gap-2">
                                 <Layers class="size-3.5 text-muted-foreground" />
@@ -288,7 +307,32 @@
                             {/each}
                         </div>
 
-                        <!-- Industrial Color Options Filtering Block -->
+                        <!-- Width -->
+                        <div class="max-h-55 scrollbar-none space-y-2.5 overflow-y-auto border-b border-border/60 pb-4">
+                            <div class="flex items-center gap-2">
+                                <Ruler class="size-3.5 text-muted-foreground" />
+                                <h4 class="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+                                    Width Options
+                                </h4>
+                            </div>
+                            <div class="flex flex-wrap gap-2 pt-1">
+                                {#each availableWidths as w (w.id)}
+                                    {@const isSelected = selectedWidthIds.includes(w.id)}
+                                    <button
+                                        type="button"
+                                        onclick={() => toggleWidthFilter(w.id)}
+                                        class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150
+                                        {isSelected
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                            : 'bg-card text-foreground/80 border-border hover:bg-accent'}"
+                                    >
+                                        {widthLabel(w)}
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+
+                        <!-- Color -->
                         <div class="max-h-60 scrollbar-none space-y-2.5 overflow-y-auto">
                             <div class="flex items-center gap-2">
                                 <Paintbrush class="size-3.5 text-muted-foreground" />
@@ -297,29 +341,29 @@
                                 </h4>
                             </div>
                             <div class="flex flex-wrap gap-2 pt-1">
-                                {#each availableColors as color (color)}
-                                    {@const isSelected = selectedColor === color}
+                                {#each availableColors as color (color.id)}
+                                    {@const isSelected = selectedColorIds.includes(color.id)}
                                     <button
                                         type="button"
-                                        onclick={() => toggleColorFilter(color)}
+                                        onclick={() => toggleColorFilter(color.id)}
                                         class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150
-                                        {isSelected 
-                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs' 
+                                        {isSelected
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
                                             : 'bg-card text-foreground/80 border-border hover:bg-accent'}"
                                     >
-                                        {#if isColorName(color)}
-                                            <span 
-                                                class="w-2.5 h-2.5 rounded-full border border-foreground/10 shrink-0" 
-                                                style:background-color={color}
+                                        {#if color.hexValue}
+                                            <span
+                                                class="w-2.5 h-2.5 rounded-full border border-foreground/10 shrink-0"
+                                                style:background-color={color.hexValue}
                                             ></span>
                                         {/if}
-                                        <span>{getColorName(color)}</span>
+                                        <span>{color.name}</span>
                                     </button>
                                 {/each}
                             </div>
                         </div>
 
-                        <!-- Availability Stock Filter Block -->
+                        <!-- Availability -->
                         <div class="flex items-center gap-2.5 py-1">
                             <Checkbox
                                 id="stock-available"
@@ -336,7 +380,6 @@
                 </aside>
             {/if}
 
-            <!-- Dynamic Product Canvas Block Grid -->
             <div class="space-y-8 lg:col-span-3">
                 {#if !data.productList || data.productList.length === 0}
                     <div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/20 py-28 text-center backdrop-blur-xs">
@@ -362,7 +405,6 @@
                         {/each}
                     </div>
 
-                    <!-- Client Pagination Engine Stack Setup -->
                     {#if data.pagination && data.pagination.totalPages > 1}
                         <div class="mt-12 flex items-center justify-center gap-1.5 border-t border-border/40 pt-6">
                             <Button

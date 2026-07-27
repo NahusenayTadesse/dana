@@ -35,7 +35,7 @@ export const actions: Actions = {
 			sendEmail(SMTP_USER, adminMail.subject, adminMail.html);
 
 			const userMail = customerContactTemplate(name, subject);
-			sendEmail(email, userMail.subject, userMail.html);
+			sendEmail(email, userMail.subject, userMail.html, phoneNumber);
 
 			return message(form, { type: 'success', text: 'Message Successfully Sent!' });
 		} catch (err) {
