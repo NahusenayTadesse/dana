@@ -9,15 +9,21 @@
 </script>
 
 <section
-	class="relative z-0 mx-auto max-w-full border-t border-border/50 bg-background bg-cover bg-center py-24 md:py-32 lg:px-6"
+	class="relative z-0 mx-auto max-w-full overflow-hidden border-t border-primary/10 bg-background bg-cover bg-center py-20 sm:py-24 lg:px-6"
 >
+	<div
+		class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_bottom,hsl(var(--primary)/0.08),transparent_40%)]"
+	></div>
 	<div class="mx-auto lg:max-w-7xl">
-		<div class="mb-16 max-w-3xl justify-self-center md:mb-20">
-			<h3 class="text-center text-4xl font-semibold tracking-tighter sm:text-5xl lg:text-6xl">
+		<div class="mb-16 flex max-w-3xl flex-col items-center gap-3 justify-self-center text-center md:mb-20">
+			<span class="text-xs font-bold uppercase tracking-widest text-primary">
+				{m.partners_badge()}
+			</span>
+			<h3 class="text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
 				{m.partners_heading_prefix()}
 				<span class="text-primary">{m.partners_heading_highlight()}</span>
 			</h3>
-			<p class="mt-6 text-lg leading-relaxed text-muted-foreground md:text-xl">
+			<p class="mt-2 text-lg leading-relaxed text-muted-foreground md:text-xl">
 				{m.partners_description()}
 			</p>
 		</div>
@@ -40,7 +46,7 @@
 								src="/files/{src}"
 								alt={m.partners_logo_alt()}
 								loading="lazy"
-								class="hover: rounded-4xl object-cover transition-all duration-300 ease-in-out hover:scale-110"
+								class="rounded-4xl object-cover transition-all duration-300 ease-in-out hover:scale-110"
 							/>
 						</div>
 					</Carousel.Item>

@@ -3,8 +3,8 @@
 
   // Tuning knobs (can also be passed as props if you prefer)
   let gap = 30;      // px between dots / grid lines
-let radius = 130;  // px radius of cursor influence
-   let push = 26;     // max px a dot is pushed away
+  let radius = 130;  // px radius of cursor influence
+  let push = 26;     // max px a dot is pushed away
 
   let canvas;
 
@@ -33,8 +33,8 @@ let radius = 130;  // px radius of cursor influence
     const draw = () => {
       ctx.clearRect(0, 0, w, h);
 
-      // faint grid lines
-      ctx.strokeStyle = 'rgba(30,82,168,0.06)';
+      // faint grid lines (lighter than before)
+      ctx.strokeStyle = 'rgba(30,82,168,0.03)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let x = gap / 2; x < w; x += gap) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
@@ -58,9 +58,10 @@ let radius = 130;  // px radius of cursor influence
         const r = 1.4 + near * 2.2;
         ctx.beginPath();
         ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+        // opacity reduced roughly by half in both resting and "near cursor" states
         ctx.fillStyle = near > 0
-          ? `rgba(44,111,214,${0.28 + near * 0.6})`
-          : 'rgba(30,82,168,0.20)';
+          ? `rgba(44,111,214,${0.14 + near * 0.18})`
+          : 'rgba(30,82,168,0.10)';
         ctx.fill();
       }
 
@@ -113,13 +114,15 @@ let radius = 130;  // px radius of cursor influence
   .blob--blue {
     top: -160px; right: -120px;
     width: 560px; height: 560px;
-    background: radial-gradient(circle, rgba(44,111,214,.28), transparent 66%);
+    /* opacity roughly halved: .28 -> .14 */
+    background: radial-gradient(circle, rgba(44,111,214,.14), transparent 66%);
     animation: dsBlob 16s ease-in-out infinite;
   }
   .blob--red {
     top: 280px; left: -160px;
     width: 480px; height: 480px;
-    background: radial-gradient(circle, rgba(229,52,42,.14), transparent 66%);
+    /* opacity roughly halved: .14 -> .07 */
+    background: radial-gradient(circle, rgba(229,52,42,.07), transparent 66%);
     animation: dsBlob 20s ease-in-out infinite reverse;
   }
 </style>

@@ -5,17 +5,16 @@ import {
 	gallery,
 	products,
 	productCategories,
-	productTags,
 	blog,
 	blogCategories,
-	tags,
-	categoriesProducts,
 	orderItems,
-	prices,
 	testimonials
 } from '$lib/server/db/schema';
-import { eq, sql, desc, sum, inArray, getTableColumns } from 'drizzle-orm';
+import { eq, sql, desc, inArray, getTableColumns } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
+import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
+
+const HOME_FEATURED_LIMIT = 9;
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	const currentUser = locals?.user;
@@ -36,46 +35,53 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
 	const imagesList = images.map((img) => img.imageUrl);
 
-	const bestSelling = await db
+	// Rank active products by total ordered quantity (LEFT JOIN so products with zero
+	// orders still show up, just ranked last) — a single join, no fan-out.
+	const bestSellingRows = await db
 		.select({
 			productId: products.id,
-			brand: products.brand,
-			productName: products.name,
-			price: sql<number>`min(${prices.price})`,
-			amount: sql<number>`min(${prices.variant})`,
-			image: products.featuredImage,
-			category: productCategories.name
+			orderedQty: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`
 		})
 		.from(products)
-		.leftJoin(categoriesProducts, eq(categoriesProducts.productId, products.id))
-		.leftJoin(productCategories, eq(productCategories.id, categoriesProducts.categoryId))
-		.leftJoin(productTags, eq(productTags.productId, products.id))
-		.leftJoin(tags, eq(tags.id, productTags.tagId))
-		.leftJoin(prices, eq(prices.productId, products.id))
 		.leftJoin(orderItems, eq(orderItems.productId, products.id))
+		.where(eq(products.isActive, true))
 		.groupBy(products.id)
-		.orderBy(desc(sum(orderItems.quantity)))
-		.limit(10);
+		.orderBy(desc(sql`coalesce(sum(${orderItems.quantity}), 0)`))
+		.limit(HOME_FEATURED_LIMIT);
 
-	const productIds = bestSelling.map((p) => p.productId);
-	let allPrices = [];
-	if (productIds.length > 0) {
-		allPrices = await db.select().from(prices).where(inArray(prices.productId, productIds)); // ✅ cleaner than raw sql`IN`
-	}
+	const featuredIds = bestSellingRows.map((r) => r.productId);
 
-	const productList = bestSelling.map((p) => ({
-		...p,
-		priceList: allPrices
-			.filter((price) => price.productId === p.productId)
-			.map((price) => ({
-				amount: price.amount,
-				price: price.price
-			}))
-	}));
+	const featuredProductsData = featuredIds.length
+		? await db
+				.select({
+					productId: products.id,
+					productName: products.name,
+					slug: products.slug,
+					image: products.featuredImage,
+					categoryName: productCategories.name,
+					baseQuantity: products.quantity,
+					brand: products.brand,
+					coatingType: products.coatingType,
+					thickness: products.thickness,
+					width: products.width
+				})
+				.from(products)
+				.leftJoin(productCategories, eq(productCategories.id, products.categoryId))
+				.where(inArray(products.id, featuredIds))
+		: [];
+
+	const featuredVariantRows = await fetchVariantRowsForProducts(featuredIds);
+
+	// Re-order to match the best-selling rank (the IN query above doesn't preserve it)
+	const productList = featuredIds
+		.map((id) => featuredProductsData.find((p) => p.productId === id))
+		.filter((p): p is (typeof featuredProductsData)[number] => p !== undefined)
+		.map((p) => assembleProductCard(p, featuredVariantRows));
 
 	const testimonialList = await db
 		.select()
-		.from(testimonials);
+		.from(testimonials)
+		.where(eq(testimonials.isApproved, true));
 
 	const blogItems = await db
 		.select({

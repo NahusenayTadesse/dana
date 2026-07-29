@@ -1,5 +1,18 @@
 <script lang="ts">
-	import { CheckIcon, ShoppingCart, PlusIcon, MinusIcon, FileText } from '@lucide/svelte';
+	import {
+		CheckIcon,
+		ShoppingCart,
+		PlusIcon,
+		MinusIcon,
+		FileText,
+		Printer,
+
+		Share,
+
+		Share2
+
+
+	} from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
 	import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
@@ -77,9 +90,12 @@
 
 		const lengthPart =
 			v.lengthLabel || (v.lengthValue ? `${v.lengthValue}${v.lengthUnit ?? ''}` : null);
-		if (lengthPart) parts.push(v.isCustomLength ? `${lengthPart} (cut to order)` : lengthPart);
+		if (lengthPart)
+			parts.push(
+				v.isCustomLength ? `${lengthPart} ${m.product_detail_cut_to_order()}` : lengthPart
+			);
 
-		return parts.length ? parts.join(' · ') : (v.sku ?? 'Standard');
+		return parts.length ? parts.join(' · ') : (v.sku ?? m.product_detail_default_variant_label());
 	}
 
 	// Gallery: featured image + explicit gallery images + every variant's own image, deduped
@@ -147,13 +163,13 @@
 	// (e.g. "0.3mm – 0.6mm"), separate from the exact per-variant specs below.
 	const specRows = $derived(
 		[
-			{ k: 'Thickness Range', v: product?.thickness },
-			{ k: 'Standard Width', v: product?.width },
-			{ k: 'Coating Classification', v: product?.coatingType },
-			{ k: 'Available Finish', v: product?.finish },
-			{ k: 'Size Profiles Available', v: product?.sizeRange },
-			{ k: 'Color Options', v: product?.colorOptions },
-			{ k: 'Brand Origin', v: product?.brand }
+			{ k: m.product_detail_spec_thickness_range(), v: product?.thickness },
+			{ k: m.product_detail_spec_standard_width(), v: product?.width },
+			{ k: m.product_detail_spec_coating_classification(), v: product?.coatingType },
+			{ k: m.product_detail_spec_available_finish(), v: product?.finish },
+			{ k: m.product_detail_spec_size_profiles(), v: product?.sizeRange },
+			{ k: m.product_detail_spec_color_options(), v: product?.colorOptions },
+			{ k: m.product_detail_spec_brand_origin(), v: product?.brand }
 		].filter((row) => row.v)
 	);
 
@@ -166,7 +182,7 @@
 						const parts = line.split(':');
 						return parts.length > 1
 							? { title: parts[0].trim(), desc: parts.slice(1).join(':').trim() }
-							: { title: 'Feature', desc: line.trim() };
+							: { title: m.product_detail_default_feature(), desc: line.trim() };
 					})
 			: []
 	);
@@ -198,7 +214,7 @@
 
 		justAdded = true;
 		toast.success(m.product_detail_added_to_cart({ productName: product.name }), {
-			description: `Added ${quantity} item(s) to order sheet.`
+			description: m.product_detail_added_to_order_sheet_toast({ quantity })
 		});
 
 		setTimeout(() => {
@@ -210,13 +226,99 @@
 		navigator.clipboard.writeText(window.location.href);
 		toast.success(m.product_detail_link_copied());
 	}
+
+	function escapeHtml(value: string) {
+		return value
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+	}
+
+	function printSpecSheet() {
+		const printWindow = window.open('', '_blank');
+		if (!printWindow) return;
+
+		const specRowsHtml = specRows
+			.map(
+				(row) =>
+					`<tr><td>${escapeHtml(row.k)}</td><td>${escapeHtml(String(row.v ?? ''))}</td></tr>`
+			)
+			.join('');
+
+		const variantsHtml = hasVariants
+			? `
+				<h2>${escapeHtml(m.product_detail_full_spec_matrix())}</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>${escapeHtml(m.product_detail_table_color())}</th>
+							<th>${escapeHtml(m.product_detail_table_width())}</th>
+							<th>${escapeHtml(m.product_detail_table_thickness())}</th>
+							<th>${escapeHtml(m.product_detail_table_length())}</th>
+							<th>${escapeHtml(m.product_detail_table_sku())}</th>
+							<th>${escapeHtml(m.product_detail_table_price())}</th>
+						</tr>
+					</thead>
+					<tbody>
+						${variants
+							.map(
+								(v) => `
+							<tr>
+								<td>${escapeHtml(v.colorName ?? '—')}</td>
+								<td>${escapeHtml(v.widthLabel || (v.widthValue ? `${v.widthValue}${v.widthUnit ?? ''}` : '—'))}</td>
+								<td>${escapeHtml(v.thicknessValue ? `${v.thicknessValue}${v.thicknessUnit ?? ''}` : '—')}</td>
+								<td>${escapeHtml(v.lengthLabel || (v.lengthValue ? `${v.lengthValue}${v.lengthUnit ?? ''}` : '—'))}</td>
+								<td>${escapeHtml(v.sku ?? '—')}</td>
+								<td>${escapeHtml(v.price !== null ? `${Number(v.price).toLocaleString()} ETB` : m.product_detail_quote_only())}</td>
+							</tr>`
+							)
+							.join('')}
+					</tbody>
+				</table>`
+			: '';
+
+		printWindow.document.write(`
+			<!doctype html>
+			<html>
+				<head>
+					<meta charset="utf-8" />
+					<title>${escapeHtml(product.name)}</title>
+					<style>
+						body { font-family: system-ui, sans-serif; padding: 32px; color: #0f172a; }
+						h1 { font-size: 22px; margin-bottom: 4px; }
+						h2 { font-size: 16px; margin-top: 32px; margin-bottom: 8px; }
+						p { color: #475569; font-size: 13px; max-width: 640px; }
+						table { width: 100%; border-collapse: collapse; font-size: 13px; }
+						th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+						th { background: #f1f5f9; }
+					</style>
+				</head>
+				<body>
+					<h1>${escapeHtml(product.name)}</h1>
+					${product.overview || product.description ? `<p>${escapeHtml(product.overview || product.description || '')}</p>` : ''}
+					<h2>${escapeHtml(m.product_detail_technical_specifications())}</h2>
+					<table>
+						<tbody>${specRowsHtml}</tbody>
+					</table>
+					${variantsHtml}
+				</body>
+			</html>
+		`);
+		printWindow.document.close();
+		printWindow.focus();
+		printWindow.print();
+	}
 </script>
 
 <main class="mx-auto max-w-[1320px] px-7 pt-11 pb-24 text-slate-900 dark:text-slate-100">
 	<div class="mb-6 flex items-center gap-2 font-mono text-xs text-slate-500 dark:text-slate-400">
-		<a href="/" class="transition-colors hover:text-slate-900 dark:hover:text-white">Home</a>
+		<a href="/" class="transition-colors hover:text-slate-900 dark:hover:text-white"
+			>{m.product_detail_breadcrumb_home()}</a
+		>
 		<span>/</span>
-		<a href="/shop" class="transition-colors hover:text-slate-900 dark:hover:text-white">Products</a
+		<a href="/shop" class="transition-colors hover:text-slate-900 dark:hover:text-white"
+			>{m.product_detail_breadcrumb_products()}</a
 		>
 		<span>/</span>
 		<span class="text-slate-700 dark:text-slate-300">{product.name}</span>
@@ -275,7 +377,7 @@
 			<span
 				class="font-mono text-xs font-semibold tracking-widest text-blue-600 uppercase dark:text-blue-400"
 			>
-				{product?.categoryName || 'Industrial Sheet'}
+				{product?.categoryName || m.product_detail_default_category()}
 			</span>
 			<h1
 				class="mt-3 text-3xl leading-tight font-extrabold tracking-tight text-slate-900 sm:text-4xl lg:text-[40px] dark:text-white"
@@ -290,7 +392,7 @@
 						: 'text-rose-600 dark:text-rose-500'}"
 				>
 					<span class="h-2 w-2 rounded-full {inStock ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
-					{inStock ? 'In stock · Material Available' : 'Out of stock'}
+					{inStock ? m.product_detail_in_stock() : m.product_detail_out_of_stock()}
 				</span>
 			</div>
 
@@ -306,11 +408,11 @@
 						<div
 							class="font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
 						>
-							Current Selection Price
+							{m.product_detail_current_selection_price()}
 						</div>
 						<div class="mt-1 text-3xl font-extrabold text-blue-600 dark:text-blue-400">
 							{#if isQuoteOnly}
-								Price on request
+								{m.product_detail_price_on_request()}
 							{:else if numericPrice !== null}
 								{numericPrice.toLocaleString()} ETB
 							{:else}
@@ -319,7 +421,7 @@
 						</div>
 					</div>
 					<span class="max-w-[24ch] text-right text-xs text-slate-500 dark:text-slate-400"
-						>Volume discounts available for bulk & contractor orders</span
+						>{m.product_detail_volume_discounts()}</span
 					>
 				</div>
 
@@ -329,7 +431,7 @@
 						<div
 							class="mb-2.5 font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
 						>
-							Color Profiles
+							{m.product_detail_color_profiles()}
 						</div>
 						<div class="flex flex-wrap gap-2.5">
 							{#each availableColors as c (c.id)}
@@ -354,7 +456,7 @@
 						<div
 							class="mb-2 font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
 						>
-							Select Dimension/Profile
+							{m.product_detail_select_dimension_profile()}
 						</div>
 						<Select
 							type="single"
@@ -368,12 +470,12 @@
 									<span class="text-sm font-semibold">
 										{selectedVariant
 											? variantLabel(selectedVariant, { skipColor: true })
-											: 'Choose an option'}
+											: m.product_detail_choose_option()}
 									</span>
 									<span class="text-sm font-bold text-blue-600 dark:text-blue-400">
 										{selectedVariant?.price != null
 											? `${Number(selectedVariant.price).toLocaleString()} ETB`
-											: 'Quote'}
+											: m.product_detail_quote()}
 									</span>
 								</div>
 							</SelectTrigger>
@@ -389,7 +491,9 @@
 											<span class="text-xs font-medium">{variantLabel(v, { skipColor: true })}</span
 											>
 											<span class="text-xs font-bold text-blue-600 dark:text-blue-400">
-												{v.price !== null ? `${Number(v.price).toLocaleString()} ETB` : 'Quote'}
+												{v.price !== null
+													? `${Number(v.price).toLocaleString()} ETB`
+													: m.product_detail_quote()}
 											</span>
 										</div>
 									</SelectItem>
@@ -403,7 +507,7 @@
 					class="mt-5 flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-200/50 px-3.5 py-2 dark:border-white/5 dark:bg-black/20"
 				>
 					<span class="font-mono text-xs text-slate-500 uppercase dark:text-slate-400"
-						>Quantity</span
+						>{m.product_detail_quantity_label()}</span
 					>
 					<div class="flex items-center gap-3">
 						<button
@@ -428,7 +532,7 @@
 								: ''}"
 							class="flex min-w-[180px] flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-3.5 text-sm font-extrabold text-white shadow-lg transition-transform active:scale-95"
 						>
-							Request a Quote
+							{m.product_detail_request_quote_button()}
 						</a>
 					{:else}
 						<button
@@ -438,9 +542,9 @@
 							class="flex min-w-[180px] flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-800 p-3.5 text-sm font-extrabold text-white shadow-lg shadow-blue-500/25 transition-transform active:scale-95 disabled:opacity-50 dark:from-blue-600 dark:to-blue-900"
 						>
 							{#if justAdded}
-								<CheckIcon size={16} /> Order Form Added
+								<CheckIcon size={16} /> {m.product_detail_order_form_added()}
 							{:else}
-								<ShoppingCart size={16} /> Add to Order Sheet
+								<ShoppingCart size={16} /> {m.product_detail_add_to_order_sheet()}
 							{/if}
 						</button>
 					{/if}
@@ -451,13 +555,13 @@
 						type="button"
 						onclick={handleShare}
 						class="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm font-bold text-slate-700 hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-					>
-						Share Link
+					>  <Share2 size={16	} />
+						{m.product_detail_share_link()}
 					</button>
 				</div>
 			</div>
 
-			<div class="mt-4.5 flex flex-wrap gap-3">
+			<button type="button" onclick={printSpecSheet} class="mt-4.5 flex flex-wrap gap-3">
 				<div
 					class="flex min-w-[200px] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-white/10 dark:bg-slate-900"
 				>
@@ -468,21 +572,33 @@
 					</span>
 					<div>
 						<div class="text-sm font-bold text-slate-800 dark:text-slate-200">
-							Technical Spec Sheet
+							{m.product_detail_tech_spec_sheet_title()}
 						</div>
-						<div class="text-xs text-slate-500 dark:text-slate-400">PDF · Internal Specs</div>
+						<div class="text-xs text-slate-500 dark:text-slate-400">
+							{m.product_detail_tech_spec_sheet_sub()}
+						</div>
 					</div>
 				</div>
-			</div>
+			</button>
 		</div>
 	</div>
 
 	<!-- Specs + advantages -->
 	<div class="mt-16 grid grid-cols-1 gap-9 lg:grid-cols-2">
 		<div>
-			<h2 class="mb-5 text-2xl font-extrabold text-slate-900 dark:text-white">
-				Technical Specifications
-			</h2>
+			<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+				<h2 class="text-2xl font-extrabold text-slate-900 dark:text-white">
+					{m.product_detail_technical_specifications()}
+				</h2>
+				<button
+					type="button"
+					onclick={printSpecSheet}
+					class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+				>
+					<Printer size={14} />
+					{m.product_detail_print_spec_sheet()}
+				</button>
+			</div>
 			<div
 				class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-900"
 			>
@@ -498,7 +614,7 @@
 
 			{#if product.applications}
 				<h2 class="mt-9 mb-4 text-2xl font-extrabold text-slate-900 dark:text-white">
-					Applications
+					{m.product_detail_applications()}
 				</h2>
 				<p class="text-sm leading-relaxed whitespace-pre-line text-slate-600 dark:text-slate-300">
 					{product.applications}
@@ -507,7 +623,9 @@
 		</div>
 
 		<div>
-			<h2 class="mb-5 text-2xl font-extrabold text-slate-900 dark:text-white">Advantages</h2>
+			<h2 class="mb-5 text-2xl font-extrabold text-slate-900 dark:text-white">
+				{m.product_detail_advantages()}
+			</h2>
 			{#if structuralAdvantages.length > 0}
 				<div class="flex flex-col gap-3">
 					{#each structuralAdvantages as adv}
@@ -532,7 +650,7 @@
 
 			{#if product.performanceFeatures}
 				<h2 class="mt-9 mb-4 text-2xl font-extrabold text-slate-900 dark:text-white">
-					Performance Features
+					{m.product_detail_performance_features()}
 				</h2>
 				<p class="text-sm leading-relaxed whitespace-pre-line text-slate-600 dark:text-slate-300">
 					{product.performanceFeatures}
@@ -546,19 +664,33 @@
 	{#if hasVariants}
 		<div class="mt-16">
 			<h2 class="mb-5 text-2xl font-extrabold text-slate-900 dark:text-white">
-				Full Specification Matrix
+				{m.product_detail_full_spec_matrix()}
 			</h2>
 			<div class="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/10">
 				<table class="w-full min-w-[640px] border-collapse text-left text-sm">
 					<thead>
 						<tr class="bg-slate-100 dark:bg-slate-900">
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">Color</th>
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">Width</th>
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">Thickness</th>
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">Length</th>
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">SKU</th>
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">Price</th>
-							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">Status</th>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_color()}</th
+							>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_width()}</th
+							>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_thickness()}</th
+							>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_length()}</th
+							>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_sku()}</th
+							>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_price()}</th
+							>
+							<th class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300"
+								>{m.product_detail_table_status()}</th
+							>
 							<th class="px-4 py-3"></th>
 						</tr>
 					</thead>
@@ -586,11 +718,13 @@
 								>
 								<td class="px-4 py-3">
 									{v.lengthLabel || (v.lengthValue ? `${v.lengthValue}${v.lengthUnit}` : '—')}
-									{v.isCustomLength ? ' (cut to order)' : ''}
+									{v.isCustomLength ? ` ${m.product_detail_cut_to_order()}` : ''}
 								</td>
 								<td class="px-4 py-3 font-mono text-xs text-slate-500">{v.sku ?? '—'}</td>
 								<td class="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">
-									{v.price !== null ? `${Number(v.price).toLocaleString()} ETB` : 'Quote only'}
+									{v.price !== null
+										? `${Number(v.price).toLocaleString()} ETB`
+										: m.product_detail_quote_only()}
 								</td>
 								<td class="px-4 py-3">
 									<span
@@ -598,7 +732,9 @@
 											? 'text-emerald-600 dark:text-emerald-400'
 											: 'text-rose-600 dark:text-rose-500'}"
 									>
-										{v.quantity > 0 ? 'In stock' : 'Out of stock'}
+										{v.quantity > 0
+											? m.product_detail_in_stock_short()
+											: m.product_detail_out_of_stock()}
 									</span>
 								</td>
 								<td class="px-4 py-3 text-right">
@@ -612,14 +748,14 @@
 												addToCart();
 											}}
 										>
-											Add
+											{m.product_detail_add_button()}
 										</button>
 									{:else}
 										<a
 											href="/quote?productId={product.id}&variantId={v.variantId}"
 											class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/5"
 										>
-											Quote
+											{m.product_detail_quote()}
 										</a>
 									{/if}
 								</td>
@@ -634,7 +770,7 @@
 	{#if relatedProducts && relatedProducts.length > 0}
 		<div class="mt-16">
 			<h2 class="mb-5.5 text-2xl font-extrabold text-slate-900 dark:text-white">
-				Related Products
+				{m.product_detail_related_products()}
 			</h2>
 			<div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
 				{#each relatedProducts as p}
@@ -657,10 +793,10 @@
 								</h3>
 								<div class="mt-2 flex items-center justify-between">
 									<span class="font-mono text-xs text-blue-600 dark:text-blue-400"
-										>{p.thickness || 'Specs'}</span
+										>{p.thickness || m.product_detail_specs_fallback()}</span
 									>
 									<span class="text-xs font-bold text-blue-600 dark:text-blue-400"
-										>View Specs →</span
+										>{m.product_detail_view_specs()}</span
 									>
 								</div>
 							</div>

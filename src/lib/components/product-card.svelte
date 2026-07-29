@@ -34,6 +34,10 @@
 		slug: string;
 		image?: string | null;
 		categoryName?: string | null;
+		brand?: string | null;
+		coatingType?: string | null;
+		thickness?: string | null;
+		width?: string | null;
 		minPrice: number | null;
 		maxPrice: number | null;
 		hasQuoteOnlyVariant: boolean;
@@ -48,6 +52,10 @@
 		slug,
 		image,
 		categoryName,
+		brand,
+		coatingType,
+		thickness,
+		width,
 		minPrice,
 		maxPrice,
 		hasQuoteOnlyVariant,
@@ -55,6 +63,10 @@
 		colorSwatches = [],
 		variants = []
 	}: Props = $props();
+
+	const LOW_STOCK_THRESHOLD = 5;
+
+	const specChips = $derived([coatingType, thickness, width].filter((v): v is string => !!v));
 
 	const cart = $derived(useCart());
 	let justAdded = $state(false);
@@ -71,9 +83,12 @@
 
 		const lengthPart =
 			v.lengthLabel || (v.lengthValue ? `${v.lengthValue}${v.lengthUnit ?? ''}` : null);
-		if (lengthPart) parts.push(v.isCustomLength ? `${lengthPart} (cut to order)` : lengthPart);
+		if (lengthPart)
+			parts.push(
+				v.isCustomLength ? `${lengthPart} ${m.product_detail_cut_to_order()}` : lengthPart
+			);
 
-		return parts.length ? parts.join(' · ') : (v.sku ?? 'Standard');
+		return parts.length ? parts.join(' · ') : (v.sku ?? m.product_detail_default_variant_label());
 	}
 
 	// Default selection: the first variant that's both priced and in stock,
@@ -95,7 +110,9 @@
 	const isQuoteOnly = $derived(
 		selectedVariant ? selectedVariant.price === null : hasQuoteOnlyVariant
 	);
-	const inStock = $derived(selectedVariant ? selectedVariant.quantity > 0 : totalQuantity > 0);
+	const stockQuantity = $derived(selectedVariant ? selectedVariant.quantity : totalQuantity);
+	const inStock = $derived(stockQuantity > 0);
+	const lowStock = $derived(stockQuantity > 0 && stockQuantity <= LOW_STOCK_THRESHOLD);
 	const displayPrice = $derived(
 		selectedVariant?.price != null ? Number(selectedVariant.price) : null
 	);
@@ -170,28 +187,48 @@
 				<span
 					class="flex items-center rounded-lg bg-blue-600 px-2.5 py-1 font-mono text-[10px] font-bold text-white dark:bg-blue-500"
 				>
-					{quantityInCart} In Cart
+					{m.product_card_in_cart_badge({ count: quantityInCart })}
 				</span>
 			{/if}
-			<button
+			<!-- <button
 				type="button"
-				aria-label="Favorite Product"
+				aria-label={m.product_card_favorite()}
 				class="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-700 backdrop-blur-md transition-colors hover:text-red-500 dark:border-white/15 dark:bg-slate-950/60 dark:text-slate-300 dark:hover:text-red-400"
 			>
 				<Heart size={14} />
-			</button>
+			</button> -->
 		</div>
 	</div>
 
 	<div class="flex flex-1 flex-col p-5">
 		<div class="mb-2 flex items-center gap-1.5">
 			<span
-				class="text-[11.5px] font-bold {inStock
-					? 'text-emerald-600 dark:text-emerald-400'
+				class="flex items-center gap-1.5 text-[11.5px] font-bold {inStock
+					? lowStock
+						? 'text-amber-600 dark:text-amber-400'
+						: 'text-emerald-600 dark:text-emerald-400'
 					: 'text-slate-400 dark:text-slate-500'}"
 			>
-				{inStock ? 'In stock' : 'Out of stock'}
+				<span
+					class="h-1.5 w-1.5 rounded-full {inStock
+						? lowStock
+							? 'bg-amber-500'
+							: 'bg-emerald-500'
+						: 'bg-slate-400 dark:bg-slate-500'}"
+				></span>
+				{#if !inStock}
+					{m.product_card_out_of_stock()}
+				{:else if lowStock}
+					{m.product_card_low_stock()}
+				{:else}
+					{m.product_card_in_stock()}
+				{/if}
 			</span>
+			{#if brand}
+				<span class="text-[11.5px] font-semibold text-slate-400 dark:text-slate-500"
+					>· {brand}</span
+				>
+			{/if}
 		</div>
 
 		<h3 class="m-0 text-lg leading-snug font-bold text-slate-900 dark:text-white">
@@ -206,17 +243,30 @@
 		<!-- Price: a range until a specific variant is chosen, then the exact price -->
 		<div class="mt-2 text-sm font-bold text-blue-600 dark:text-blue-400">
 			{#if isQuoteOnly}
-				Contact for quote
+				{m.product_card_contact_for_quote()}
 			{:else if displayPrice !== null}
 				ETB {displayPrice?.toLocaleString()}
 			{:else if minPrice !== null}
 				{minPrice === maxPrice
 					? `ETB ${minPrice?.toLocaleString()}`
-					: `From ETB ${minPrice?.toLocaleString()}`}
+					: m.product_card_price_from({ price: minPrice?.toLocaleString() ?? '' })}
 			{:else}
-				Contact for pricing
+				{m.product_card_contact_for_pricing()}
 			{/if}
 		</div>
+
+		<!-- Spec chips — the technical details a steel buyer scans for before opening the sheet -->
+		{#if specChips.length > 0}
+			<div class="mt-2.5 flex flex-wrap gap-1.5">
+				{#each specChips as chip (chip)}
+					<span
+						class="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-slate-600 dark:bg-white/5 dark:text-slate-300"
+					>
+						{chip}
+					</span>
+				{/each}
+			</div>
+		{/if}
 
 		<!-- Color swatches — real hex values from the colors table, no more string guessing -->
 		{#if colorSwatches.length > 0}
@@ -248,12 +298,14 @@
 						class="h-auto w-full rounded-xl border border-slate-200 bg-white p-2 text-slate-900 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
 					>
 						<div class="flex w-full items-center justify-between gap-2 text-left">
-							<div class="text-xs font-semibold text-slate-800 dark:text-slate-200">
-								{selectedVariant ? variantLabel(selectedVariant) : 'Choose an option'}
+              <div
+                class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
+              >								{selectedVariant ? variantLabel(selectedVariant) : m.product_card_choose_option()}
 							</div>
 							{#if selectedVariant?.sku}
-								<div class="font-mono text-[10px] text-slate-400">{selectedVariant.sku}</div>
-							{/if}
+    <div class="shrink-0 font-mono text-[10px] text-slate-400">
+                  {selectedVariant.sku}
+                </div>							{/if}
 						</div>
 					</SelectTrigger>
 					<SelectContent
@@ -267,7 +319,9 @@
 								<div class="flex w-full items-center justify-between gap-6">
 									<span class="text-xs">{variantLabel(v)}</span>
 									<span class="text-xs font-bold text-blue-600 dark:text-blue-400">
-										{v.price !== null ? `ETB ${Number(v.price).toLocaleString()}` : 'Quote'}
+										{v.price !== null
+											? `ETB ${Number(v.price).toLocaleString()}`
+											: m.product_card_quote_short()}
 									</span>
 								</div>
 							</SelectItem>
@@ -285,7 +339,7 @@
 						: ''}"
 					class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-3 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
 				>
-					Request Quote
+					{m.product_card_request_quote()}
 				</a>
 			{:else}
 				<button
@@ -296,17 +350,17 @@
 				>
 					{#if justAdded}
 						<CheckIcon size={14} class="text-emerald-400" />
-						Added
+						{m.product_card_added()}
 					{:else}
 						<ShoppingCartIcon size={14} />
-						Add To Cart
+						{m.product_card_add_to_cart_button()}
 					{/if}
 				</button>
 			{/if}
 			<a
 				href="/shop/single/{slug}"
 				class="flex w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-				title="View Sheet Specs"
+				title={m.product_card_view_specs()}
 			>
 				<Eye size={16} />
 			</a>

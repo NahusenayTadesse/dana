@@ -15,7 +15,7 @@
 	let {
 		quoteUrl = '/checkout',
 		watchUrl = '/factory',
-		heroImage = '/images/manufacture.webp'
+		heroVideoId = 'Pds8-d8su7s'
 	} = $props();
 
 	const stats = [
@@ -147,9 +147,18 @@
 				<div class="ds-dots absolute inset-0 opacity-[0.16]"></div>
 
 				<div
-					class="absolute inset-x-0 top-[6%] bottom-0 bg-cover [background-position:52%_center] [mask-image:linear-gradient(180deg,transparent_0%,#000_12%,#000_100%)]"
-					style="background-image: url('{heroImage}');"
-				></div>
+					class="absolute inset-x-0 top-[6%] bottom-0 overflow-hidden [mask-image:linear-gradient(180deg,transparent_0%,#000_12%,#000_100%)]"
+				>
+					<iframe
+						class="pointer-events-none absolute top-1/2 left-1/2 h-full w-[177.78%] -translate-x-1/2 -translate-y-1/2"
+						src="https://www.youtube-nocookie.com/embed/{heroVideoId}?autoplay=1&mute=1&loop=1&playlist={heroVideoId}&controls=0&showinfo=0&modestbranding=1&playsinline=1&rel=0"
+						title="Hero background video"
+						allow="autoplay; encrypted-media"
+						loading="lazy"
+						aria-hidden="true"
+						tabindex="-1"
+					></iframe>
+				</div>
 
 				<div
 					class="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,58,130,.34)_0%,rgba(18,58,130,0)_28%,rgba(12,27,52,.34)_100%)]"

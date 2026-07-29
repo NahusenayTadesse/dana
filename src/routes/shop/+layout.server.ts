@@ -9,6 +9,7 @@ import {
 } from '$lib/server/db/schema';
 import type { LayoutServerLoad } from './$types';
 import { eq, sql, and, like, asc, gte, lte, inArray } from 'drizzle-orm';
+import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
 
 const PAGE_SIZE = 20;
 const THICKNESS_UNIT = 'mm' as const; // gauge is a different, non-comparable scale — see note to user
@@ -154,7 +155,11 @@ export const load: LayoutServerLoad = async ({ url }) => {
 					image: products.featuredImage,
 					categoryId: products.categoryId,
 					categoryName: productCategories.name,
-					baseQuantity: products.quantity
+					baseQuantity: products.quantity,
+					brand: products.brand,
+					coatingType: products.coatingType,
+					thickness: products.thickness,
+					width: products.width
 				})
 				.from(products)
 				.leftJoin(productCategories, eq(productCategories.id, products.categoryId))
@@ -196,29 +201,7 @@ export const load: LayoutServerLoad = async ({ url }) => {
 		: [];
 
 	// 8. Assemble: price range + de-duped color swatches per product
-	const productList = productsData.map((p) => {
-		const variants = variantRows.filter((v) => v.productId === p.productId);
-		const prices = variants.map((v) => v.price).filter((v): v is string => v !== null);
-		const variantQty = variants.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
-
-		const colorSwatches = Array.from(
-			new Map(
-				variants
-					.filter((v) => v.colorId !== null)
-					.map((v) => [v.colorId, { id: v.colorId, name: v.colorName, hex: v.colorHex }])
-			).values()
-		);
-
-		return {
-			...p,
-			minPrice: prices.length ? Math.min(...prices.map(Number)) : null,
-			maxPrice: prices.length ? Math.max(...prices.map(Number)) : null,
-			hasQuoteOnlyVariant: variants.some((v) => v.price === null),
-			totalQuantity: (p.baseQuantity ?? 0) + variantQty,
-			colorSwatches,
-			variants
-		};
-	});
+	const productList = productsData.map((p) => assembleProductCard(p, variantRows));
 
 	return {
 		productList,

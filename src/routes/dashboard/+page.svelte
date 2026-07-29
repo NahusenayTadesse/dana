@@ -2,7 +2,6 @@
 	import ReorderList from '$lib/components/dashboard/reorder-list.svelte';
 	import { PackageIcon } from '@lucide/svelte';
 
-	import Reports from '$lib/components/dashboard/reports.svelte';
 	import DailyStats from '$lib/components/dashboard/daily-stats.svelte';
 
 	let { data } = $props();

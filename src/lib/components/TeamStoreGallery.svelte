@@ -2,10 +2,42 @@
   import { fade, fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
-  // Generate the 10 image paths dynamically from the static/assets directory
-  const images = Array.from({ length: 10 }, (_, i) => ({
+  // Every image file actually present in /static/assets — keep this list in sync
+  // with the folder contents (SvelteKit can't glob the static dir at build time).
+  const imageFiles = [
+    '1.webp',
+    '2.webp',
+    '4.webp',
+    '5.webp',
+    '8.webp',
+    '10.webp',
+    '11.webp',
+    '12.webp',
+    '14.webp',
+    '15.webp',
+    '18.webp',
+    '19.webp',
+    '77.webp',
+    'products show4.webp',
+    'factory-gate.jpg',
+    'forklift.jpg',
+    'reception.jpg',
+    'rollforming.jpg',
+    'showroom.jpg',
+    'slitting-line.jpg',
+    'warehouse.jpg',
+    'image1.jpg',
+    'image2.jpg',
+    'image5.jpg',
+    'image7.jpg',
+    'image8.jpg',
+    'image9.jpg',
+    'image10.jpg'
+  ];
+
+  const images = imageFiles.map((file, i) => ({
     id: i + 1,
-    src: `/assets/image${i + 1}.jpg`,
+    src: encodeURI(`/assets/${file}`),
     title: `Asset Gallery #${i + 1}`,
     subtitle: `High-resolution preview`
   }));
@@ -41,6 +73,20 @@
     if (event.key === 'ArrowRight') nextImage();
     if (event.key === 'ArrowLeft') prevImage();
   }
+
+  // Repeating bento rhythm — every 8 tiles has one big feature, one tall, one wide.
+  function tileSpan(i: number) {
+    switch (i % 8) {
+      case 0:
+        return 'sm:col-span-2 sm:row-span-2';
+      case 3:
+        return 'sm:row-span-2';
+      case 5:
+        return 'sm:col-span-2';
+      default:
+        return '';
+    }
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -50,41 +96,71 @@
 
 
   <!-- Grid Gallery -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+  <div
+    class="grid grid-flow-dense grid-cols-2 auto-rows-[140px] gap-4 sm:grid-cols-3 sm:auto-rows-[160px] md:grid-cols-4 md:auto-rows-[190px]"
+  >
     {#each images as image, i (image.id)}
-      <div 
-        in:fly={{ y: 20, duration: 500, delay: i * 60, easing: cubicOut }}
-        class="group relative aspect-[4/5] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-md transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40 cursor-pointer"
+      <div
+        in:fly={{ y: 20, duration: 500, delay: i * 40, easing: cubicOut }}
+        class="group relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-md transition-all duration-500 hover:-translate-y-1 hover:rotate-[-0.3deg] hover:shadow-2xl hover:shadow-primary/20 hover:border-primary/40 cursor-pointer {tileSpan(
+          i
+        )}"
         onclick={() => openLightbox(i)}
         role="button"
         tabindex="0"
         onkeydown={(e) => e.key === 'Enter' && openLightbox(i)}
       >
         <!-- Thumbnail Image -->
-        <img 
-          src={image.src} 
+        <img
+          src={image.src}
           alt={image.title}
           loading="lazy"
-          class="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+          class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
         />
 
+        <!-- Resting gradient so tiles read as a cohesive mosaic even without hover -->
+        <div
+          class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent opacity-70 transition-opacity duration-500 group-hover:opacity-0"
+        ></div>
+
+        <!-- Hover ring accent -->
+        <div
+          class="pointer-events-none absolute inset-0 rounded-2xl opacity-0 ring-2 ring-primary/50 ring-inset transition-opacity duration-300 group-hover:opacity-100"
+        ></div>
+
         <!-- Hover Overlay Gradient -->
-        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+        <div
+          class="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/25 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        >
           <span class="font-mono text-[10px] tracking-widest text-primary-foreground/70 uppercase">
-            0{image.id} / 10
+            {String(image.id).padStart(2, '0')} / {images.length}
           </span>
-          <h3 class="font-bold text-white text-sm translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+          <h3
+            class="translate-y-2 text-sm font-bold text-white transition-transform duration-300 group-hover:translate-y-0"
+          >
             {image.title}
           </h3>
-          <p class="text-[11px] text-gray-300 translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75">
+          <p
+            class="translate-y-2 text-[11px] text-gray-300 transition-transform delay-75 duration-300 group-hover:translate-y-0"
+          >
             {image.subtitle}
           </p>
         </div>
 
         <!-- Glass Badge in Corner -->
-        <div class="absolute top-3 right-3 w-8 h-8 rounded-full bg-card/60 backdrop-blur-md border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110">
-          <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 3h6v6M14 10l6-6M9 21H3v-6M10 14l-6 6"/>
+        <div
+          class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-card/60 opacity-0 backdrop-blur-md transition-all duration-300 group-hover:scale-110 group-hover:opacity-100"
+        >
+          <svg
+            class="h-4 w-4 text-white"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M15 3h6v6M14 10l6-6M9 21H3v-6M10 14l-6 6" />
           </svg>
         </div>
       </div>

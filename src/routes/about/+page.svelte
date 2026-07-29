@@ -26,7 +26,6 @@
     import Faq from '$lib/components/faq.svelte';
     import Testimonial from '$lib/components/testimonial.svelte';
     import Slider from '$lib/components/slider.svelte';
-    import ImgSeparator from '$lib/components/imgSeparator.svelte';
     import Mission from '$lib/components/mission.svelte';
     import * as m from '$lib/paraglide/messages.js';
 
@@ -300,13 +299,11 @@
         </div>
     </section>
 
-    <ImgSeparator />
+  
 
     <!-- Tabs Feature Section with Image Sidecar -->
-    <section
-        class="border-y border-primary/10  px-4 py-20 backdrop-blur-xl sm:px-6 lg:px-8"
-    >
-        <div class="mx-auto max-w-6xl">
+    <section class="border-y border-primary/10 px-4 py-20 backdrop-blur-xl sm:px-6 sm:py-24 lg:px-8">
+        <div class="mx-auto max-w-7xl">
             <div class="mb-10 text-center">
                 <span class="text-xs font-bold uppercase tracking-widest text-primary">
                     {m.about_page_why_label()}
@@ -387,7 +384,7 @@
         </div>
     </section>
 
-    <ImgSeparator />
+  
 
     <!-- Stats Section -->
     <section class="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
@@ -412,62 +409,77 @@
         </div>
     </section>
 
-    <ImgSeparator />
+  
 
     <!-- Manufacturing & Operations Feature Gallery Section -->
-    <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+    <section class="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div class="mb-10 text-center">
-            <h2 class="text-3xl font-black tracking-tight sm:text-4xl">State-of-the-Art Operations</h2>
-            <p class="mt-2 text-sm text-muted-foreground">Inside our development and manufacturing facilities</p>
+            <span class="text-xs font-bold uppercase tracking-widest text-primary">
+                {m.about_page_manufacturing_label()}
+            </span>
+            <h2 class="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+                {m.about_page_manufacturing_title()}
+            </h2>
+            <p class="mt-3 text-sm text-muted-foreground">{m.about_page_manufacturing_description()}</p>
         </div>
 
         <div class="grid gap-4 md:grid-cols-12">
-            <div class="relative overflow-hidden rounded-3xl border border-primary/10 md:col-span-8">
+            <div
+                class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-8"
+            >
                 <img
                     src="/images/manufacture top view.webp"
                     alt="Facility Top View"
-                    class="h-72 w-full object-cover transition-transform duration-700 hover:scale-105"
+                    class="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 <div class="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent"></div>
                 <div class="absolute bottom-6 left-6">
-                    <span class="rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold text-primary backdrop-blur-md">
-                        Manufacturing Hub
+                    <span
+                        class="rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold text-primary backdrop-blur-md"
+                    >
+                        {m.about_page_manufacturing_hub_badge()}
                     </span>
-                    <h3 class="mt-2 text-xl font-bold">Assembly & Testing Center</h3>
+                    <h3 class="mt-2 text-xl font-bold">{m.about_page_manufacturing_assembly_title()}</h3>
                 </div>
             </div>
 
-            <div class="relative overflow-hidden rounded-3xl border border-primary/10 md:col-span-4">
+            <div
+                class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-4"
+            >
                 <img
                     src="/images/manufacture.webp"
                     alt="Manufacturing Process"
-                    class="h-72 w-full object-cover transition-transform duration-700 hover:scale-105"
+                    class="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 <div class="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent"></div>
                 <div class="absolute bottom-6 left-6">
-                    <h3 class="text-lg font-bold">Strict Standards</h3>
+                    <h3 class="text-lg font-bold">{m.about_page_manufacturing_strict_title()}</h3>
                 </div>
             </div>
 
-            <div class="relative overflow-hidden rounded-3xl border border-primary/10 md:col-span-6">
+            <div
+                class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-6"
+            >
                 <img
                     src="/images/welcome.webp"
                     alt="Welcome Reception"
-                    class="h-56 w-full object-cover transition-transform duration-700 hover:scale-105"
+                    class="h-56 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
             </div>
 
-            <div class="relative overflow-hidden rounded-3xl border border-primary/10 md:col-span-6">
+            <div
+                class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-6"
+            >
                 <img
                     src="/images/client.webp"
                     alt="Client Engagement"
-                    class="h-56 w-full object-cover transition-transform duration-700 hover:scale-105"
+                    class="h-56 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
             </div>
         </div>
     </section>
 
-    <ImgSeparator />
+
 
     <!-- Categories & Embedded Interactive Product Image Slider -->
     <section
@@ -545,11 +557,11 @@
         </div>
     </section>
 
-    <ImgSeparator />
+  
 
     <TeamStoreGallery />
 
-    <ImgSeparator />
+  
 
     <!-- Journey Section -->
     <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
@@ -585,11 +597,11 @@
         </div>
     </section>
 
-    <ImgSeparator />
+  
 
     <Mission />
 
-    <ImgSeparator />
+  
 
     <!-- CTA Section -->
     <section class="mx-auto max-w-4xl px-4 py-24 text-center sm:px-6 lg:px-8">
@@ -627,28 +639,15 @@
     </section>
 </div>
 
-<ImgSeparator />
 
 {#if data?.imagesList?.length > 0}
     <Slider imagesList={data.imagesList} />
 {/if}
 
-<ImgSeparator />
 
 {#if data?.testimonialList?.length > 0}
-    <main class="flex flex-col items-center justify-center px-4 py-16">
-        <div class="mb-10 max-w-2xl text-center">
-            <h2 class="text-3xl font-bold md:text-4xl">{m.about_page_testimonials_title()}</h2>
-            <p class="mt-3 text-muted-foreground">
-                {m.about_page_testimonials_description()}
-            </p>
-        </div>
-
-        <Testimonial testimonials={data.testimonialList} />
-    </main>
+    <Testimonial testimonials={data.testimonialList} />
 {/if}
-
-<ImgSeparator />
 
 <Faq />
 
