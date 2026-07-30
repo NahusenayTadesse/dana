@@ -401,7 +401,8 @@ export const actions: Actions = {
 	},
 	addVariant: async ({ request, params, locals }) => {
 			const form = await superValidate(request, zod4(addVariant));
-			if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' });
+			if (!form.valid)
+				return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
 	
 			const { colorId, widthId, thicknessId, lengthId, sku, price, quantity, reorderLevel, image } =
 				form.data;
@@ -436,7 +437,8 @@ export const actions: Actions = {
 	
 		editVariant: async ({ request }) => {
 			const form = await superValidate(request, zod4(editVariant));
-			if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' });
+			if (!form.valid)
+				return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
 	
 			const {
 				id,
@@ -482,12 +484,15 @@ export const actions: Actions = {
 		},
 	
 		deleteVariant: async ({ request }) => {
-			// Shares the edit form (only needs the id).
+			// Shares the edit form so the response keeps the client form's shape,
+			// but a delete only needs the id — an unrelated invalid field (a stale
+			// SKU, a bad price) must not block removing the row.
 			const form = await superValidate(request, zod4(editVariant));
-			if (!form.valid) return message(form, { type: 'error', text: 'Invalid form data.' });
-	
 			const { id } = form.data;
-	
+
+			if (!id)
+				return message(form, { type: 'error', text: 'Variant not found.' }, { status: 400 });
+
 			try {
 				await db.delete(productVariants).where(eq(productVariants.id, id));
 				return message(form, { type: 'success', text: 'Variant deleted successfully.' });

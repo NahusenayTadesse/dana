@@ -62,7 +62,7 @@
 			<h1
 				class="mt-6 animate-ds-up font-heading text-[clamp(2.6rem,4.8vw,4.5rem)] leading-[1.02] font-extrabold tracking-[-0.025em] text-balance text-foreground [animation-delay:120ms]"
 			>
-				<span class="bg-gradient-to-br from-brand-bright to-brand-mid bg-clip-text text-transparent">
+				<span class="bg-linear-to-br from-brand-bright to-brand-mid bg-clip-text text-transparent">
 					{m.hero_title_highlight()}
 				</span>
 				{m.hero_title_rest()}
@@ -79,7 +79,7 @@
 			<div class="mt-9 flex animate-ds-up flex-wrap items-center gap-4 [animation-delay:280ms]">
 				<a
 					href={quoteUrl}
-					class="group inline-flex items-center gap-3.5 rounded-full bg-gradient-to-br from-brand-bright to-brand py-2.5 pr-2.5 pl-7 text-base font-bold text-white shadow-lg shadow-brand/30 transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand/40 active:translate-y-0"
+					class="group inline-flex items-center gap-3.5 rounded-full bg-linear-to-br from-brand-bright to-brand py-2.5 pr-2.5 pl-7 text-base font-bold text-white shadow-lg shadow-brand/30 transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand/40 active:translate-y-0"
 				>
 					{m.btn_quote()}
 					<span class="flex size-10 items-center justify-center rounded-full bg-white">

@@ -23,7 +23,6 @@ export const load: LayoutServerLoad = async ({ params }) => {
 	const { id } = params;
 	const productId = Number(id);
 
-	const form = await superValidate(zod4(edit));
 	const adjustForm = await superValidate(zod4(adjust));
 	const damagedForm = await superValidate(zod4(damaged));
 	const galleryEdit = await superValidate(zod4(editGallery));
@@ -89,6 +88,8 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		.where(eq(products.id, productId))
 		.then((rows) => rows[0]);
 
+
+
 	const priceList = await db
 		.select({
 			id: prices.id,
@@ -131,6 +132,26 @@ export const load: LayoutServerLoad = async ({ params }) => {
 				eq(categoriesProducts.productId, productId)
 			)
 		);
+
+	// Prefill the product edit form server-side, keyed to the `edit` schema.
+	// `image` is deliberately left out — a file input can't be prefilled, and the
+	// action only overwrites featuredImage when a new file is actually uploaded.
+	// `errors: false` so an incomplete existing row doesn't render as red on open.
+	const form = await superValidate(
+		{
+			productName: product?.name ?? '',
+			brand: product?.brand ?? '',
+			category: categorized.map((c) => c.value),
+			tag: tagged.map((t) => t.value),
+			commission: Number(product?.commission ?? 0),
+			description: product?.description ?? '',
+			quantity: product?.quantity ?? 0,
+			supplier: product?.supplierId ?? undefined,
+			reorderLevel: product?.reorderLevel ?? 0
+		},
+		zod4(edit),
+		{ errors: false }
+	);
 
 	return {
 		product,

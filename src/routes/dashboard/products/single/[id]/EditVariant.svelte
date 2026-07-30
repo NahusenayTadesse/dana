@@ -3,10 +3,11 @@
 	import { SquarePen, Save, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
+	import { untrack } from 'svelte';
 	import type { Infer, SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 
-	import type { EditVariant } from './schema';
+	import type { editVariant } from './variant.schema';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
@@ -22,6 +23,7 @@
 		price: string | number | null;
 		quantity: number;
 		reorderLevel: number | null;
+		imageUrl: string | null;
 	};
 
 	let {
@@ -30,9 +32,9 @@
 		colorItems = [],
 		widthItems = [],
 		thicknessItems = [],
-		lengthItems = []
+		lengthItems = [],
 	}: {
-		data: SuperValidated<Infer<EditVariant>>;
+		data: SuperValidated<Infer<typeof editVariant>>;
 		variant: Variant;
 		colorItems?: Item[];
 		widthItems?: Item[];
@@ -40,21 +42,47 @@
 		lengthItems?: Item[];
 	} = $props();
 
+	// A superForm id is fixed for the lifetime of the instance, so capturing the
+	// initial row id here is deliberate.
+	const formId = `variant-${untrack(() => variant.id)}`;
+
 	const { form, errors, enhance, delayed, message } = superForm(data, {
-		dataType: 'json'
+		// Every row is handed the same `editVariantForm` from `load`, so without a
+		// unique id all rows share one form id and each response is applied to all
+		// of them — one row's save silently overwrites every other row's state.
+		id: formId,
+		dataType: 'json',
+		// The prefill below is what makes this row's id/values exist at all; a reset
+		// would wipe them back to the empty defaults and break the next submit.
+		resetForm: false
 	});
 
-	// Prefill this row's values (runs once on mount). With dataType: 'json'
-	// these go straight to the server — no hidden inputs needed.
-	$form.id = variant.id;
-	$form.colorId = variant.colorId;
-	$form.widthId = variant.widthId;
-	$form.thicknessId = variant.thicknessId;
-	$form.lengthId = variant.lengthId;
-	$form.sku = variant.sku;
-	$form.price = variant.price != null ? Number(variant.price) : null;
-	$form.quantity = variant.quantity;
-	$form.reorderLevel = variant.reorderLevel;
+	// Prefill this row's values. With dataType: 'json' these go straight to the
+	// server — no hidden inputs needed. Guarded on the row id so it re-applies if
+	// this instance is ever reused for another row, but never clobbers an edit in
+	// progress. `form.update` (not `$form`) keeps this off the keystroke path.
+	let prefilledFor: number | null = null;
+	$effect(() => {
+		const v = variant;
+		if (prefilledFor === v.id) return;
+		prefilledFor = v.id;
+
+		form.update(
+			(f) => ({
+				...f,
+				id: v.id,
+				colorId: v.colorId,
+				widthId: v.widthId,
+				thicknessId: v.thicknessId,
+				lengthId: v.lengthId,
+				sku: v.sku,
+				price: v.price != null ? Number(v.price) : null,
+				quantity: v.quantity,
+				reorderLevel: v.reorderLevel
+			}),
+			{ taint: false }
+		);
+	});
 
 	$effect(() => {
 		if ($message) {
@@ -73,7 +101,6 @@
 			class="flex w-full flex-col gap-3"
 			enctype="multipart/form-data"
 		>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 				<InputComp
 					{form}
 					{errors}
@@ -110,7 +137,6 @@
 					placeholder="Select length"
 					items={lengthItems}
 				/>
-			</div>
 
 			<InputComp
 				{form}
@@ -121,7 +147,6 @@
 				placeholder="e.g. PPGI-RED-0.5-1000"
 			/>
 
-			<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 				<InputComp
 					{form}
 					{errors}
@@ -146,13 +171,14 @@
 					label="Reorder Level"
 					placeholder="Notify level"
 				/>
-			</div>
+		
 
 			<InputComp
 				{form}
 				{errors}
 				type="file"
 				name="image"
+				image={variant.imageUrl ?? ''}
 				label="Variant Image (leave empty to keep current)"
 				placeholder="Upload new variant image"
 			/>

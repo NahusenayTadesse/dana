@@ -54,12 +54,14 @@ export const addVariant = z.object({
 		)
 		.default(0),
 
+	// nonnegative, not positive — the column is nullable with no default, so an
+	// existing row can legitimately hold 0 and must stay editable.
 	reorderLevel: z.preprocess(
 		emptyToNull,
 		z.coerce
 			.number()
 			.int('Reorder level must be a whole number.')
-			.positive('Reorder level must be a positive number.')
+			.nonnegative('Reorder level cannot be negative.')
 			.nullable()
 	),
 

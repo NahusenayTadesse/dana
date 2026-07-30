@@ -68,15 +68,7 @@
 		}
 	);
 
-	(($form.productName = data.product.name),
-		($form.brand = data.product.brand),
-		($form.category = data.categorized.map((c) => c.value)),
-		($form.tag = data.tagged.map((c) => c.value)),
-		($form.commission = Number(data.product.commission ?? 0)),
-		($form.description = data.product.description),
-		($form.quantity = data.product.quantity),
-		($form.reorderLevel = data.product.reorderLevel),
-		($form.supplier = data.product.supplierId));
+	// Values come prefilled from `load` (see +layout.server.ts) — no client patch.
 
 	export const snapshot: Snapshot = { capture, restore };
 
@@ -192,7 +184,8 @@
 					colorItems: data?.colorItems,
 					widthItems: data?.widthItems,
 					thicknessItems: data?.thicknessItems,
-					lengthItems: data?.lengthItems
+					lengthItems: data?.lengthItems,
+					
 				})
 		}
 	];
@@ -382,7 +375,7 @@
 					name="commission"
 					label="Commission Amount"
 					placeholder="Enter commission earned per sale"
-					required
+		
 				/>
 
 				<InputComp
@@ -392,7 +385,6 @@
 					name="quantity"
 					label="Quantity"
 					placeholder="Enter the number of items the product currently has"
-					required
 				/>
 
 				<InputComp
@@ -402,7 +394,6 @@
 					name="supplier"
 					label="Product Supplier"
 					placeholder="Select Supplier"
-					required
 					items={data?.supplierList}
 				/>
 
@@ -413,7 +404,6 @@
 					name="reorderLevel"
 					label="Reorder Notify Level"
 					placeholder="Enter when you want to be notified"
-					required
 				/>
 
 				<Button form="edit" type="submit" class="mt-4">
