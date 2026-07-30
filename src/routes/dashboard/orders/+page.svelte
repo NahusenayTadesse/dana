@@ -72,6 +72,12 @@
 			cell: ({ row }) => row.original.name ?? '—'
 		},
 		{
+			accessorKey: 'type',
+			header: sortHeader('Customer Type'),
+			sortable: true,
+		},
+		
+		{
 			accessorKey: 'phone',
 			header: 'Phone',
 			sortable: false,

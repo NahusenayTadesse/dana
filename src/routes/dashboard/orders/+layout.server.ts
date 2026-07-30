@@ -54,6 +54,7 @@ export const load: LayoutServerLoad = async () => {
 			id: orders.id,
 			name: customers.name,
 			customerId: customers.id,
+			type: customers.type,
 			phone: customers.phone,
 			status: orders.status
 		})

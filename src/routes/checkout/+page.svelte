@@ -53,6 +53,8 @@
 		})) || []
 	);
 
+	
+
 	$effect(() => {
 		if ($message) {
 			if ($message.type === 'error') {
@@ -180,7 +182,19 @@
 									placeholder={m.checkout_phone_placeholder()}
 									required
 								/>
-
+								<InputComp
+				label={m.signup_type()}
+				name="type"
+				type="select"
+				items={[
+					 { value: 'individual', name: m.signup_type_customer()},
+					 { value: 'business', name: m.signup_type_business()},
+				]}
+				{form}
+				{errors}
+				placeholder={m.signup_phone_placeholder()}
+			/>
+   {#if $form.type ===  'business'}
 								<InputComp
 									label={m.checkout_tin_label()}
 									name="tinNo"
@@ -198,6 +212,7 @@
 									{errors}
 									placeholder={m.checkout_docs_placeholder()}
 								/>
+								{/if}
 								<InputComp
 									label=""
 									name="selectedProducts"

@@ -600,6 +600,11 @@
 	"signup_email_placeholder": "procurement@buildethiopia.com",
 	"signup_phone_label": "Contact Phone Line",
 	"signup_phone_placeholder": "+251 9-11-00-00-00",
+	"signup_type": "Are you an individual customer or a business?",
+	"signup_type_business": "Business",
+	"signup_type_customer": "Individual",
+	
+
 	"signup_password_label": "Secure Portal Password",
 	"signup_show_password": "Make password visible",
 	"signup_hide_password": "Hide password",

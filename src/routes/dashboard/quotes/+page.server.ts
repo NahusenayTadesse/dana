@@ -34,6 +34,7 @@ export const load: PageServerLoad = async () => {
 			email: quoteRequests.email,
 			phone: quoteRequests.phone,
 			whatsapp: quoteRequests.whatsapp,
+			type: customers.type,
 			companyName: quoteRequests.companyName,
 			quantityEstimate: quoteRequests.quantityEstimate,
 			message: quoteRequests.message,
@@ -57,6 +58,7 @@ export const load: PageServerLoad = async () => {
 		.leftJoin(products, eq(products.id, quoteRequests.productId))
 		.leftJoin(productCategories, eq(productCategories.id, quoteRequests.categoryId))
 		.leftJoin(productVariants, eq(productVariants.id, quoteRequests.variantId))
+		.leftJoin(customers, eq(customers.id, quoteRequests.customerId))
 		.leftJoin(colors, eq(colors.id, productVariants.colorId))
 		.leftJoin(widths, eq(widths.id, productVariants.widthId))
 		.leftJoin(thicknesses, eq(thicknesses.id, productVariants.thicknessId))

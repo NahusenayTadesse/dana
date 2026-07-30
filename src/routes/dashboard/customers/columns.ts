@@ -31,6 +31,16 @@ export const columns = [
 		}
 	},
 	{
+		accessorKey: 'type',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Customer Type',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+
+	},
+	{
 		accessorKey: 'phone',
 		header: 'Phone',
 		sortable: true,

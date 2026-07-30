@@ -74,7 +74,21 @@
 				{errors}
 				placeholder={m.signup_phone_placeholder()}
 			/>
-			
+				<InputComp
+				label={m.signup_type()}
+				name="type"
+				type="select"
+				items={[
+					 { value: 'individual', name: m.signup_type_customer()},
+					 { value: 'business', name: m.signup_type_business()},
+				]}
+				{form}
+				{errors}
+				placeholder={m.signup_phone_placeholder()}
+			/>
+		
+		
+	{#if $form.type === 'business'}
 			   
 		<InputComp
 									label={m.checkout_tin_label()}
@@ -96,6 +110,7 @@
 									placeholder={m.checkout_docs_placeholder()}
 									required
 								/>
+								{/if}
 							
 			<div class="grid gap-2">
 				<div class="flex items-center">

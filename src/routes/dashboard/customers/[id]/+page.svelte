@@ -21,6 +21,7 @@
 		{ name: 'Name', value: data.customer?.customerName },
 		{ name: 'Phone', value: data.customer?.phone },
 		{ name: 'Email', value: data.customer?.email },
+		{ name: 'Customer Type', value: data.customer?.type },
 		{ name: 'Tin No', value: data.customer?.tinNo },
 		{ name: 'Address', value: data.customer?.address },
 		{ name: 'Status', value: data.customer?.status ? 'Active' : 'Inactive' },

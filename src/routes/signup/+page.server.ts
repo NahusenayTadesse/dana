@@ -48,7 +48,7 @@ export const actions: Actions = {
 			);
 		}
 
-		const { name, email, password, phone, tinNo, docs } = form.data;
+		const { name, email, password, phone, tinNo, docs, type } = form.data;
 
 		try {
 			await db.transaction(async (tx) => {
@@ -68,7 +68,7 @@ export const actions: Actions = {
 					.where(eq(user.id, newCustomer?.user.id));
 					const imageUrl = docs ? await saveUploadedFile(docs): null;
 					
-				await tx.insert(customers).values({ email, name, phone, userId: newCustomer?.user.id, tinNo, docs: imageUrl });
+				await tx.insert(customers).values({ email, name, phone, userId: newCustomer?.user.id, tinNo, docs: imageUrl, type });
 			});
 			// const { subject, html } = customerWelcomeTemplate(name);
 

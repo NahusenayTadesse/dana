@@ -35,7 +35,7 @@ export const actions: Actions = {
 			);
 		}
 
-		const { name, email, phone, tinNo, docs, selectedProducts } = form.data;
+		const { name, email, phone, tinNo, docs, selectedProducts, type } = form.data;
 
 		let customerInfo: { value: number; email: string; name: string; phone: string | null } | undefined;
 		let newQuoteIds: number[] = [];
@@ -72,7 +72,8 @@ export const actions: Actions = {
 							value: customers.id,
 							email: customers.email,
 							name: customers.name,
-							phone: customers.phone
+							phone: customers.phone,
+						
 						})
 						.from(customers)
 						.where(eq(customers.email, email))
@@ -90,7 +91,7 @@ export const actions: Actions = {
 
 						const newCustomer = await tx
 							.insert(customers)
-							.values({ name, email, phone, tinNo, docs: imageUrl })
+							.values({ name, email, phone, tinNo, docs: imageUrl, type })
 							.$returningId();
 
 						const inserted = newCustomer[0];

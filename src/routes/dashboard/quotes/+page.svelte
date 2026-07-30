@@ -42,11 +42,17 @@
 				renderComponent(DataTableSort, { name: 'Name', onclick: column.getToggleSortingHandler() }),
 			sortable: true
 		},
-		{
-			accessorKey: 'companyName',
-			header: 'Company',
+			{
+			accessorKey: 'type',
+			header: ({ column }) =>
+				renderComponent(DataTableSort, { name: 'Customer Type', onclick: column.getToggleSortingHandler() }),
 			sortable: true
 		},
+		// {
+		// 	accessorKey: 'companyName',
+		// 	header: 'Company',
+		// 	sortable: true
+		// },
 		{
 			accessorKey: 'phone',
 			header: 'Phone',
