@@ -4,7 +4,7 @@
     import { Badge } from '$lib/components/ui/badge';
     import { ScrollArea } from '$lib/components/ui/scroll-area';
     import { ScrollText as ReceiptIcon, TrashIcon } from '@lucide/svelte';
-    import CartRow from './cart-item.svelte';
+    import CartRow from './cart-item-detailed.svelte';
     import * as Popover from '$lib/components/ui/sheet/index.js';
     import * as m from '$lib/paraglide/messages.js';
 
@@ -63,7 +63,18 @@
             </div>
         </Popover.Trigger>
 
-        <Popover.Content class="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+        <!--
+            The sheet's own data-[side=right]:w-3/4 / sm:max-w-sm utilities sort
+            after plain w-/max-w- classes in the generated CSS, so a class-only
+            override loses the cascade no matter what order it's listed in here.
+            An inline style wins regardless of utility ordering — "width: 100%"
+            resolves against the fixed element's viewport-wide containing block,
+            so this is min(100vw, 56rem): full-screen on mobile, capped on desktop.
+        -->
+        <Popover.Content
+            class="flex flex-col gap-0 p-0"
+            style="width: 100%; max-width: 56rem;"
+        >
             <div class="flex items-center justify-between border-b border-border bg-muted/30 p-4">
                 <div class="flex items-center gap-2">
                     <ReceiptIcon class="size-5 text-primary" />
@@ -73,12 +84,18 @@
 
             {#if cart.items.length > 0}
                 <ScrollArea class="overscroll-behavior-contain min-h-0 flex-1">
+                    <!-- min-w on the table + overflow-x-auto: no scroll needed once the
+                         sheet is wide enough (desktop), but it's still there as a
+                         fallback on narrow/small-laptop widths instead of clipping. -->
                     <div class="overflow-x-auto p-3">
-                        <table class="w-full min-w-[520px] border-collapse text-sm">
+                        <table class="w-full min-w-[760px] border-collapse text-sm">
                             <thead>
                                 <tr class="border-b border-border text-left text-xs text-muted-foreground uppercase">
                                     <th class="pb-2 font-medium">{m.cart_col_product()}</th>
-                                    <th class="pb-2 font-medium">{m.cart_col_spec()}</th>
+                                    <th class="pb-2 font-medium">{m.checkout_col_color()}</th>
+                                    <th class="pb-2 font-medium">{m.checkout_col_width()}</th>
+                                    <th class="pb-2 font-medium">{m.checkout_col_thickness()}</th>
+                                    <th class="pb-2 font-medium">{m.checkout_col_length()}</th>
                                     <th class="pb-2 font-medium text-right">{m.cart_col_qty()}</th>
                                     <th class="pb-2 font-medium text-right">{m.cart_col_unit_price()}</th>
                                     <th class="pb-2 font-medium text-right">{m.cart_col_total()}</th>

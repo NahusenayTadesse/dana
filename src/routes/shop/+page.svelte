@@ -14,7 +14,10 @@
         Layers,
         Paintbrush,
         Ruler,
-        CheckCircle2
+        CheckCircle2,
+        Move,
+        Layers3,
+        Tag
     } from '@lucide/svelte';
     import Label from '$lib/components/ui/label/label.svelte';
     import { goto } from '$app/navigation';
@@ -46,10 +49,19 @@
     let selectedWidthIds = $state(
         sveltePage.url.searchParams.get('widths')?.split(',').filter(Boolean).map(Number) ?? []
     );
+    let selectedLengthIds = $state(
+        sveltePage.url.searchParams.get('lengths')?.split(',').filter(Boolean).map(Number) ?? []
+    );
     let isAvailableOnly = $state(sveltePage.url.searchParams.get('available') === 'true');
 
     let selectedCategories = $state(
         sveltePage.url.searchParams.get('categories')?.split(',').filter(Boolean).map(Number) ?? []
+    );
+    let selectedCoatingTypes = $state(
+        sveltePage.url.searchParams.get('coatingTypes')?.split(',').filter(Boolean) ?? []
+    );
+    let selectedBrands = $state(
+        sveltePage.url.searchParams.get('brands')?.split(',').filter(Boolean) ?? []
     );
 
     const hasActiveFilters = $derived(
@@ -60,6 +72,9 @@
     const categories = $derived(data?.categoriesList ?? []);
     const availableColors = $derived(data?.colorsList ?? []);
     const availableWidths = $derived(data?.widthsList ?? []);
+    const availableLengths = $derived(data?.lengthsList ?? []);
+    const availableCoatingTypes = $derived(data?.coatingTypesList ?? []);
+    const availableBrands = $derived(data?.brandsList ?? []);
     const isAllCategoriesSelected = $derived(selectedCategories.length === 0);
 
     const minPct = $derived(((minThick - THICKNESS_MIN) / (THICKNESS_MAX - THICKNESS_MIN)) * 100);
@@ -132,6 +147,36 @@
         });
     }
 
+    function toggleLengthFilter(id: number) {
+        selectedLengthIds = selectedLengthIds.includes(id)
+            ? selectedLengthIds.filter((l) => l !== id)
+            : [...selectedLengthIds, id];
+        updateFilters({
+            lengths: selectedLengthIds.length > 0 ? selectedLengthIds.join(',') : undefined,
+            page: 1
+        });
+    }
+
+    function toggleCoatingTypeFilter(value: string) {
+        selectedCoatingTypes = selectedCoatingTypes.includes(value)
+            ? selectedCoatingTypes.filter((c) => c !== value)
+            : [...selectedCoatingTypes, value];
+        updateFilters({
+            coatingTypes: selectedCoatingTypes.length > 0 ? selectedCoatingTypes.join(',') : undefined,
+            page: 1
+        });
+    }
+
+    function toggleBrandFilter(value: string) {
+        selectedBrands = selectedBrands.includes(value)
+            ? selectedBrands.filter((b) => b !== value)
+            : [...selectedBrands, value];
+        updateFilters({
+            brands: selectedBrands.length > 0 ? selectedBrands.join(',') : undefined,
+            page: 1
+        });
+    }
+
     function handleAvailabilityChange(checked: boolean) {
         isAvailableOnly = checked;
         updateFilters({ available: isAvailableOnly || undefined, page: 1 });
@@ -148,8 +193,11 @@
         maxThick = THICKNESS_MAX;
         selectedColorIds = [];
         selectedWidthIds = [];
+        selectedLengthIds = [];
         isAvailableOnly = false;
         selectedCategories = [];
+        selectedCoatingTypes = [];
+        selectedBrands = [];
         goto(sveltePage.url.pathname);
     }
 
@@ -161,6 +209,11 @@
     function widthLabel(w: { value: string; unit: string; label: string | null }) {
         return w.label || `${w.value}${w.unit}`;
     }
+
+    function lengthLabel(l: { value: string; unit: string; label: string | null; isCustom: boolean | null }) {
+        const base = l.label || `${l.value}${l.unit}`;
+        return l.isCustom ? `${base} (cut to order)` : base;
+    }
 </script>
 
 <svelte:head>
@@ -168,7 +221,7 @@
     <meta name="description" content={m.shop_meta_description()} />
 </svelte:head>
 
-<div class="min-h-screen bg-linear-to-b from-background via-background/98 to-muted/20 pb-16 text-foreground antialiased transition-colors duration-300">
+<div class="min-h-screen antialiased transition-colors duration-300">
     <header class="sticky top-0 z-40 border-b border-border/80 bg-background/75 shadow-xs backdrop-blur-md">
         <div class="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
             <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -218,7 +271,7 @@
 
             {#if showFilter}
                 <aside class="lg:col-span-1" transition:fly={{ x: -200, duration: 200 }}>
-                    <div class="sticky top-32 space-y-6 rounded-2xl border border-border/80 bg-card/40 p-5 shadow-sm backdrop-blur-md">
+                    <div class="sticky top-32 space-y-6 rounded-2xl border border-border/80 bg-card/40 p-5 shadow-sm backdrop-blur-lg">
                         <div class="flex items-center gap-2 border-b border-border/60 pb-3">
                             <SlidersHorizontal class="size-4 text-primary" />
                             <h3 class="text-sm font-bold tracking-wider text-foreground uppercase">
@@ -327,6 +380,81 @@
                                             : 'bg-card text-foreground/80 border-border hover:bg-accent'}"
                                     >
                                         {widthLabel(w)}
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+
+                        <!-- Length -->
+                        <div class="max-h-55 scrollbar-none space-y-2.5 overflow-y-auto border-b border-border/60 pb-4">
+                            <div class="flex items-center gap-2">
+                                <Move class="size-3.5 text-muted-foreground" />
+                                <h4 class="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+                                    Length Options
+                                </h4>
+                            </div>
+                            <div class="flex flex-wrap gap-2 pt-1">
+                                {#each availableLengths as l (l.id)}
+                                    {@const isSelected = selectedLengthIds.includes(l.id)}
+                                    <button
+                                        type="button"
+                                        onclick={() => toggleLengthFilter(l.id)}
+                                        class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150
+                                        {isSelected
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                            : 'bg-card text-foreground/80 border-border hover:bg-accent'}"
+                                    >
+                                        {lengthLabel(l)}
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+
+                        <!-- Coating Type -->
+                        <div class="max-h-55 scrollbar-none space-y-2.5 overflow-y-auto border-b border-border/60 pb-4">
+                            <div class="flex items-center gap-2">
+                                <Layers3 class="size-3.5 text-muted-foreground" />
+                                <h4 class="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+                                    Coating Type
+                                </h4>
+                            </div>
+                            <div class="flex flex-wrap gap-2 pt-1">
+                                {#each availableCoatingTypes as coatingType (coatingType)}
+                                    {@const isSelected = selectedCoatingTypes.includes(coatingType)}
+                                    <button
+                                        type="button"
+                                        onclick={() => toggleCoatingTypeFilter(coatingType)}
+                                        class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150
+                                        {isSelected
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                            : 'bg-card text-foreground/80 border-border hover:bg-accent'}"
+                                    >
+                                        {coatingType}
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+
+                        <!-- Brand -->
+                        <div class="max-h-55 scrollbar-none space-y-2.5 overflow-y-auto border-b border-border/60 pb-4">
+                            <div class="flex items-center gap-2">
+                                <Tag class="size-3.5 text-muted-foreground" />
+                                <h4 class="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+                                    Brand
+                                </h4>
+                            </div>
+                            <div class="flex flex-wrap gap-2 pt-1">
+                                {#each availableBrands as brand (brand)}
+                                    {@const isSelected = selectedBrands.includes(brand)}
+                                    <button
+                                        type="button"
+                                        onclick={() => toggleBrandFilter(brand)}
+                                        class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150
+                                        {isSelected
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                            : 'bg-card text-foreground/80 border-border hover:bg-accent'}"
+                                    >
+                                        {brand}
                                     </button>
                                 {/each}
                             </div>

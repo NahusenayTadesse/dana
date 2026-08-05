@@ -5,10 +5,11 @@ import {
 	productVariants,
 	colors,
 	widths,
-	thicknesses
+	thicknesses,
+	lengths
 } from '$lib/server/db/schema';
 import type { LayoutServerLoad } from './$types';
-import { eq, sql, and, like, asc, gte, lte, inArray } from 'drizzle-orm';
+import { eq, sql, and, like, asc, gte, lte, inArray, isNotNull } from 'drizzle-orm';
 import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
 
 const PAGE_SIZE = 20;
@@ -29,8 +30,13 @@ export const load: LayoutServerLoad = async ({ url }) => {
 		url.searchParams.get('colors')?.split(',').filter(Boolean).map(Number) ?? [];
 	const selectedWidthIds =
 		url.searchParams.get('widths')?.split(',').filter(Boolean).map(Number) ?? [];
+	const selectedLengthIds =
+		url.searchParams.get('lengths')?.split(',').filter(Boolean).map(Number) ?? [];
 	const selectedCats =
 		url.searchParams.get('categories')?.split(',').filter(Boolean).map(Number) ?? [];
+	const selectedCoatingTypes =
+		url.searchParams.get('coatingTypes')?.split(',').filter(Boolean) ?? [];
+	const selectedBrands = url.searchParams.get('brands')?.split(',').filter(Boolean) ?? [];
 	const onlyAvailable = url.searchParams.get('available') === 'true';
 
 	// 2. Sidebar option lists — now sourced from the real lookup tables, no more string parsing
@@ -49,6 +55,39 @@ export const load: LayoutServerLoad = async ({ url }) => {
 		.from(widths)
 		.where(eq(widths.isActive, true))
 		.orderBy(asc(widths.value));
+
+	const lengthsList = await db
+		.select({
+			id: lengths.id,
+			value: lengths.value,
+			unit: lengths.unit,
+			label: lengths.label,
+			isCustom: lengths.isCustom
+		})
+		.from(lengths)
+		.where(eq(lengths.isActive, true))
+		.orderBy(asc(lengths.value));
+
+	// Coating type / brand are free-text on `products`, not lookup tables —
+	// pull the distinct values actually in use so the filter never shows an
+	// option with zero matching products.
+	const coatingTypeRows = await db
+		.selectDistinct({ coatingType: products.coatingType })
+		.from(products)
+		.where(and(eq(products.isActive, true), isNotNull(products.coatingType)));
+	const coatingTypesList = coatingTypeRows
+		.map((r) => r.coatingType)
+		.filter((v): v is string => !!v)
+		.sort();
+
+	const brandRows = await db
+		.selectDistinct({ brand: products.brand })
+		.from(products)
+		.where(and(eq(products.isActive, true), isNotNull(products.brand)));
+	const brandsList = brandRows
+		.map((r) => r.brand)
+		.filter((v): v is string => !!v)
+		.sort();
 
 	const [thicknessBounds] = await db
 		.select({
@@ -75,20 +114,26 @@ export const load: LayoutServerLoad = async ({ url }) => {
 		matchingThicknessIds = rows.map((r) => r.id);
 	}
 
-	// 4. Product-level filters (search/category), independent of variant specs
+	// 4. Product-level filters (search/category/coating/brand), independent of variant specs
 	const productWhere = and(
 		eq(products.isActive, true),
 		search ? like(products.name, `%${search}%`) : undefined,
-		selectedCats.length > 0 ? inArray(products.categoryId, selectedCats) : undefined
+		selectedCats.length > 0 ? inArray(products.categoryId, selectedCats) : undefined,
+		selectedCoatingTypes.length > 0 ? inArray(products.coatingType, selectedCoatingTypes) : undefined,
+		selectedBrands.length > 0 ? inArray(products.brand, selectedBrands) : undefined
 	);
 
 	// Variant-level spec filters — these require an actual matching variant to exist
 	const hasVariantSpecFilter =
-		selectedColorIds.length > 0 || selectedWidthIds.length > 0 || matchingThicknessIds !== undefined;
+		selectedColorIds.length > 0 ||
+		selectedWidthIds.length > 0 ||
+		selectedLengthIds.length > 0 ||
+		matchingThicknessIds !== undefined;
 
 	const specFilterConditions = and(
 		selectedColorIds.length > 0 ? inArray(productVariants.colorId, selectedColorIds) : undefined,
 		selectedWidthIds.length > 0 ? inArray(productVariants.widthId, selectedWidthIds) : undefined,
+		selectedLengthIds.length > 0 ? inArray(productVariants.lengthId, selectedLengthIds) : undefined,
 		matchingThicknessIds
 			? inArray(productVariants.thicknessId, matchingThicknessIds.length ? matchingThicknessIds : [-1])
 			: undefined,
@@ -186,12 +231,17 @@ export const load: LayoutServerLoad = async ({ url }) => {
 					widthUnit: widths.unit,
 					widthLabel: widths.label,
 					thicknessValue: thicknesses.value,
-					thicknessUnit: thicknesses.unit
+					thicknessUnit: thicknesses.unit,
+					lengthValue: lengths.value,
+					lengthUnit: lengths.unit,
+					lengthLabel: lengths.label,
+					isCustomLength: lengths.isCustom
 				})
 				.from(productVariants)
 				.leftJoin(colors, eq(colors.id, productVariants.colorId))
 				.leftJoin(widths, eq(widths.id, productVariants.widthId))
 				.leftJoin(thicknesses, eq(thicknesses.id, productVariants.thicknessId))
+				.leftJoin(lengths, eq(lengths.id, productVariants.lengthId))
 				.where(
 					and(
 						inArray(productVariants.productId, pagedIds),
@@ -209,6 +259,9 @@ export const load: LayoutServerLoad = async ({ url }) => {
 		categoriesList,
 		colorsList,
 		widthsList,
+		lengthsList,
+		coatingTypesList,
+		brandsList,
 		thicknessBounds: {
 			min: thicknessBounds?.min ?? 0,
 			max: thicknessBounds?.max ?? 5
