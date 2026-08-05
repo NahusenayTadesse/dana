@@ -1,7 +1,7 @@
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 
-import { edit, adjust, damaged, editGallery, editPrice, addPrice } from './schema';
+import { edit, adjust, damaged, editGallery, upsertVariantPrice, deleteVariantPrice } from './schema';
 
 import { db } from '$lib/server/db';
 import {
@@ -9,7 +9,6 @@ import {
 	productImages,
 	productAdjustments,
 	damagedProducts,
-	prices as priceList,
 	transactions,
 	categoriesProducts,
 	productTags,
@@ -17,9 +16,10 @@ import {
 	widths,
 	thicknesses,
 	lengths,
-	productVariants
+	productVariants,
+	variantPrices
 } from '$lib/server/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, inArray } from 'drizzle-orm';
 import { fail, message } from 'sveltekit-superforms';
 import { setFlash } from 'sveltekit-flash-message/server';
 
@@ -70,13 +70,30 @@ export const load: PageServerLoad = async ({ params }) => {
 			.where(eq(productVariants.productId, productId))
 	]);
 
+	// Standard price book rows for every variant of this product, grouped by
+	// variantId so the UI can show/manage each variant's rates independently.
+	const variantIds = variants.map((v) => v.id);
+	const priceRows =
+		variantIds.length > 0
+			? await db.select().from(variantPrices).where(inArray(variantPrices.variantId, variantIds))
+			: [];
+	const variantPricesByVariant: Record<number, typeof priceRows> = {};
+	for (const row of priceRows) {
+		(variantPricesByVariant[row.variantId] ??= []).push(row);
+	}
+
 	const addVariantForm = await superValidate(zod4(addVariant));
 	const editVariantForm = await superValidate(zod4(editVariant));
+	const upsertVariantPriceForm = await superValidate(zod4(upsertVariantPrice));
+	const deleteVariantPriceForm = await superValidate(zod4(deleteVariantPrice));
 
 	return {
 		addVariantForm,
 		editVariantForm,
+		upsertVariantPriceForm,
+		deleteVariantPriceForm,
 		variants,
+		variantPricesByVariant,
 		colorItems: colorRows.map((c) => ({ value: c.id, name: c.name })),
 		widthItems: widthRows.map((w) => ({ value: w.id, name: specLabel(w.value, w.unit, w.label) })),
 		thicknessItems: thicknessRows.map((t) => ({
@@ -116,6 +133,15 @@ export const actions: Actions = {
 			quantity,
 			supplier,
 			reorderLevel,
+			soldBy,
+			thickness,
+			width,
+			maxLength,
+			maxLengthUnit,
+			coatingType,
+			colorOptions,
+			sizeRange,
+			finish,
 			image
 		} = form.data;
 
@@ -133,6 +159,15 @@ export const actions: Actions = {
 						commissionAmount: String(commission),
 						supplierId: supplier ? supplier : null,
 						reorderLevel,
+						soldBy,
+						thickness: thickness ?? null,
+						width: width ?? null,
+						maxLength: maxLength != null ? String(maxLength) : null,
+						maxLengthUnit,
+						coatingType: coatingType ?? null,
+						colorOptions: colorOptions ?? null,
+						sizeRange: sizeRange ?? null,
+						finish: finish ?? null,
 						updatedBy: locals?.user?.id,
 						...(featuredImage ? { featuredImage } : {})
 					})
@@ -322,80 +357,45 @@ export const actions: Actions = {
 		}
 	},
 
-	editPrice: async ({ request }) => {
-		const form = await superValidate(request, zod4(editPrice));
+	// Upserts one basis's rate for a variant's standard price book — basis is
+	// unique per variant, so saving an existing basis just overwrites its rate.
+	upsertVariantPrice: async ({ request }) => {
+		const form = await superValidate(request, zod4(upsertVariantPrice));
 
 		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Invalid form data' });
+			return message(form, { type: 'error', text: 'Invalid form data' }, { status: 400 });
 		}
 
-		const { id, price, amount, image } = form.data;
+		const { variantId, basis, price, priceIncludesVat } = form.data;
 
 		try {
-			if (image) {
-				const imageUrl = await saveUploadedFile(image);
-				await db
-					.update(priceList)
-					.set({ price: String(price), amount, imageUrl })
-					.where(eq(priceList.id, id));
-			} else {
-				await db
-					.update(priceList)
-					.set({ price: String(price), amount })
-					.where(eq(priceList.id, id));
-			}
+			await db
+				.insert(variantPrices)
+				.values({ variantId, basis, price: String(price), priceIncludesVat })
+				.onDuplicateKeyUpdate({ set: { price: String(price), priceIncludesVat } });
 
-			return message(form, { type: 'success', text: 'Product Price updated Successfully!' });
+			return message(form, { type: 'success', text: 'Price rate saved Successfully!' });
 		} catch (err) {
-			console.error('Error editing product price:', err);
+			console.error('Error saving variant price:', err);
 			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
 		}
 	},
 
-	addPrice: async ({ request, params }) => {
-		const form = await superValidate(request, zod4(addPrice));
-		const { id } = params;
+	deleteVariantPrice: async ({ request }) => {
+		const form = await superValidate(request, zod4(deleteVariantPrice));
 
 		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Invalid form data' });
+			return message(form, { type: 'error', text: 'Invalid form data' }, { status: 400 });
 		}
 
-		const { price, amount, image } = form.data;
+		const { id } = form.data;
 
 		try {
-			const imageUrl = image ? await saveUploadedFile(image) : null;
-			await db.insert(priceList).values({
-				productId: Number(id),
-				price: String(price),
-				amount,
-				imageUrl
-			});
+			await db.delete(variantPrices).where(eq(variantPrices.id, id));
 
-			return message(form, { type: 'success', text: 'Product Price added Successfully!' });
+			return message(form, { type: 'success', text: 'Price rate deleted Successfully!' });
 		} catch (err) {
-			console.error('Error adding product price:', err);
-			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
-		}
-	},
-
-	deletePrice: async ({ request }) => {
-		const form = await superValidate(request, zod4(editPrice));
-
-		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Invalid form data' });
-		}
-
-		const { id, price, amount } = form.data;
-
-		try {
-			await db.delete(priceList).where(eq(priceList.id, id));
-
-			return message(form, {
-				type: 'success',
-				text: `Variant ${amount} with ${price} price deleted Successfully!`
-			});
-		} catch (err) {
-			console.error('Error deleting Variant price:', err);
+			console.error('Error deleting variant price:', err);
 			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
 		}
 	},

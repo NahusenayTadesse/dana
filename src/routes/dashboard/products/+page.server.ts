@@ -2,11 +2,13 @@ import { db } from '$lib/server/db';
 import {
 	products,
 	productCategories,
-	prices,
+	productVariants,
+	variantPrices,
 	tags,
 	categoriesProducts,
 	productTags,
-	discounts
+	discounts,
+	productSuppliers
 } from '$lib/server/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import type { PageServerLoad, Actions } from '../$types';
@@ -17,18 +19,40 @@ import { schema } from './schema';
 export const load: PageServerLoad = async () => {
 	const form = await superValidate(zod4(schema));
 
-	// 1. Fetch only active products
+	// 1. Fetch only active products, with supplier + full spec fields
 	const productsData = await db
 		.select({
 			id: products.id,
 			name: products.name,
+			slug: products.slug,
 			brand: products.brand,
 			image: products.featuredImage,
 			reorderLevel: products.reorderLevel,
 			quantity: products.quantity,
-			description: products.description
+			description: products.description,
+			overview: products.overview,
+
+			supplier: productSuppliers.name,
+
+			soldBy: products.soldBy,
+			thickness: products.thickness,
+			width: products.width,
+			maxLength: products.maxLength,
+			maxLengthUnit: products.maxLengthUnit,
+			coatingType: products.coatingType,
+			colorOptions: products.colorOptions,
+			sizeRange: products.sizeRange,
+			finish: products.finish,
+
+			performanceFeatures: products.performanceFeatures,
+			advantages: products.advantages,
+			applications: products.applications,
+
+			isFeaturedOnHome: products.isFeaturedOnHome,
+			createdAt: products.createdAt
 		})
 		.from(products)
+		.leftJoin(productSuppliers, eq(productSuppliers.id, products.supplierId))
 		.where(eq(products.isActive, true));
 
 	const productIds = productsData.map((p) => p.id);
@@ -40,14 +64,18 @@ export const load: PageServerLoad = async () => {
 
 	// 2. Fetch related data CONCURRENTLY and FILTERED by productIds
 	const [rawPrices, rawCategories, rawTags] = await Promise.all([
+		// Prices now live per-variant, per-basis (variantPrices), not one flat
+		// row per product — join through productVariants to get back to productId.
 		db
 			.select({
-				productId: prices.productId,
-				amount: prices.variant,
-				price: prices.price
+				productId: productVariants.productId,
+				basis: variantPrices.basis,
+				price: variantPrices.price,
+				priceIncludesVat: variantPrices.priceIncludesVat
 			})
-			.from(prices)
-			.where(inArray(prices.productId, productIds)),
+			.from(variantPrices)
+			.innerJoin(productVariants, eq(productVariants.id, variantPrices.variantId))
+			.where(inArray(productVariants.productId, productIds)),
 		db
 			.selectDistinct({
 				productId: categoriesProducts.productId,
@@ -71,9 +99,22 @@ export const load: PageServerLoad = async () => {
 	const categoriesMap: Record<number, string[]> = {};
 	const tagsMap: Record<number, string[]> = {};
 
+	const basisLabels: Record<string, string> = {
+		quantity: 'Per piece',
+		length: 'Per length',
+		width: 'Per width',
+		thickness: 'Per thickness',
+		color: 'Per colour',
+		weight: 'Per weight',
+		area: 'Per area'
+	};
+
 	for (const price of rawPrices) {
 		if (price.productId == null) continue;
-		(pricesMap[price.productId] ??= []).push({ amount: price.amount, price: price.price });
+		(pricesMap[price.productId] ??= []).push({
+			amount: basisLabels[price.basis] ?? price.basis,
+			price: price.priceIncludesVat ? `${price.price} (incl. VAT)` : price.price
+		});
 	}
 
 	for (const cat of rawCategories) {
@@ -90,7 +131,7 @@ export const load: PageServerLoad = async () => {
 	const productList = productsData.map((p) => ({
 		...p,
 		priceList: (pricesMap[p.id] ?? []).map((price) => ({
-			amount: `${price.amount} Pieces`,
+			amount: price.amount,
 			price: `ETB ${price.price}`
 		})),
 		category: categoriesMap[p.id] ?? [],

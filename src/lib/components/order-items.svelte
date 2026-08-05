@@ -12,8 +12,10 @@
 		quantity: number | string;
 		amount: number | string; // The package size/amount
 		price: string | number;
-		productId: string | number;
+		productId: string | number | null;
 		total: number;
+		/** Build-to spec (colour · thickness · width · length), when present */
+		spec?: string;
 	};
 
 	type Props = {
@@ -42,6 +44,9 @@
 					{items[0].amount}
 				</Badge>
 			</div>
+			{#if items[0].spec}
+				<span class="text-xs font-medium text-primary">{items[0].spec}</span>
+			{/if}
 			<span class="text-xs text-muted-foreground">
 				{items[0].quantity} × {formatPrice(items[0].price)} = {formatPrice(items[0].total)}
 			</span>
@@ -90,6 +95,9 @@
 									[{item.amount}]
 								</span>
 							</div>
+							{#if item.spec}
+								<p class="text-xs font-medium text-primary">{item.spec}</p>
+							{/if}
 							<p class="text-xs text-muted-foreground">
 								Qty: {item.quantity} × {formatPrice(item.price)}
 							</p>

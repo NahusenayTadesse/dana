@@ -66,6 +66,7 @@
             images={data.images}
             variants={data.variants}
             relatedProducts={data.relatedProducts}
+            accessories={data.accessories}
         />
     </section>
 </div>

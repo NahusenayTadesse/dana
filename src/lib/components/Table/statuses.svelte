@@ -44,6 +44,23 @@
 		new: { icon: Loader, colour: 'bg-yellow-500' },
 		live: { icon: BadgeCheck, colour: 'bg-green-400' },
 
+		/* transactions.paymentStatus */
+		refunded: { icon: OctagonMinus, colour: 'bg-red-500' },
+		partially_paid: { icon: Loader, colour: 'bg-yellow-500' },
+		partially_refunded: { icon: Loader, colour: 'bg-yellow-500' },
+		overpaid: { icon: Loader, colour: 'bg-yellow-500' },
+		disputed: { icon: OctagonMinus, colour: 'bg-red-500' },
+
+		/* quoteRequests.status */
+		contacted: { icon: Loader, colour: 'bg-yellow-500' },
+		converted: { icon: BadgeCheck, colour: 'bg-green-400' },
+		lost: { icon: OctagonMinus, colour: 'bg-red-500' },
+
+		/* orders.requestStatus / priceOffers.status */
+		approved: { icon: BadgeCheck, colour: 'bg-green-400' },
+		accepted: { icon: BadgeCheck, colour: 'bg-green-400' },
+		rejected: { icon: OctagonMinus, colour: 'bg-red-500' },
+
 		/* fallback */
 		unknown: { icon: Loader, colour: 'bg-gray-500' }
 	} as const;

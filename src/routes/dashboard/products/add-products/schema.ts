@@ -93,9 +93,20 @@ export const add = z.object({
 			.nullable()
 	),
 
+	// How this product is sold — drives which quantities the storefront/quote
+	// flow asks for.
+	soldBy: z.enum(['quantity', 'length', 'both']).default('quantity'),
+
 	// Technical specifications
 	thickness: z.string().max(100).optional().nullable(),
 	width: z.string().max(100).optional().nullable(),
+	// Cap on custom-length quote requests (mm/m/ft). Only meaningful when
+	// soldBy is 'length' or 'both', but left valid either way.
+	maxLength: z.preprocess(
+		emptyToNull,
+		z.coerce.number().positive('Max length must be a positive number.').nullable()
+	),
+	maxLengthUnit: z.enum(['mm', 'm', 'ft']).default('m'),
 	coatingType: z.string().max(100).optional().nullable(),
 	colorOptions: z.string().max(255).optional().nullable(),
 	sizeRange: z.string().max(100).optional().nullable(),

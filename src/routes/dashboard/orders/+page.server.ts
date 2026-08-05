@@ -1,4 +1,4 @@
-import { eq, and, or, like, sql, inArray, desc } from 'drizzle-orm';
+import { eq, and, or, like, sql, inArray, desc, type SQL } from 'drizzle-orm';
 import { superValidate, message, fail } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 
@@ -14,10 +14,35 @@ import {
 	colors,
 	widths,
 	thicknesses,
-	lengths
+	lengths,
+	orderAdjustments
 } from '$lib/server/db/schema';
+
+// A spec string built from an order item's own requested dimensions — these
+// are captured directly on orderItems (not just the variant), since a
+// custom quote isn't limited to a catalog variant. This is what tells the
+// factory floor what to actually cut/build.
+const itemSpec = (item: {
+	length: string | number | null;
+	lengthUnit: string | null;
+	thickness: string | number | null;
+	thicknessUnit: string | null;
+	width: string | number | null;
+	widthUnit: string | null;
+	colorName: string | null;
+}) =>
+	[
+		item.colorName,
+		item.thickness != null ? `${Number(item.thickness)}${item.thicknessUnit === 'gauge' ? 'ga' : item.thicknessUnit}` : null,
+		item.width != null ? `${Number(item.width)}${item.widthUnit}` : null,
+		item.length != null ? `${Number(item.length)}${item.lengthUnit}` : null
+	]
+		.filter(Boolean)
+		.join(' · ');
 import { saveUploadedFile } from '$lib/server/upload';
-import { add, edit } from './schema';
+import { add, edit, requestBalance, addAdjustment, decideAdjustment } from './schema';
+import { sendBalancePaymentLink, sendOrderAdjustmentNotice, sendAdjustmentDecisionNotice } from '$lib/server/notifications';
+import { getAdjustedOrderTotals } from '$lib/server/orderAdjustments';
 import type { Actions, PageServerLoad } from './$types';
 
 const STATUSES = ['pending', 'delivered', 'cancelled'] as const;
@@ -43,9 +68,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		.groupBy(orderItems.orderId)
 		.as('item_totals');
 
-	// Build the WHERE from status + free-text search across everything an
-	// order touches: customer, order id, token, payment status, total.
-	const conditions = [];
+	// This page is the factory's build queue, not a negotiation inbox — only
+	// orders staff have actually confirmed show up here. Anything still being
+	// negotiated (pending) or turned down (rejected) only shows on the Quotes
+	// page, where it gets approved/rejected.
+	const conditions: (SQL<unknown> | undefined)[] = [eq(orders.requestStatus, 'approved')];
 	if (status) conditions.push(eq(orders.status, status));
 	if (q) {
 		const pattern = `%${q}%`;
@@ -84,12 +111,17 @@ export const load: PageServerLoad = async ({ url }) => {
 			name: customers.name,
 			phone: customers.phone,
 			customerId: customers.id,
+			customerType: customers.type,
+			customerEmail: customers.email,
+			customerPhone: customers.phone,
 			paymentMethod: transactions.paymentMethodId,
 			recieptLink: transactions.recieptLink,
 			txnRef: transactions.txnRef, // gateway token
 			paymentStatus: transactions.paymentStatus,
 			status: orders.status,
 			createdAt: orders.createdAt,
+			deliveryAddress: orders.deliveryAddress,
+			deliveryDate: orders.deliveryDate,
 			total: sql<number>`COALESCE(${itemTotals.total}, 0)`.mapWith(Number)
 		})
 		.from(orders)
@@ -102,7 +134,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		.offset(offset);
 
 	const pageOrderIds = allOrders.map((o) => o.id);
-	const allItems = pageOrderIds.length
+	const rawItems = pageOrderIds.length
 		? await db
 				.select({
 					id: orderItems.id,
@@ -113,12 +145,43 @@ export const load: PageServerLoad = async ({ url }) => {
 					quantity: orderItems.quantity,
 					amount: orderItems.amount,
 					price: orderItems.price,
-					total: sql<number>`${orderItems.quantity} * ${orderItems.price}`.mapWith(Number)
+					total: sql<number>`${orderItems.quantity} * ${orderItems.price}`.mapWith(Number),
+					// The customer's actual requested spec, captured directly on the
+					// line item — this is what the factory builds to, not the
+					// (optional) suggested catalog variant.
+					length: orderItems.length,
+					lengthUnit: orderItems.lengthUnit,
+					thickness: orderItems.thickness,
+					thicknessUnit: orderItems.thicknessUnit,
+					width: orderItems.width,
+					widthUnit: orderItems.widthUnit,
+					colorName: colors.name
 				})
 				.from(orderItems)
 				.leftJoin(products, eq(orderItems.productId, products.id))
+				.leftJoin(colors, eq(orderItems.colorId, colors.id))
 				.where(inArray(orderItems.orderId, pageOrderIds))
 		: [];
+
+	const allItems = rawItems.map((item) => ({ ...item, spec: itemSpec(item) }));
+
+	const allAdjustments = pageOrderIds.length
+		? await db
+				.select()
+				.from(orderAdjustments)
+				.where(inArray(orderAdjustments.orderId, pageOrderIds))
+				.orderBy(desc(orderAdjustments.id))
+		: [];
+
+	// Current adjusted total per order (offer total + every approved
+	// adjustment so far) — lets the adjustment dialog show a live "new total"
+	// preview using the real VAT/withholding rates instead of guessing them.
+	const adjustedTotalsByOrder: Record<number, Awaited<ReturnType<typeof getAdjustedOrderTotals>>> = {};
+	await Promise.all(
+		pageOrderIds.map(async (id) => {
+			adjustedTotalsByOrder[id] = await getAdjustedOrderTotals(id);
+		})
+	);
 
 	const customerList = await db.select({ value: customers.id, name: customers.name }).from(customers);
 	const productList = await db.select({ value: products.id, name: products.name }).from(products);
@@ -157,18 +220,26 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const addForm = await superValidate(zod4(add));
 	const editForm = await superValidate(zod4(edit));
+	const requestBalanceForm = await superValidate(zod4(requestBalance));
+	const addAdjustmentForm = await superValidate(zod4(addAdjustment));
+	const decideAdjustmentForm = await superValidate(zod4(decideAdjustment));
 
 	return {
 		activeStatus: status ?? 'all',
 		q,
 		allOrders,
 		allItems,
+		allAdjustments,
+		adjustedTotalsByOrder,
 		customerList,
 		productList,
 		variantList,
 		paymentMethodList,
 		addForm,
 		editForm,
+		requestBalanceForm,
+		addAdjustmentForm,
+		decideAdjustmentForm,
 		page: currentPage,
 		perPage: PER_PAGE,
 		totalOrders: count,
@@ -248,7 +319,16 @@ export const actions: Actions = {
 
 				const [order] = await tx
 					.insert(orders)
-					.values({ customerId: customer, status, transactionId, createdBy: locals?.user?.id })
+					.values({
+						customerId: customer,
+						status,
+						transactionId,
+						// Created directly by staff here, not via a customer quote
+						// negotiation — treat it as already confirmed so it shows up
+						// on this (now filtered-to-approved) page immediately.
+						requestStatus: 'approved',
+						createdBy: locals?.user?.id
+					})
 					.$returningId();
 
 				await tx.insert(orderItems).values(resolved.values(order.id, locals?.user?.id));
@@ -343,6 +423,127 @@ export const actions: Actions = {
 		} catch (err) {
 			console.error('Update order failed:', err);
 			return message(form, { type: 'error', text: 'Could not update the order.' }, { status: 500 });
+		}
+	},
+
+	// Fresh payment link for whatever's still owed — usable any time (after
+	// delivery, mid-negotiation, whenever staff wants to chase the balance),
+	// not gated to a specific order status.
+	requestBalance: async ({ request, url }) => {
+		const form = await superValidate(request, zod4(requestBalance));
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
+
+		try {
+			await sendBalancePaymentLink(form.data.orderId, url.origin);
+			return message(form, { type: 'success', text: 'Balance payment link sent to the customer.' });
+		} catch (err) {
+			console.error('Request balance payment failed:', err);
+			return message(
+				form,
+				{ type: 'error', text: err instanceof Error ? err.message : 'Could not send the balance payment link.' },
+				{ status: 400 }
+			);
+		}
+	},
+
+	// Staff-created correction — takes effect immediately (auto-approved, since
+	// staff already has the authority a customer-submitted request needs
+	// review for). An addition triggers a fresh balance-payment link for the
+	// extra amount; a deduction is just recorded — refunding it happens
+	// outside the system, staff just needs to see the number.
+	addAdjustment: async ({ request, locals, url }) => {
+		const form = await superValidate(request, zod4(addAdjustment));
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
+
+		const { orderId, type, amount, reason, notes } = form.data;
+
+		try {
+			await db.insert(orderAdjustments).values({
+				orderId,
+				type,
+				amount: String(amount),
+				reason,
+				notes: notes ?? null,
+				causedBy: 'company',
+				status: 'approved',
+				approvedBy: locals?.user?.id,
+				approvedAt: new Date(),
+				createdBy: locals?.user?.id
+			});
+
+			await sendOrderAdjustmentNotice(orderId, { type, amount, reason, causedBy: 'company' }).catch((err) =>
+				console.error('Adjustment notice failed:', err)
+			);
+
+			if (type === 'addition') {
+				await sendBalancePaymentLink(orderId, url.origin).catch((err) =>
+					console.error('Adjustment balance link failed:', err)
+				);
+			}
+
+			return message(form, { type: 'success', text: 'Adjustment applied.' });
+		} catch (err) {
+			console.error('Add adjustment failed:', err);
+			return message(form, { type: 'error', text: 'Could not apply the adjustment.' }, { status: 500 });
+		}
+	},
+
+	// Approve/reject a customer-submitted adjustment request (requested from
+	// their account page). Approving an addition — unusual for a customer
+	// request, since they'd only ever ask to pay less, but the type is
+	// whatever staff/the request actually specified — sends a balance link
+	// the same as a staff-created one.
+	decideAdjustment: async ({ request, locals, url }) => {
+		const form = await superValidate(request, zod4(decideAdjustment));
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
+
+		const { adjustmentId, approve, note } = form.data;
+
+		try {
+			const adjustment = await db
+				.select()
+				.from(orderAdjustments)
+				.where(eq(orderAdjustments.id, adjustmentId))
+				.then((rows) => rows[0]);
+
+			if (!adjustment) return message(form, { type: 'error', text: 'Adjustment not found.' }, { status: 404 });
+			if (adjustment.status !== 'pending') {
+				return message(form, { type: 'error', text: 'This request has already been decided.' }, { status: 400 });
+			}
+
+			await db
+				.update(orderAdjustments)
+				.set({
+					status: approve ? 'approved' : 'rejected',
+					approvedBy: locals?.user?.id,
+					approvedAt: new Date(),
+					notes: note ? `${adjustment.notes ?? ''}\n\nStaff note: ${note}`.trim() : adjustment.notes
+				})
+				.where(eq(orderAdjustments.id, adjustmentId));
+
+			await sendAdjustmentDecisionNotice(adjustment.orderId, approve, note).catch((err) =>
+				console.error('Adjustment decision notice failed:', err)
+			);
+
+			if (approve) {
+				await sendOrderAdjustmentNotice(adjustment.orderId, {
+					type: adjustment.type,
+					amount: Number(adjustment.amount),
+					reason: adjustment.reason,
+					causedBy: adjustment.causedBy
+				}).catch((err) => console.error('Adjustment notice failed:', err));
+
+				if (adjustment.type === 'addition') {
+					await sendBalancePaymentLink(adjustment.orderId, url.origin).catch((err) =>
+						console.error('Adjustment balance link failed:', err)
+					);
+				}
+			}
+
+			return message(form, { type: 'success', text: approve ? 'Adjustment approved.' : 'Adjustment rejected.' });
+		} catch (err) {
+			console.error('Decide adjustment failed:', err);
+			return message(form, { type: 'error', text: 'Could not process the decision.' }, { status: 500 });
 		}
 	},
 

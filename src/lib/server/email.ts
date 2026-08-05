@@ -131,7 +131,12 @@ export const sendSms = async (phone: string, msg: string) => {
 	}
 };
 
-export const sendEmail = async (to: string, subject: string, html: string, phone?: string) => {
+// `smsText` lets callers pass a purpose-built, concise message (e.g. just
+// unit price/total/VAT + a link) for emails whose full HTML — a detailed
+// item table with VAT/withholding breakdowns — would be unreadable once
+// blindly stripped down to plain text. Falls back to auto-stripping the html
+// when no dedicated SMS copy is given (simple notifications only).
+export const sendEmail = async (to: string, subject: string, html: string, phone?: string, smsText?: string) => {
 	await transporter.sendMail({
 		from: `"Support Team" <${SMTP_USER}>`,
 		to,
@@ -139,16 +144,9 @@ export const sendEmail = async (to: string, subject: string, html: string, phone
 		html
 	});
 
-
-	// Optionally also send an SMS if a phone number was provided — reuses the
-	// same html, stripped down to plain text, so callers only need to pass phone.
-
-      console.log(phone)
 	if (phone) {
-         const newPhone = formatAndValidateEthPhone(phone)
-         console.log(newPhone)
-        
-		 if(newPhone.isValid) await sendSms(String(newPhone?.formattedPhone), stripHtml(html));
+		const newPhone = formatAndValidateEthPhone(phone);
+		if (newPhone.isValid) await sendSms(String(newPhone?.formattedPhone), smsText ?? stripHtml(html));
 	}
 };
 
@@ -661,21 +659,20 @@ export const customerResetPasswordTemplate = (url: string) => ({
 
 
 
-// Variant-aware item table: renders each item's actual color/width/thickness
-// spec instead of the old free-text "amount" field. Used for confirmed-price
-// emails (quote payment link, payment confirmation) — NOT for quote requests
-// still awaiting a price, which should keep using generateQuoteTable.
+// Variant-aware item table: renders each item's actual color/width/thickness/
+// length spec straight off orderItems (the customer's real requested spec,
+// not necessarily a catalog variant) instead of the old free-text "amount"
+// field. Used for confirmed-price emails (quote payment link, payment
+// confirmation) — NOT for quote requests still awaiting a price, which should
+// keep using generateQuoteTable.
 const generateVariantOrderTable = (items) => {
 	const specLabel = (item) => {
 		const parts = [];
 		if (item.colorName) parts.push(item.colorName);
-		const widthPart =
-			item.widthLabel || (item.widthValue ? `${item.widthValue}${item.widthUnit ?? ''}` : null);
-		if (widthPart) parts.push(widthPart);
-		const thicknessPart = item.thicknessValue
-			? `${item.thicknessValue}${item.thicknessUnit ?? ''}`
-			: null;
-		if (thicknessPart) parts.push(thicknessPart);
+		if (item.width != null) parts.push(`${item.width}${item.widthUnit ?? ''}`);
+		if (item.thickness != null)
+			parts.push(`${item.thickness}${item.thicknessUnit === 'gauge' ? 'ga' : (item.thicknessUnit ?? '')}`);
+		if (item.length != null) parts.push(`${item.length}${item.lengthUnit ?? ''}`);
 		return parts.join(' · ');
 	};
 
@@ -693,7 +690,7 @@ const generateVariantOrderTable = (items) => {
                          ${item.quantity}
                      </td>
                      <td style="padding: 10px; text-align: right;">
-                         ${unitPrice.toLocaleString()} ETB
+                         ${unitPrice.toLocaleString()} ETB${item.priceIncludesVat ? '<br/><span style="color:#888; font-size: 11px;">(incl. VAT)</span>' : ''}
                      </td>
                      <td style="padding: 10px; text-align: right;">
                          ${lineTotal.toLocaleString()} ETB
@@ -720,9 +717,64 @@ const generateVariantOrderTable = (items) => {
     `;
 };
 
+// Renders a price offer's VAT/withholding/total breakdown — the same figures
+// computed by calculateOrderPricing() in the dashboard's quote builder.
+// `payAmount`/`isAdvance` are optional: when a customer is paying just the
+// advance percentage, this shows both the full total and what's due now.
+type OfferTotals = {
+	subtotal: string | number;
+	discountAmount?: string | number | null;
+	priceExcludingVat: string | number;
+	vatRate: string | number;
+	vatAmount: string | number;
+	priceIncludingVat: string | number;
+	withholdingRate?: string | number | null;
+	withholdingAmount?: string | number | null;
+	total: string | number;
+	advancePaymentPercentage?: string | number | null;
+};
+const generateTotalsBlock = (offer: OfferTotals, opts: { payAmount?: number; isAdvance?: boolean } = {}) => {
+	const fmt = (n: string | number | null | undefined) => Number(n ?? 0).toLocaleString();
+	const discount = Number(offer.discountAmount ?? 0);
+
+	const row = (label: string, value: string, bold = false) => `
+        <tr>
+            <td style="padding: 4px 10px; text-align: left; ${bold ? 'font-weight:bold;' : 'color:#555;'}">${label}</td>
+            <td style="padding: 4px 10px; text-align: right; ${bold ? 'font-weight:bold;' : ''}">${value}</td>
+        </tr>
+    `;
+
+	return `
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px;">
+            <tbody>
+                ${row('Subtotal', `${fmt(offer.subtotal)} ETB`)}
+                ${discount > 0 ? row('Discount', `-${fmt(discount)} ETB`) : ''}
+                ${row('Price (excl. VAT)', `${fmt(offer.priceExcludingVat)} ETB`)}
+                ${row(`VAT (${fmt(offer.vatRate)}%)`, `${fmt(offer.vatAmount)} ETB`)}
+                ${row('Price (incl. VAT)', `${fmt(offer.priceIncludingVat)} ETB`)}
+                ${
+									offer.withholdingAmount != null && Number(offer.withholdingAmount) > 0
+										? row(`Withholding (${fmt(offer.withholdingRate)}%)`, `-${fmt(offer.withholdingAmount)} ETB`)
+										: ''
+								}
+                ${row('Total', `${fmt(offer.total)} ETB`, true)}
+                ${
+									opts.isAdvance && opts.payAmount != null
+										? row(
+												`Advance Due Now (${fmt(offer.advancePaymentPercentage)}%)`,
+												`${opts.payAmount.toLocaleString()} ETB`,
+												true
+											)
+										: ''
+								}
+            </tbody>
+        </table>
+    `;
+};
+
 // --- Quote → payment link (the "quote reply" email/SMS) ---
 
-export const quotePaymentLinkTemplate = (orderId, items, total, payUrl) => ({
+export const quotePaymentLinkTemplate = (orderId, items, offer: OfferTotals, payUrl) => ({
 	subject: `Your Quote is Ready — ${BRAND_NAME} (#${orderId})`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
@@ -733,9 +785,12 @@ export const quotePaymentLinkTemplate = (orderId, items, total, payUrl) => ({
             <div style="padding: 20px; color: #333;">
                 <p>Good news — we've priced your request <strong>#${orderId}</strong>. Review the details below and pay securely to confirm your order.</p>
                 ${generateVariantOrderTable(items)}
-                <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
-                    Total: ${Number(total).toLocaleString()} ETB
-                </div>
+                ${generateTotalsBlock(offer)}
+                ${
+									offer.advancePaymentPercentage != null && Number(offer.advancePaymentPercentage) < 100
+										? `<p style="font-size: 13px; color: #555; margin-top: 10px;">A ${Number(offer.advancePaymentPercentage)}% advance payment is accepted for this order — you'll be able to choose advance or full payment on the payment page.</p>`
+										: ''
+								}
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="${payUrl}"
                        style="background: ${BRAND_HEADER_BG}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">
@@ -759,28 +814,263 @@ export const quotePaymentLinkTemplate = (orderId, items, total, payUrl) => ({
     `
 });
 
-// Deliberately short and link-first — see note above on why this isn't derived from the HTML.
-export const quotePaymentLinkSms = (orderId, total, payUrl) => {
-	const msg = `${BRAND_NAME}: Your quote #${orderId} is ready (${Number(total).toLocaleString()} ETB). Pay securely: ${payUrl} (expires in 14 days, no login needed)`;
+// Deliberately short and link-first — see note above on why this isn't derived
+// from the HTML. Keeps to unit total + VAT + the link, not the full item table.
+export const quotePaymentLinkSms = (orderId, offer: OfferTotals, payUrl) => {
+	const msg = `${BRAND_NAME}: Quote #${orderId} ready. Total ${Number(offer.total).toLocaleString()} ETB (incl. VAT ${Number(offer.vatAmount).toLocaleString()} ETB). Pay: ${payUrl}`;
 	return msg.length > 335 ? msg.slice(0, 335) : msg;
 };
 
-// --- Payment confirmation ---
+// Sent to staff whenever a priced offer goes out — lets the team see what
+// was quoted without waiting for the customer to open the email.
+export const adminQuotePaymentLinkTemplate = (orderId, items, offer: OfferTotals) => ({
+	subject: `Quote Sent: Order #${orderId} — ${Number(offer.total).toLocaleString()} ETB`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Priced Quote Sent to Customer</h2>
+            <p>A payment link was just sent for <strong>Order #${orderId}</strong>.</p>
+            ${generateVariantOrderTable(items)}
+            ${generateTotalsBlock(offer)}
+            <a href="${BRAND_URL}dashboard/quotes"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px;">
+               View in Dashboard
+            </a>
+        </div>
+    `
+});
 
-export const paymentConfirmedTemplate = (orderId, items, total) => ({
-	subject: `Payment Confirmed - ${BRAND_NAME} (#${orderId})`,
+// --- Remaining-balance reminder (staff can request this at any time from the
+// Orders page — e.g. an advance was paid earlier, or a fresh reminder after
+// delivery) — a fresh payment link scoped to just what's still owed. ---
+
+export const balancePaymentLinkTemplate = (
+	orderId,
+	offer: OfferTotals,
+	amountPaid: number,
+	remainingBalance: number,
+	payUrl: string
+) => ({
+	subject: `Balance Due — ${BRAND_NAME} (#${orderId})`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
             <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
                 <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
-                <h1 style="color: white; margin: 0; font-size: 20px;">Payment Confirmed ✅</h1>
+                <h1 style="color: white; margin: 0; font-size: 20px;">Remaining Balance Due</h1>
             </div>
             <div style="padding: 20px; color: #333;">
-                <p>We've received your payment for order <strong>#${orderId}</strong>. Thank you! Our team is now preparing your order.</p>
-                ${generateVariantOrderTable(items)}
-                <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
-                    Total Paid: ${Number(total).toLocaleString()} ETB
+                <p>This is a reminder about the remaining balance on your order <strong>#${orderId}</strong>.</p>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 13px;">
+                    <tbody>
+                        <tr><td style="padding: 4px 10px; color:#555;">Order Total</td><td style="padding: 4px 10px; text-align: right;">${Number(offer.total).toLocaleString()} ETB</td></tr>
+                        <tr><td style="padding: 4px 10px; color:#555;">Already Paid</td><td style="padding: 4px 10px; text-align: right;">${amountPaid.toLocaleString()} ETB</td></tr>
+                        <tr><td style="padding: 4px 10px; font-weight:bold;">Balance Due</td><td style="padding: 4px 10px; text-align: right; font-weight:bold;">${remainingBalance.toLocaleString()} ETB</td></tr>
+                    </tbody>
+                </table>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${payUrl}"
+                       style="background: ${BRAND_HEADER_BG}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">
+                        Pay Balance
+                    </a>
                 </div>
+                <p style="font-size: 12px; color: #888;">
+                    This link is unique to your order and expires in 14 days. If the button doesn't work, copy this link into your browser:<br/>
+                    <span style="word-break: break-all; color: ${BRAND_PRIMARY};">${payUrl}</span>
+                </p>
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+export const balancePaymentLinkSms = (orderId, remainingBalance: number, payUrl: string) => {
+	const msg = `${BRAND_NAME}: Balance due on order #${orderId} is ${remainingBalance.toLocaleString()} ETB. Pay: ${payUrl}`;
+	return msg.length > 335 ? msg.slice(0, 335) : msg;
+};
+
+export const adminBalancePaymentLinkTemplate = (orderId, amountPaid: number, remainingBalance: number) => ({
+	subject: `Balance Reminder Sent: Order #${orderId}`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Balance Payment Link Sent</h2>
+            <p>A balance-due payment link was sent to the customer for <strong>Order #${orderId}</strong>.</p>
+            <p>Already paid: <strong>${amountPaid.toLocaleString()} ETB</strong> — Balance due: <strong>${remainingBalance.toLocaleString()} ETB</strong></p>
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               View in Dashboard
+            </a>
+        </div>
+    `
+});
+
+// --- Order adjustments (post-dispatch corrections) ---
+
+// A deduction (or an addition too small/handled outside the payment flow) —
+// informational, no payment link. Additions that need collecting reuse the
+// balance-payment link email instead (see sendBalancePaymentLink).
+export const orderAdjustmentAppliedTemplate = (
+	orderId,
+	adjustment: { type: 'addition' | 'deduction'; amount: number; reason: string },
+	newTotal: number
+) => ({
+	subject: `Order #${orderId} Adjusted`,
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Order Adjustment</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>An adjustment was made to your order <strong>#${orderId}</strong>.</p>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 13px;">
+                    <tbody>
+                        <tr><td style="padding: 4px 10px; color:#555;">Reason</td><td style="padding: 4px 10px; text-align: right;">${escapeHtml(adjustment.reason)}</td></tr>
+                        <tr><td style="padding: 4px 10px; color:#555;">${adjustment.type === 'addition' ? 'Amount Added' : 'Amount Credited'}</td><td style="padding: 4px 10px; text-align: right;">${adjustment.amount.toLocaleString()} ETB</td></tr>
+                        <tr><td style="padding: 4px 10px; font-weight:bold;">New Order Total</td><td style="padding: 4px 10px; text-align: right; font-weight:bold;">${newTotal.toLocaleString()} ETB</td></tr>
+                    </tbody>
+                </table>
+                ${
+									adjustment.type === 'deduction'
+										? `<p style="margin-top: 15px; font-size: 13px; color: #555;">If you've already paid more than the new total, our team will be in touch to arrange your refund.</p>`
+										: `<p style="margin-top: 15px; font-size: 13px; color: #555;">A separate payment link for the additional amount will follow if anything remains due.</p>`
+								}
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+export const adminOrderAdjustmentTemplate = (
+	orderId,
+	adjustment: { type: 'addition' | 'deduction'; amount: number; reason: string; causedBy: string },
+	newTotal: number
+) => ({
+	subject: `Order #${orderId} Adjusted (${adjustment.type})`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Order Adjustment Applied</h2>
+            <p><strong>Order #${orderId}</strong> — ${adjustment.type} of ${adjustment.amount.toLocaleString()} ETB (caused by ${adjustment.causedBy}).</p>
+            <p>Reason: ${escapeHtml(adjustment.reason)}</p>
+            <p style="font-size: 16px;"><strong>New Total: ${newTotal.toLocaleString()} ETB</strong></p>
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               View in Dashboard
+            </a>
+        </div>
+    `
+});
+
+// Customer requested an adjustment — staff needs to review it.
+export const adjustmentRequestedTemplate = (orderId, customerName: string, reason: string, requestedAmount: number) => ({
+	subject: `Adjustment Requested: Order #${orderId}`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Customer Requested an Adjustment</h2>
+            <p><strong>${escapeHtml(customerName)}</strong> requested an adjustment on <strong>Order #${orderId}</strong>.</p>
+            <p>Requested credit: <strong>${requestedAmount.toLocaleString()} ETB</strong></p>
+            <p>Reason: ${escapeHtml(reason)}</p>
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               Review in Dashboard
+            </a>
+        </div>
+    `
+});
+
+// Staff approved or rejected a customer's adjustment request.
+export const adjustmentDecisionTemplate = (orderId, approved: boolean, reason?: string | null) => ({
+	subject: approved ? `Adjustment Approved: Order #${orderId}` : `Adjustment Request Declined: Order #${orderId}`,
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">${approved ? 'Adjustment Approved' : 'Adjustment Request Declined'}</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>Your requested adjustment on order <strong>#${orderId}</strong> has been ${approved ? 'approved' : 'declined'}.</p>
+                ${reason ? `<p style="color:#555; font-size: 13px;">Note: ${escapeHtml(reason)}</p>` : ''}
+                <p style="margin-top: 20px;">
+                    Best regards,<br/>
+                    <strong>${BRAND_NAME} Team</strong>
+                </p>
+            </div>
+            <div style="background: #f9f9f9; padding: 15px; text-align: center; color: #777; font-size: 12px;">
+                ${BRAND_NAME} | <a href="${BRAND_URL}" style="color: ${BRAND_PRIMARY}; text-decoration: none;">${BRAND_URL}</a>
+            </div>
+        </div>
+    `
+});
+
+// --- Customer offer rejection / order cancellation (from the magic-link page) ---
+
+export const adminOfferRejectedTemplate = (orderId, reason?: string | null) => ({
+	subject: `Offer Rejected: Order #${orderId}`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Customer Rejected the Price Offer</h2>
+            <p>The customer rejected the current price offer on <strong>Order #${orderId}</strong> and is asking for a new one.</p>
+            ${reason ? `<p>Note from customer: ${escapeHtml(reason)}</p>` : ''}
+            <a href="${BRAND_URL}dashboard/quotes"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               Review in Dashboard
+            </a>
+        </div>
+    `
+});
+
+export const adminOrderCancelledTemplate = (orderId, reason?: string | null) => ({
+	subject: `Order Cancelled: Order #${orderId}`,
+	html: `
+        <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">Customer Cancelled Their Order</h2>
+            <p>The customer cancelled <strong>Order #${orderId}</strong> from the payment page.</p>
+            ${reason ? `<p>Note from customer: ${escapeHtml(reason)}</p>` : ''}
+            <a href="${BRAND_URL}dashboard/orders"
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               View in Dashboard
+            </a>
+        </div>
+    `
+});
+
+// --- Payment confirmation ---
+
+export const paymentConfirmedTemplate = (
+	orderId,
+	items,
+	offer: OfferTotals,
+	payAmount: number,
+	isAdvance: boolean
+) => ({
+	subject: isAdvance
+		? `Advance Payment Received - ${BRAND_NAME} (#${orderId})`
+		: `Payment Confirmed - ${BRAND_NAME} (#${orderId})`,
+	html: `
+        <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
+            <div style="background: ${BRAND_HEADER_BG}; padding: 20px; text-align: center;">
+                <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" width="80" style="display: block; margin: 0 auto 10px;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">${isAdvance ? 'Advance Payment Received ✅' : 'Payment Confirmed ✅'}</h1>
+            </div>
+            <div style="padding: 20px; color: #333;">
+                <p>We've received your ${isAdvance ? 'advance payment' : 'payment'} for order <strong>#${orderId}</strong>. Thank you! Our team is now preparing your order.</p>
+                ${generateVariantOrderTable(items)}
+                ${generateTotalsBlock(offer, { payAmount, isAdvance })}
+                ${
+									isAdvance
+										? `<p style="margin-top: 10px; font-size: 13px; color: #555;">Remaining balance: <strong>${(Number(offer.total) - payAmount).toLocaleString()} ETB</strong>, due before delivery.</p>`
+										: ''
+								}
                 <p style="margin-top: 20px;">We'll be in touch with delivery/pickup details shortly.</p>
                 <p style="margin-top: 20px;">
                     Best regards,<br/>
@@ -794,24 +1084,37 @@ export const paymentConfirmedTemplate = (orderId, items, total) => ({
     `
 });
 
-export const adminPaymentConfirmedTemplate = (orderId, items, total) => ({
-	subject: `Payment Received: Order #${orderId}`,
+export const adminPaymentConfirmedTemplate = (
+	orderId,
+	items,
+	offer: OfferTotals,
+	payAmount: number,
+	isAdvance: boolean
+) => ({
+	subject: `${isAdvance ? 'Advance Payment' : 'Payment'} Received: Order #${orderId}`,
 	html: `
         <div style="font-family: sans-serif; color: #333;">
-            <h2 style="color: ${BRAND_PRIMARY_DARK};">Payment Confirmed</h2>
-            <p>Payment has been confirmed via Chapa for <strong>Order #${orderId}</strong>.</p>
+            <h2 style="color: ${BRAND_PRIMARY_DARK};">${isAdvance ? 'Advance Payment' : 'Payment'} Confirmed</h2>
+            <p>${isAdvance ? 'An advance payment' : 'Payment'} has been confirmed via Chapa for <strong>Order #${orderId}</strong>.</p>
             ${generateVariantOrderTable(items)}
-            <p style="font-size: 18px;"><strong>Total Paid: ${Number(total).toLocaleString()} ETB</strong></p>
+            ${generateTotalsBlock(offer, { payAmount, isAdvance })}
+            ${
+							isAdvance
+								? `<p style="font-size: 13px; color: #555;">Remaining balance: <strong>${(Number(offer.total) - payAmount).toLocaleString()} ETB</strong></p>`
+								: ''
+						}
             <a href="${BRAND_URL}dashboard/orders"
-               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px;">
                View in Dashboard
             </a>
         </div>
     `
 });
 
-export const paymentConfirmedSms = (orderId, total) => {
-	const msg = `${BRAND_NAME}: Payment of ${Number(total).toLocaleString()} ETB confirmed for order #${orderId}. Thank you! We'll contact you about delivery.`;
+export const paymentConfirmedSms = (orderId, offer: OfferTotals, payAmount: number, isAdvance: boolean) => {
+	const msg = isAdvance
+		? `${BRAND_NAME}: Advance of ${payAmount.toLocaleString()} ETB confirmed for order #${orderId} (total ${Number(offer.total).toLocaleString()} ETB, VAT ${Number(offer.vatAmount).toLocaleString()} ETB). Balance due before delivery: ${(Number(offer.total) - payAmount).toLocaleString()} ETB.`
+		: `${BRAND_NAME}: Payment of ${payAmount.toLocaleString()} ETB confirmed for order #${orderId} (incl. VAT ${Number(offer.vatAmount).toLocaleString()} ETB). Thank you!`;
 	return msg.length > 335 ? msg.slice(0, 335) : msg;
 };
 

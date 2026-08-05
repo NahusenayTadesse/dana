@@ -12,11 +12,7 @@
 	} from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
-	let {
-		quoteUrl = '/checkout',
-		watchUrl = '/factory',
-		heroVideoId = 'Pds8-d8su7s'
-	} = $props();
+	let { quoteUrl = '/checkout', watchUrl = '/factory' } = $props();
 
 	const stats = [
 		{ icon: ShieldCheck, label: m.hero_stat_quality },
@@ -149,15 +145,12 @@
 				<div
 					class="absolute inset-x-0 top-[6%] bottom-0 overflow-hidden [mask-image:linear-gradient(180deg,transparent_0%,#000_12%,#000_100%)]"
 				>
-					<iframe
-						class="pointer-events-none absolute top-1/2 left-1/2 h-full w-[177.78%] -translate-x-1/2 -translate-y-1/2"
-						src="https://www.youtube-nocookie.com/embed/{heroVideoId}?autoplay=1&mute=1&loop=1&playlist={heroVideoId}&controls=0&showinfo=0&modestbranding=1&playsinline=1&rel=0"
-						title="Hero background video"
-						allow="autoplay; encrypted-media"
-						loading="lazy"
-						aria-hidden="true"
-						tabindex="-1"
-					></iframe>
+					<img
+						src="/images/front desk.webp"
+						alt={m.hero_product_showcase_alt()}
+						class="absolute inset-0 h-full w-full object-cover object-[70%_center]"
+						loading="eager"
+					/>
 				</div>
 
 				<div

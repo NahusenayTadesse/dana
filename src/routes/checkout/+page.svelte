@@ -47,9 +47,18 @@
 	const formattedData = $derived(
 		cart?.items.map((item) => ({
 			product: item.productId,
+			variantId: item.variantId,
 			quantity: item.quantity,
-			amount: item.amount,
-			price: item.price
+			amount: item.specLabel,
+			price: item.price,
+			priceIncludesVat: item.priceIncludesVat,
+			colorId: item.colorId,
+			width: item.width,
+			widthUnit: item.widthUnit,
+			thickness: item.thickness,
+			thicknessUnit: item.thicknessUnit,
+			length: item.length,
+			lengthUnit: item.lengthUnit
 		})) || []
 	);
 
@@ -326,12 +335,24 @@
 
 						{#if cart.items.length > 0}
 							<ScrollArea class="max-h-96 pr-3">
-								<div class="divide-y divide-border/60">
-									{#each cart.items as item}
-										<div class="py-2.5 transition-all">
-											<CartItem {item} />
-										</div>
-									{/each}
+								<div class="overflow-x-auto">
+									<table class="w-full min-w-[520px] border-collapse text-sm">
+										<thead>
+											<tr class="border-b border-border/60 text-left text-xs text-muted-foreground uppercase">
+												<th class="pb-2 font-medium">{m.cart_col_product()}</th>
+												<th class="pb-2 font-medium">{m.cart_col_spec()}</th>
+												<th class="pb-2 text-right font-medium">{m.cart_col_qty()}</th>
+												<th class="pb-2 text-right font-medium">{m.cart_col_unit_price()}</th>
+												<th class="pb-2 text-right font-medium">{m.cart_col_total()}</th>
+												<th class="pb-2"></th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each cart.items as item}
+												<CartItem {item} />
+											{/each}
+										</tbody>
+									</table>
 								</div>
 							</ScrollArea>
 

@@ -8,6 +8,8 @@ import { quoteRequest } from './schema';
 import { db } from '$lib/server/db';
 import {
 	quoteRequests,
+	orders,
+	orderItems,
 	products,
 	productCategories,
 	productVariants,
@@ -26,6 +28,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	const productId = Number(url.searchParams.get('productId')) || undefined;
 	const variantId = Number(url.searchParams.get('variantId')) || undefined;
 	const categoryIdParam = Number(url.searchParams.get('categoryId')) || undefined;
+	// Prefilled context from a custom spec configured on the product page (e.g.
+	// a cut-to-order length beyond the catalog) — just a note for staff, the
+	// exact spec gets captured properly when they build the order.
+	const note = url.searchParams.get('note') ?? undefined;
 
 	// Display-only context — what actually gets submitted comes from the hidden form fields
 	let productContext = null;
@@ -77,7 +83,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		{
 			productId,
 			variantId,
-			categoryId: categoryIdParam ?? productContext?.categoryId
+			categoryId: categoryIdParam ?? productContext?.categoryId,
+			message: note
 		},
 		zod4(quoteRequest)
 	);
@@ -108,7 +115,6 @@ export const actions: Actions = {
 			docs,
 			productId,
 			variantId,
-			categoryId,
 			quantityEstimate,
 			message: userMessage
 		} = form.data;
@@ -184,6 +190,27 @@ export const actions: Actions = {
 					throw new Error('Missing phone number for quote request — please update your profile.');
 				}
 
+				// Every quote is for a whole order now, not a single product row —
+				// create the order (and its one line, if a product was specified)
+				// up front so the dashboard's quote builder has something to work
+				// with immediately.
+				let newOrderId: number | undefined;
+				if (productId) {
+					const [order] = await tx
+						.insert(orders)
+						.values({ customerId: customerInfo?.value, status: 'pending', requestStatus: 'pending' })
+						.$returningId();
+					newOrderId = order.id;
+
+					await tx.insert(orderItems).values({
+						orderId: newOrderId,
+						productId,
+						variantId: variantId ?? null,
+						quantity: quantityEstimate ? Number(quantityEstimate) || null : null,
+						amount: quantityEstimate ?? 'quote requested'
+					});
+				}
+
 				const inserted = await tx
 					.insert(quoteRequests)
 					.values({
@@ -193,10 +220,7 @@ export const actions: Actions = {
 						whatsapp,
 						companyName,
 						customerId: customerInfo?.value,
-						productId,
-						variantId,
-						categoryId,
-						quantityEstimate,
+						orderId: newOrderId,
 						message: userMessage,
 						status: 'new' as const
 					})

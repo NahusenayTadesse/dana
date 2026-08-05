@@ -10,10 +10,19 @@ export const add = z.object({
 
 	selectedProducts: z
 		.object({
-			amount: z.string( 'Variation is required' ).optional(),
-			price: z.number().optional(), 
+			amount: z.string('Variation is required').optional(), // human-readable spec label
+			price: z.number().optional(),
 			product: z.number('Product is required').int(),
-			quantity: z.number().int().positive('Number of products must be at least 1')
+			variantId: z.number().int().optional(),
+			quantity: z.number().int().positive('Number of products must be at least 1'),
+			priceIncludesVat: z.boolean().optional(),
+			colorId: z.number().int().nullable().optional(),
+			width: z.number().nullable().optional(),
+			widthUnit: z.enum(['mm', 'cm', 'm', 'in', 'ft']).nullable().optional(),
+			thickness: z.number().nullable().optional(),
+			thicknessUnit: z.enum(['mm', 'gauge']).nullable().optional(),
+			length: z.number().nullable().optional(),
+			lengthUnit: z.enum(['mm', 'm', 'ft']).nullable().optional()
 		})
 		.array()
 		.min(1, { message: 'Add at least one product before requesting a quote' })

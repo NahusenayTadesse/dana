@@ -10,21 +10,11 @@ export const deleteQuote = z.object({
 });
 export type DeleteQuote = z.infer<typeof deleteQuote>;
 
-export const replySchema = z
-	.object({
-		quoteRequestId: z.coerce.number(),
-		subject: z.string().min(1, 'Subject is required'),
-		message: z.string().min(1, 'Message is required'),
-		quotedUnitPrice: z.coerce.number().positive().optional(),
-		quotedQuantity: z.coerce.number().int().positive().optional()
-	})
-	.refine(
-		(data) =>
-			(data.quotedUnitPrice === undefined && data.quotedQuantity === undefined) ||
-			(data.quotedUnitPrice !== undefined && data.quotedQuantity !== undefined),
-		{
-			message: 'Provide both a unit price and quantity to send a priced quote — or leave both blank for a plain reply.',
-			path: ['quotedUnitPrice']
-		}
-	);
+// Plain correspondence only now — pricing lives in the price-offer builder
+// on the quote's detail page (see [id]/schema.ts), not in a reply field.
+export const replySchema = z.object({
+	quoteRequestId: z.coerce.number(),
+	subject: z.string().min(1, 'Subject is required'),
+	message: z.string().min(1, 'Message is required')
+});
 export type ReplySchema = z.infer<typeof replySchema>;

@@ -9,9 +9,15 @@ import {
 	thicknesses,
 	lengths
 } from '$lib/server/db/schema';
-import { eq, and, ne, sql } from 'drizzle-orm';
+import { eq, and, ne, inArray } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
+import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
+
+// The hardware/trim products a customer typically needs alongside any sheet,
+// tile, or coil purchase — shown as "Accessories" on every product page
+// (minus whichever of these the customer is already looking at).
+const ACCESSORY_SLUGS = ['ridge-caps', 'flashings', 'gutters-and-downpipes'];
 
 export const load: LayoutServerLoad = async ({ params }) => {
 	const { slug } = params;
@@ -37,6 +43,9 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			reorderLevel: products.reorderLevel,
 			thickness: products.thickness,
 			width: products.width,
+			soldBy: products.soldBy,
+			maxLength: products.maxLength,
+			maxLengthUnit: products.maxLengthUnit,
 			coatingType: products.coatingType,
 			colorOptions: products.colorOptions,
 			sizeRange: products.sizeRange,
@@ -110,10 +119,44 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		)
 		.limit(3);
 
+	// 5. Accessories — ridge caps / flashings / gutters, ready to add straight
+	// from their own variant picker (see product-card.svelte reuse below),
+	// so a sheet/tile purchase can pick up the hardware it needs in one pass.
+	const accessoryProducts = await db
+		.select({
+			productId: products.id,
+			id: products.id,
+			name: products.name,
+			productName: products.name,
+			slug: products.slug,
+			featuredImage: products.featuredImage,
+			image: products.featuredImage,
+			categoryName: productCategories.name,
+			brand: products.brand,
+			coatingType: products.coatingType,
+			thickness: products.thickness,
+			width: products.width,
+			soldBy: products.soldBy,
+			baseQuantity: products.quantity
+		})
+		.from(products)
+		.leftJoin(productCategories, eq(productCategories.id, products.categoryId))
+		.where(
+			and(
+				inArray(products.slug, ACCESSORY_SLUGS),
+				ne(products.id, product.id),
+				eq(products.isActive, true)
+			)
+		);
+
+	const accessoryVariantRows = await fetchVariantRowsForProducts(accessoryProducts.map((p) => p.productId));
+	const accessories = accessoryProducts.map((p) => assembleProductCard(p, accessoryVariantRows));
+
 	return {
 		product,
 		images,
 		variants,
-		relatedProducts
+		relatedProducts,
+		accessories
 	};
 };

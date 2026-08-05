@@ -63,44 +63,9 @@
 		}
 	});
 
-	import { renderComponent } from '$lib/components/ui/data-table/index.js';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
-	import DataTable from '$lib/components/Table/data-table.svelte';
-	import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
-	import OrderItems from '../../orders/order-items.svelte';
+	import OrderHistoryTable from '$lib/components/OrderHistoryTable.svelte';
 	import { page } from '$app/state';
-	const columns = [
-		{
-			accessorKey: 'index',
-			header: '#',
-			cell: (info) => info.row.index + 1,
-			sortable: false
-		},
-
-		{
-			accessorKey: 'items',
-			header: 'Items',
-			sortable: true,
-			cell: ({ row }) => {
-				return renderComponent(OrderItems, {
-					items:
-						data?.allItems?.filter((item) => Number(item.orderId) === Number(row.original.id)) ??
-						[],
-					currency: 'ETB'
-				});
-			}
-		},
-
-		{
-			accessorKey: 'createdAt',
-			header: ({ column }) =>
-				renderComponent(DataTableSort, {
-					name: 'Ordered On',
-					onclick: column.getToggleSortingHandler()
-				}),
-			sortable: false
-		}
-	];
 
 	$form.name = data?.customer?.customerName;
 	$form.phone = data?.customer?.phone;
@@ -213,20 +178,17 @@
 	</SingleView>
 
 	<header class="mt-6 flex w-lg flex-col gap-1 pb-4">
-		<h1 class="text-3xl font-bold tracking-tight text-foreground">Pending Orders</h1>
+		<h1 class="text-3xl font-bold tracking-tight text-foreground">Order History</h1>
 		<p class="text-sm text-foreground">
-			Viewing active records for <span class="font-semibold text-slate-700"
-				>{data?.customer?.customerName}</span
-			>
+			Viewing records for <span class="font-semibold text-slate-700">{data?.customer?.customerName}</span>
 		</p>
 	</header>
 
-	<DataTable
-		{columns}
-		data={data?.allData}
-		class="w-6xl!"
-		fileName="Pending Orders - {data?.customer?.customerName}"
-		search={true}
+	<OrderHistoryTable
+		data={data.history}
+		activeStatus={data.activeStatus}
+		q={data.q}
+		basePath={page.url.pathname}
 	/>
 {:else}
 	<Empty title="customer" />

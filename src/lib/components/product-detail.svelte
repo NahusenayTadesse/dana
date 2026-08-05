@@ -15,7 +15,7 @@
 	} from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
-	import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
+	import ProductCard from './product-card.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	type ProductInfo = {
@@ -30,6 +30,9 @@
 		quantity: number; // base retail qty — only meaningful for products with no variants
 		thickness: string | null; // summary range text, e.g. "0.3mm – 0.6mm"
 		width: string | null;
+		soldBy: 'quantity' | 'length' | 'both';
+		maxLength: string | number | null; // cap on a custom cut-to-order length request
+		maxLengthUnit: string | null;
 		coatingType: string | null;
 		colorOptions: string | null; // now a marketing blurb, not parsed for swatches
 		sizeRange: string | null;
@@ -49,12 +52,12 @@
 		colorName: string | null;
 		colorHex: string | null;
 		widthValue: string | number | null;
-		widthUnit: string | null;
+		widthUnit: 'mm' | 'cm' | 'm' | 'in' | 'ft' | null;
 		widthLabel: string | null;
 		thicknessValue: string | number | null;
-		thicknessUnit: string | null;
+		thicknessUnit: 'mm' | 'gauge' | null;
 		lengthValue?: string | number | null;
-		lengthUnit?: string | null;
+		lengthUnit?: 'mm' | 'm' | 'ft' | null;
 		lengthLabel?: string | null;
 		isCustomLength?: boolean;
 	};
@@ -67,16 +70,68 @@
 		thickness?: string | null;
 	};
 
+	// Shape produced by assembleProductCard() server-side — a full
+	// product-card.svelte-ready record, variant picker and all.
+	type Accessory = {
+		id: number;
+		productId: number;
+		productName: string;
+		slug: string;
+		image: string | null;
+		categoryName?: string | null;
+		brand: string | null;
+		coatingType: string | null;
+		thickness: string | null;
+		width: string | null;
+		soldBy: 'quantity' | 'length' | 'both';
+		minPrice: number | null;
+		maxPrice: number | null;
+		hasQuoteOnlyVariant: boolean;
+		totalQuantity: number;
+		variants: Variant[];
+	};
+
 	type Props = {
 		product: ProductInfo;
 		images?: string[]; // extra gallery shots from product_images
 		variants?: Variant[];
 		relatedProducts?: RelatedProduct[];
+		accessories?: Accessory[];
 	};
 
-	const { product, images = [], variants = [], relatedProducts = [] }: Props = $props();
+	const {
+		product,
+		images = [],
+		variants = [],
+		relatedProducts = [],
+		accessories = []
+	}: Props = $props();
 
 	const cart = useCart();
+
+	// Sliders (shadcn, then native <input type="range">) turned out too fiddly
+	// for picking an exact mill spec — a number field with +/- steppers is
+	// slower to look at but nobody mis-taps their way into the wrong thickness.
+	const stepperBtnClass =
+		'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white';
+	const numberInputClass =
+		'w-full rounded-lg border border-slate-200 bg-white py-1.5 pr-10 pl-3 text-right font-mono text-sm font-bold text-slate-900 [appearance:textfield] focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-slate-900 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
+	/** Index of the option in `options` closest to `raw` — used so a typed
+	 * number always resolves to a real catalog spec, never an in-between value. */
+	function nearestIndex(raw: number, options: number[]): number {
+		if (options.length === 0 || Number.isNaN(raw)) return 0;
+		let best = 0;
+		let bestDiff = Infinity;
+		options.forEach((opt, i) => {
+			const diff = Math.abs(opt - raw);
+			if (diff < bestDiff) {
+				bestDiff = diff;
+				best = i;
+			}
+		});
+		return best;
+	}
 
 	function variantLabel(v: Variant, opts: { skipColor?: boolean } = {}) {
 		const parts: string[] = [];
@@ -129,16 +184,113 @@
 	);
 
 	let selectedColorId = $state<number | null>(defaultVariant?.colorId ?? null);
-	let selectedVariantId = $state<number | undefined>(defaultVariant?.variantId);
 
 	// Every variant matching the currently selected color (or all, if this product has no color axis)
 	const variantsForSelectedColor = $derived(
 		hasColorAxis ? variants.filter((v) => v.colorId === selectedColorId) : variants
 	);
 
-	const selectedVariant = $derived(
-		variants.find((v) => v.variantId === selectedVariantId) ?? defaultVariant
+	// --- Configurator: thickness/width/length sliders instead of a flat dropdown ---
+	// Thickness and width are fixed by mill tooling, so their sliders step through
+	// the real distinct values this product actually comes in. Length is often
+	// cut to order, so — when the product supports it — it gets a free numeric
+	// entry up to maxLength instead of being limited to catalog stops.
+	function distinctSorted(values: (number | null)[]): number[] {
+		return Array.from(new Set(values.filter((v): v is number => v !== null))).sort((a, b) => a - b);
+	}
+
+	const thicknessOptions = $derived(
+		distinctSorted(variantsForSelectedColor.map((v) => (v.thicknessValue != null ? Number(v.thicknessValue) : null)))
 	);
+	const widthOptions = $derived(
+		distinctSorted(variantsForSelectedColor.map((v) => (v.widthValue != null ? Number(v.widthValue) : null)))
+	);
+	const catalogLengthOptions = $derived(
+		distinctSorted(
+			variantsForSelectedColor
+				.filter((v) => !v.isCustomLength)
+				.map((v) => (v.lengthValue != null ? Number(v.lengthValue) : null))
+		)
+	);
+
+	const thicknessUnit = $derived(variantsForSelectedColor.find((v) => v.thicknessValue != null)?.thicknessUnit ?? 'mm');
+	const widthUnit = $derived(variantsForSelectedColor.find((v) => v.widthValue != null)?.widthUnit ?? 'mm');
+	const catalogLengthUnit = $derived(variantsForSelectedColor.find((v) => v.lengthValue != null)?.lengthUnit ?? 'm');
+
+	// Seed the sliders from the actual default variant (not just "smallest
+	// available"), computed once up front from the raw variants list so it
+	// doesn't depend on reactive state that isn't initialized yet.
+	const initialColorVariants = defaultVariant
+		? hasColorAxis
+			? variants.filter((v) => v.colorId === defaultVariant.colorId)
+			: variants
+		: [];
+	const initialThicknessOptions = distinctSorted(
+		initialColorVariants.map((v) => (v.thicknessValue != null ? Number(v.thicknessValue) : null))
+	);
+	const initialWidthOptions = distinctSorted(
+		initialColorVariants.map((v) => (v.widthValue != null ? Number(v.widthValue) : null))
+	);
+	const initialLengthOptions = distinctSorted(
+		initialColorVariants
+			.filter((v) => !v.isCustomLength)
+			.map((v) => (v.lengthValue != null ? Number(v.lengthValue) : null))
+	);
+
+	let thicknessIndex = $state(
+		Math.max(0, initialThicknessOptions.indexOf(Number(defaultVariant?.thicknessValue ?? NaN)))
+	);
+	let widthIndex = $state(Math.max(0, initialWidthOptions.indexOf(Number(defaultVariant?.widthValue ?? NaN))));
+	let lengthIndex = $state(
+		Math.max(0, initialLengthOptions.indexOf(Number(defaultVariant?.lengthValue ?? NaN)))
+	); // index into catalogLengthOptions, when not using custom length
+
+	const allowsCustomLength = $derived(
+		(product.soldBy === 'length' || product.soldBy === 'both') && product.maxLength != null
+	);
+	const maxLengthValue = $derived(product.maxLength != null ? Number(product.maxLength) : 0);
+	const maxLengthUnit = $derived(product.maxLengthUnit ?? 'm');
+
+	// Starting point for the custom-length input: the smallest catalog length if
+	// one exists, otherwise a sensible fraction of the max.
+	let customLength = $state<number>(1);
+	let customLengthTouched = $state(false);
+	$effect(() => {
+		if (!customLengthTouched && catalogLengthOptions.length > 0) {
+			customLength = catalogLengthOptions[0];
+		}
+	});
+
+	const selectedThickness = $derived(thicknessOptions[thicknessIndex] ?? null);
+	const selectedWidth = $derived(widthOptions[widthIndex] ?? null);
+	const selectedCatalogLength = $derived(catalogLengthOptions[lengthIndex] ?? null);
+
+	// Does the currently configured length match a real catalog length? If the
+	// product allows custom length and the customer dialed in something else,
+	// there's no exact-priced variant — that becomes a custom quote request.
+	const useCustomLength = $derived(allowsCustomLength && customLengthTouched);
+	const effectiveLength = $derived(useCustomLength ? customLength : selectedCatalogLength);
+	const isCustomLength = $derived(
+		useCustomLength && !catalogLengthOptions.some((l) => l === customLength)
+	);
+
+	const configuredVariant = $derived(
+		variantsForSelectedColor.find(
+			(v) =>
+				(thicknessOptions.length === 0 || (v.thicknessValue != null && Number(v.thicknessValue) === selectedThickness)) &&
+				(widthOptions.length === 0 || (v.widthValue != null && Number(v.widthValue) === selectedWidth)) &&
+				(catalogLengthOptions.length === 0 ||
+					isCustomLength ||
+					(v.lengthValue != null && Number(v.lengthValue) === effectiveLength) ||
+					(v.lengthValue == null && effectiveLength == null))
+		) ?? null
+	);
+
+	// No silent fallback to defaultVariant here — if the configured combo
+	// doesn't exist as a real variant, the price/spec panel must show that
+	// (via isQuoteOnly below), not a mismatched price for a spec the customer
+	// didn't actually select.
+	const selectedVariant = $derived(isCustomLength ? null : configuredVariant);
 
 	const displayImage = $derived(
 		selectedVariant?.imageUrl || product?.featuredImage || allGalleryImages[0] || ''
@@ -147,8 +299,12 @@
 	let quantity = $state(1);
 	let justAdded = $state(false);
 
-	const isQuoteOnly = $derived(selectedVariant ? selectedVariant.price === null : false);
-	const inStock = $derived(selectedVariant ? selectedVariant.quantity > 0 : product.quantity > 0);
+	// A custom (off-catalog) length has no priced variant to match — that's a
+	// quote request too, same as a variant that's explicitly quote-only.
+	const isQuoteOnly = $derived(isCustomLength || !selectedVariant || selectedVariant.price === null);
+	const inStock = $derived(
+		selectedVariant ? selectedVariant.quantity > 0 : !hasVariants && product.quantity > 0
+	);
 	const numericPrice = $derived(
 		selectedVariant?.price != null ? Number(selectedVariant.price) : null
 	);
@@ -189,11 +345,31 @@
 
 	function selectColor(colorId: number) {
 		selectedColorId = colorId;
-		// Auto-pick the first available (in-stock, priced) variant in that color
+		// Re-anchor the sliders to the first available (in-stock, priced) variant
+		// in that color — the option lists themselves are re-derived from it.
 		const match =
 			variants.find((v) => v.colorId === colorId && v.price !== null && v.quantity > 0) ??
 			variants.find((v) => v.colorId === colorId);
-		if (match) selectedVariantId = match.variantId;
+		if (match) applyVariantToConfigurator(match);
+	}
+
+	// Point every slider at a specific variant's spec — used when a gallery
+	// thumbnail, the "add" button in the full matrix, or a colour swap picks a
+	// concrete variant rather than the customer dragging the sliders themselves.
+	function applyVariantToConfigurator(v: Variant) {
+		if (v.thicknessValue != null) {
+			const idx = thicknessOptions.indexOf(Number(v.thicknessValue));
+			if (idx >= 0) thicknessIndex = idx;
+		}
+		if (v.widthValue != null) {
+			const idx = widthOptions.indexOf(Number(v.widthValue));
+			if (idx >= 0) widthIndex = idx;
+		}
+		if (!v.isCustomLength && v.lengthValue != null) {
+			const idx = catalogLengthOptions.indexOf(Number(v.lengthValue));
+			if (idx >= 0) lengthIndex = idx;
+			customLengthTouched = false;
+		}
 	}
 
 	function addToCart() {
@@ -206,12 +382,23 @@
 				productName: product.name,
 				sku: selectedVariant.sku,
 				price: Number(selectedVariant.price),
+				priceIncludesVat: false,
+				colorId: selectedVariant.colorId,
+				colorName: selectedVariant.colorName,
+				width: selectedVariant.widthValue != null ? Number(selectedVariant.widthValue) : null,
+				widthUnit: selectedVariant.widthUnit,
+				thickness: selectedVariant.thicknessValue != null ? Number(selectedVariant.thicknessValue) : null,
+				thicknessUnit: selectedVariant.thicknessUnit,
+				length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
+				lengthUnit: selectedVariant.lengthUnit ?? null,
+				isCustomLength: selectedVariant.isCustomLength,
 				specLabel: variantLabel(selectedVariant),
 				imageUrl: selectedVariant.imageUrl
 			},
 			quantity
 		);
 
+		cart.open();
 		justAdded = true;
 		toast.success(m.product_detail_added_to_cart({ productName: product.name }), {
 			description: m.product_detail_added_to_order_sheet_toast({ quantity })
@@ -355,10 +542,12 @@
 								? 'border-blue-600 ring-2 ring-blue-500/20 dark:border-blue-500'
 								: 'border-slate-200 dark:border-white/10'}"
 							onclick={() => {
-								// Only overrides the picture — doesn't change the selected variant,
-								// since a gallery shot isn't necessarily this exact spec combo.
+								// Jump the sliders to whatever spec this gallery shot belongs to.
 								const match = variants.find((v) => v.imageUrl === img);
-								if (match) selectedVariantId = match.variantId;
+								if (match) {
+									if (match.colorId !== null) selectedColorId = match.colorId;
+									applyVariantToConfigurator(match);
+								}
 							}}
 						>
 							<img
@@ -450,58 +639,235 @@
 					</div>
 				{/if}
 
-				<!-- Width/thickness/length picker for the selected color -->
-				{#if variantsForSelectedColor.length > 0}
-					<div class="mt-4">
-						<div
-							class="mb-2 font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
-						>
-							{m.product_detail_select_dimension_profile()}
+				<!-- Configure your steel: thickness/width step through real mill stops,
+				     length can go fully custom (cut to order) when the product allows it. -->
+				{#if thicknessOptions.length > 0}
+					<div class="mt-4.5">
+						<div class="mb-2 flex items-center justify-between">
+							<span
+								class="font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
+								>{m.product_detail_spec_thickness_range()}</span
+							>
+							{#if thicknessOptions.length > 1}
+								<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+									{thicknessOptions[0]}–{thicknessOptions[thicknessOptions.length - 1]}{thicknessUnit}
+								</span>
+							{/if}
 						</div>
-						<Select
-							type="single"
-							value={selectedVariantId ? String(selectedVariantId) : undefined}
-							onValueChange={(val) => (selectedVariantId = val ? Number(val) : undefined)}
-						>
-							<SelectTrigger
-								class="h-auto w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={thicknessIndex <= 0}
+								onclick={() => (thicknessIndex = Math.max(0, thicknessIndex - 1))}
+								aria-label={m.product_detail_decrease()}
 							>
-								<div class="flex w-full items-center justify-between gap-2 text-left">
-									<span class="text-sm font-semibold">
-										{selectedVariant
-											? variantLabel(selectedVariant, { skipColor: true })
-											: m.product_detail_choose_option()}
-									</span>
-									<span class="text-sm font-bold text-blue-600 dark:text-blue-400">
-										{selectedVariant?.price != null
-											? `${Number(selectedVariant.price).toLocaleString()} ETB`
-											: m.product_detail_quote()}
-									</span>
-								</div>
-							</SelectTrigger>
-							<SelectContent
-								class="rounded-xl border border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+								<MinusIcon size={14} />
+							</button>
+							<div class="relative flex-1">
+								<input
+									type="number"
+									inputmode="decimal"
+									class={numberInputClass}
+									value={thicknessOptions[thicknessIndex]}
+									onchange={(e) =>
+										(thicknessIndex = nearestIndex(Number(e.currentTarget.value), thicknessOptions))}
+								/>
+								<span
+									class="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-slate-400 dark:text-slate-500"
+									>{thicknessUnit === 'gauge' ? 'ga' : thicknessUnit}</span
+								>
+							</div>
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={thicknessIndex >= thicknessOptions.length - 1}
+								onclick={() =>
+									(thicknessIndex = Math.min(thicknessOptions.length - 1, thicknessIndex + 1))}
+								aria-label={m.product_detail_increase()}
 							>
-								{#each variantsForSelectedColor as v (v.variantId)}
-									<SelectItem
-										value={String(v.variantId)}
-										class="cursor-pointer transition-colors hover:bg-slate-100 focus:bg-slate-100 dark:focus:bg-white/5 dark:focus:text-white"
-									>
-										<div class="flex w-full items-center justify-between gap-12">
-											<span class="text-xs font-medium">{variantLabel(v, { skipColor: true })}</span
-											>
-											<span class="text-xs font-bold text-blue-600 dark:text-blue-400">
-												{v.price !== null
-													? `${Number(v.price).toLocaleString()} ETB`
-													: m.product_detail_quote()}
-											</span>
-										</div>
-									</SelectItem>
-								{/each}
-							</SelectContent>
-						</Select>
+								<PlusIcon size={14} />
+							</button>
+						</div>
 					</div>
 				{/if}
+
+				{#if widthOptions.length > 0}
+					<div class="mt-4.5">
+						<div class="mb-2 flex items-center justify-between">
+							<span
+								class="font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
+								>{m.product_detail_spec_standard_width()}</span
+							>
+							{#if widthOptions.length > 1}
+								<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+									{widthOptions[0]}–{widthOptions[widthOptions.length - 1]}{widthUnit}
+								</span>
+							{/if}
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={widthIndex <= 0}
+								onclick={() => (widthIndex = Math.max(0, widthIndex - 1))}
+								aria-label={m.product_detail_decrease()}
+							>
+								<MinusIcon size={14} />
+							</button>
+							<div class="relative flex-1">
+								<input
+									type="number"
+									inputmode="decimal"
+									class={numberInputClass}
+									value={widthOptions[widthIndex]}
+									onchange={(e) =>
+										(widthIndex = nearestIndex(Number(e.currentTarget.value), widthOptions))}
+								/>
+								<span
+									class="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-slate-400 dark:text-slate-500"
+									>{widthUnit}</span
+								>
+							</div>
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={widthIndex >= widthOptions.length - 1}
+								onclick={() => (widthIndex = Math.min(widthOptions.length - 1, widthIndex + 1))}
+								aria-label={m.product_detail_increase()}
+							>
+								<PlusIcon size={14} />
+							</button>
+						</div>
+					</div>
+				{/if}
+
+				{#if allowsCustomLength}
+					<div class="mt-4.5">
+						<div class="mb-2 flex items-center justify-between">
+							<span
+								class="font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
+								>{m.product_detail_table_length()} — {m.product_detail_cut_to_order()}</span
+							>
+							<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+								{m.product_detail_spec_size_profiles()}: {maxLengthValue}{maxLengthUnit} max
+							</span>
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={customLength <= 0.1}
+								onclick={() => {
+									customLength = Math.max(0.1, Math.round((customLength - 0.5) * 10) / 10);
+									customLengthTouched = true;
+								}}
+								aria-label={m.product_detail_decrease()}
+							>
+								<MinusIcon size={14} />
+							</button>
+							<div class="relative flex-1">
+								<input
+									type="number"
+									inputmode="decimal"
+									class={numberInputClass}
+									value={useCustomLength ? customLength : (selectedCatalogLength ?? customLength)}
+									min="0.1"
+									max={maxLengthValue}
+									step="0.1"
+									onchange={(e) => {
+										const raw = Number(e.currentTarget.value);
+										customLength = Math.min(maxLengthValue, Math.max(0.1, Number.isNaN(raw) ? 0.1 : raw));
+										customLengthTouched = true;
+									}}
+								/>
+								<span
+									class="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-slate-400 dark:text-slate-500"
+									>{maxLengthUnit}</span
+								>
+							</div>
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={customLength >= maxLengthValue}
+								onclick={() => {
+									customLength = Math.min(maxLengthValue, Math.round((customLength + 0.5) * 10) / 10);
+									customLengthTouched = true;
+								}}
+								aria-label={m.product_detail_increase()}
+							>
+								<PlusIcon size={14} />
+							</button>
+						</div>
+						{#if isCustomLength}
+							<p class="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
+								{m.product_detail_cut_to_order()} — {m.product_detail_request_quote_button()}
+							</p>
+						{/if}
+					</div>
+				{:else if catalogLengthOptions.length > 0}
+					<div class="mt-4.5">
+						<div class="mb-2 flex items-center justify-between">
+							<span
+								class="font-mono text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400"
+								>{m.product_detail_table_length()}</span
+							>
+							{#if catalogLengthOptions.length > 1}
+								<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+									{catalogLengthOptions[0]}–{catalogLengthOptions[catalogLengthOptions.length - 1]}{catalogLengthUnit}
+								</span>
+							{/if}
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={lengthIndex <= 0}
+								onclick={() => (lengthIndex = Math.max(0, lengthIndex - 1))}
+								aria-label={m.product_detail_decrease()}
+							>
+								<MinusIcon size={14} />
+							</button>
+							<div class="relative flex-1">
+								<input
+									type="number"
+									inputmode="decimal"
+									class={numberInputClass}
+									value={catalogLengthOptions[lengthIndex]}
+									onchange={(e) =>
+										(lengthIndex = nearestIndex(Number(e.currentTarget.value), catalogLengthOptions))}
+								/>
+								<span
+									class="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-slate-400 dark:text-slate-500"
+									>{catalogLengthUnit}</span
+								>
+							</div>
+							<button
+								type="button"
+								class={stepperBtnClass}
+								disabled={lengthIndex >= catalogLengthOptions.length - 1}
+								onclick={() =>
+									(lengthIndex = Math.min(catalogLengthOptions.length - 1, lengthIndex + 1))}
+								aria-label={m.product_detail_increase()}
+							>
+								<PlusIcon size={14} />
+							</button>
+						</div>
+					</div>
+				{/if}
+
+				<div class="mt-4.5 flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-900">
+					<span class="font-semibold">
+						{selectedVariant
+							? variantLabel(selectedVariant, { skipColor: true })
+							: m.product_detail_choose_option()}
+					</span>
+					<span class="font-bold text-blue-600 dark:text-blue-400">
+						{selectedVariant?.price != null
+							? `${Number(selectedVariant.price).toLocaleString()} ETB`
+							: m.product_detail_quote()}
+					</span>
+				</div>
 
 				<div
 					class="mt-5 flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-200/50 px-3.5 py-2 dark:border-white/5 dark:bg-black/20"
@@ -527,8 +893,19 @@
 				<div class="mt-5.5 flex flex-wrap gap-2.5">
 					{#if isQuoteOnly}
 						<a
-							href="/quote?productId={product.id}{selectedVariant
+							href="/quotes?productId={product.id}{selectedVariant
 								? `&variantId=${selectedVariant.variantId}`
+								: ''}{!selectedVariant
+								? `&note=${encodeURIComponent(
+										`Requested spec: ` +
+											(selectedThickness != null ? `${selectedThickness}${thicknessUnit} thickness, ` : '') +
+											(selectedWidth != null ? `${selectedWidth}${widthUnit} width, ` : '') +
+											(useCustomLength
+												? `${customLength}${maxLengthUnit} length (cut to order)`
+												: selectedCatalogLength != null
+													? `${selectedCatalogLength}${catalogLengthUnit} length`
+													: '')
+									)}`
 								: ''}"
 							class="flex min-w-[180px] flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-3.5 text-sm font-extrabold text-white shadow-lg transition-transform active:scale-95"
 						>
@@ -582,6 +959,45 @@
 			</button>
 		</div>
 	</div>
+
+	{#if accessories && accessories.length > 0}
+		<div class="mt-14 rounded-3xl border border-blue-100 bg-blue-50/60 p-6 dark:border-blue-500/15 dark:bg-blue-500/[0.04] sm:p-8">
+			<div class="mb-1 flex flex-wrap items-center gap-3">
+				<h2 class="text-2xl font-extrabold text-slate-900 dark:text-white">
+					{m.product_detail_accessories_title()}
+				</h2>
+				<span
+					class="rounded-full bg-blue-600 px-2.5 py-1 text-[10.5px] font-bold tracking-wide text-white uppercase dark:bg-blue-500"
+				>
+					{m.product_detail_accessories_badge()}
+				</span>
+			</div>
+			<p class="mb-6 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+				{m.product_detail_accessories_subtitle()}
+			</p>
+			<div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+				{#each accessories as a (a.id)}
+					<ProductCard
+						productId={a.productId}
+						productName={a.productName}
+						slug={a.slug}
+						image={a.image}
+						categoryName={a.categoryName}
+						brand={a.brand}
+						coatingType={a.coatingType}
+						thickness={a.thickness}
+						width={a.width}
+						minPrice={a.minPrice}
+						maxPrice={a.maxPrice}
+						hasQuoteOnlyVariant={a.hasQuoteOnlyVariant}
+						totalQuantity={a.totalQuantity}
+						soldBy={a.soldBy}
+						variants={a.variants}
+					/>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	<!-- Specs + advantages -->
 	<div class="mt-16 grid grid-cols-1 gap-9 lg:grid-cols-2">
@@ -743,16 +1159,41 @@
 											type="button"
 											class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/5"
 											onclick={() => {
-												selectedVariantId = v.variantId;
-												selectedColorId = v.colorId;
-												addToCart();
+												if (v.colorId !== null) selectedColorId = v.colorId;
+												applyVariantToConfigurator(v);
+												cart.addItem(
+													{
+														variantId: v.variantId,
+														productId: product.id,
+														productName: product.name,
+														sku: v.sku,
+														price: Number(v.price),
+														priceIncludesVat: false,
+														colorId: v.colorId,
+														colorName: v.colorName,
+														width: v.widthValue != null ? Number(v.widthValue) : null,
+														widthUnit: v.widthUnit,
+														thickness: v.thicknessValue != null ? Number(v.thicknessValue) : null,
+														thicknessUnit: v.thicknessUnit,
+														length: v.lengthValue != null ? Number(v.lengthValue) : null,
+														lengthUnit: v.lengthUnit ?? null,
+														isCustomLength: v.isCustomLength,
+														specLabel: variantLabel(v),
+														imageUrl: v.imageUrl
+													},
+													1
+												);
+												cart.open();
+												toast.success(m.product_detail_added_to_cart({ productName: product.name }), {
+													description: m.product_detail_added_to_order_sheet_toast({ quantity: 1 })
+												});
 											}}
 										>
 											{m.product_detail_add_button()}
 										</button>
 									{:else}
 										<a
-											href="/quote?productId={product.id}&variantId={v.variantId}"
+											href="/quotes?productId={product.id}&variantId={v.variantId}"
 											class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/5"
 										>
 											{m.product_detail_quote()}

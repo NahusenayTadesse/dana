@@ -3,6 +3,7 @@
 	import Marquee from './Marquee.svelte';
 	import RalShowcase from './RalShowcase.svelte';
 	import FactoryBand from './FactoryBand.svelte';
+	import VideoShowcase from './VideoShowcase.svelte';
 	import Testimonials from './Testimonials.svelte';
 	import Cta from './Cta.svelte';
 
@@ -19,7 +20,7 @@
 		testimonials = [] as Testimonial[]
 	}: { children?: Snippet; testimonials?: Testimonial[] } = $props();
 </script>
-
+<VideoShowcase />
 <Marquee />
 
 <!-- Our Products section is injected here as children -->
@@ -29,5 +30,6 @@
 
 <RalShowcase />
 <FactoryBand />
+
 <Testimonials {testimonials} />
 <Cta />

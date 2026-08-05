@@ -1,14 +1,26 @@
 import { setContext, getContext } from 'svelte';
 
-// A cart line is now anchored to a specific productVariant — that's the
-// atomic sellable unit (a fixed color+width+thickness+length combo with its
-// own price/sku), replacing the old loose "amount" string.
+// A cart line is anchored to a specific productVariant — that's the atomic
+// sellable unit (a fixed color+width+thickness+length combo with its own
+// price/sku). Fields below mirror orderItems' spec columns directly so the
+// cart, checkout, and the order it produces stay in the same shape end to
+// end — no more collapsing the spec into an opaque display string.
 export type CartItem = {
 	variantId: number;
 	productId: number;
 	productName: string;
 	sku: string | null;
 	price: number;
+	priceIncludesVat: boolean;
+	colorId: number | null;
+	colorName: string | null;
+	width: number | null;
+	widthUnit: 'mm' | 'cm' | 'm' | 'in' | 'ft' | null;
+	thickness: number | null;
+	thicknessUnit: 'mm' | 'gauge' | null;
+	length: number | null;
+	lengthUnit: 'mm' | 'm' | 'ft' | null;
+	isCustomLength?: boolean;
 	// Human-readable spec summary for display, e.g. "Signal Red · 1000mm · 0.45mm"
 	specLabel: string;
 	imageUrl?: string | null;

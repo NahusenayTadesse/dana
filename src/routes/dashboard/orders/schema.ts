@@ -55,5 +55,31 @@ export const edit = z
 	.object({ ...base, id: z.coerce.number().int().positive() })
 	.superRefine(requirePaymentWhenDelivered);
 
+// Generates a fresh payment link for whatever's still owed on an order —
+// callable at any time (delivered or not), not just right after a quote.
+export const requestBalance = z.object({
+	orderId: z.coerce.number().int().positive()
+});
+
+// Staff creating a post-dispatch correction directly — takes effect
+// immediately (no separate approval step; staff already has the authority).
+export const addAdjustment = z.object({
+	orderId: z.coerce.number().int().positive(),
+	type: z.enum(['addition', 'deduction']),
+	amount: z.coerce.number().positive('Amount must be greater than 0.'),
+	reason: z.string().min(1, 'Reason is required.').max(255),
+	notes: z.string().max(2000).optional().nullable()
+});
+
+// Approve/reject a customer-submitted adjustment request.
+export const decideAdjustment = z.object({
+	adjustmentId: z.coerce.number().int().positive(),
+	approve: z.boolean(),
+	note: z.string().max(500).optional().nullable()
+});
+
 export type Add = z.infer<typeof add>;
 export type Edit = z.infer<typeof edit>;
+export type RequestBalance = z.infer<typeof requestBalance>;
+export type AddAdjustment = z.infer<typeof addAdjustment>;
+export type DecideAdjustment = z.infer<typeof decideAdjustment>;

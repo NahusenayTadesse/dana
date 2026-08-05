@@ -1,8 +1,9 @@
 <script lang="ts">
-    import { useCart } from '$lib/hooks/cart.svelte.js';
     import { Button } from '$lib/components/ui/button';
     import { MinusIcon, PlusIcon, TrashIcon } from '@lucide/svelte';
     import type { CartItem } from '$lib/hooks/cart.svelte.js';
+    import { useCart } from '$lib/hooks/cart.svelte.js';
+    import * as m from '$lib/paraglide/messages.js';
 
     const { item }: { item: CartItem } = $props();
     const cart = useCart();
@@ -13,6 +14,19 @@
             currency: 'ETB'
         }).format(price);
     };
+
+    // Structured spec chips (colour/width/thickness/length) — falls back to
+    // the flat specLabel for carts saved before these fields existed.
+    const specChips = $derived(
+        [
+            item.colorName,
+            item.width != null ? `${item.width}${item.widthUnit ?? ''}` : null,
+            item.thickness != null ? `${item.thickness}${item.thicknessUnit === 'gauge' ? 'ga' : (item.thicknessUnit ?? '')}` : null,
+            item.length != null
+                ? `${item.length}${item.lengthUnit ?? ''}${item.isCustomLength ? ` ${m.product_detail_cut_to_order()}` : ''}`
+                : null
+        ].filter((v): v is string => !!v)
+    );
 
     const decreaseQuantity = () => {
         cart.updateQuantity(item.variantId, item.quantity - 1);
@@ -27,47 +41,56 @@
     };
 </script>
 
-<div class="flex flex-col gap-2 rounded-lg border border-border/50 bg-muted/50 p-3">
-    <div class="flex items-start justify-between gap-2">
-        <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-                <h4 class="truncate text-sm font-medium">{item.productName}</h4>
-                <span
-                    class="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 ring-inset"
-                >
-                    {item.specLabel}
-                </span>
-            </div>
-            <p class="text-xs text-muted-foreground">
-                {item.sku ? `SKU: ${item.sku}` : `ID: ${item.productId}`}
-            </p>
+<tr class="border-b border-border/50 align-top last:border-b-0">
+    <td class="py-2.5 pr-2">
+        <div class="font-medium">{item.productName}</div>
+        <div class="text-xs text-muted-foreground">
+            {item.sku ? `SKU: ${item.sku}` : `ID: ${item.productId}`}
         </div>
+    </td>
+    <td class="py-2.5 pr-2">
+        {#if specChips.length > 0}
+            <div class="flex flex-wrap gap-1">
+                {#each specChips as chip}
+                    <span
+                        class="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 ring-inset"
+                    >
+                        {chip}
+                    </span>
+                {/each}
+            </div>
+        {:else}
+            <span class="text-xs text-muted-foreground">{item.specLabel}</span>
+        {/if}
+    </td>
+    <td class="py-2.5 pr-2">
+        <div class="flex items-center justify-end gap-1">
+            <Button size="icon" variant="outline" class="size-6" onclick={decreaseQuantity}>
+                <MinusIcon class="size-3" />
+            </Button>
+            <span class="w-6 text-center text-sm font-medium">{item.quantity}</span>
+            <Button size="icon" variant="outline" class="size-6" onclick={increaseQuantity}>
+                <PlusIcon class="size-3" />
+            </Button>
+        </div>
+    </td>
+    <td class="py-2.5 pr-2 text-right whitespace-nowrap">
+        <div class="font-semibold text-primary">{formatPrice(item.price)}</div>
+        {#if item.priceIncludesVat}
+            <div class="text-[10px] text-muted-foreground">{m.cart_vat_included()}</div>
+        {/if}
+    </td>
+    <td class="py-2.5 pr-2 text-right font-semibold whitespace-nowrap">
+        {formatPrice(item.price * item.quantity)}
+    </td>
+    <td class="py-2.5 text-right">
         <Button
             size="icon"
             variant="ghost"
-            class="size-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            class="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onclick={removeItem}
         >
             <TrashIcon class="size-4" />
         </Button>
-    </div>
-    <div class="flex items-center justify-between gap-2">
-        <div class="flex flex-col">
-            <span class="text-xs text-muted-foreground">Price per unit</span>
-            <span class="text-sm font-semibold text-primary">{formatPrice(item.price)}</span>
-        </div>
-        <div class="flex items-center gap-1">
-            <Button size="icon" variant="outline" class="size-7" onclick={decreaseQuantity}>
-                <MinusIcon class="size-3" />
-            </Button>
-            <span class="w-8 text-center text-sm font-medium">{item.quantity}</span>
-            <Button size="icon" variant="outline" class="size-7" onclick={increaseQuantity}>
-                <PlusIcon class="size-3" />
-            </Button>
-        </div>
-    </div>
-    <div class="flex items-center justify-between border-t border-border/50 pt-1">
-        <span class="text-xs text-muted-foreground">Subtotal</span>
-        <span class="text-sm font-semibold">{formatPrice(item.price * item.quantity)}</span>
-    </div>
-</div>
+    </td>
+</tr>

@@ -1,6 +1,6 @@
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { edit, adjust, damaged, editGallery, editPrice, addPrice } from './schema';
+import { edit, adjust, damaged, editGallery } from './schema';
 
 import { db } from '$lib/server/db';
 import {
@@ -10,7 +10,7 @@ import {
 	productSuppliers as suppliers,
 	orderItems,
 	orders,
-	prices,
+	productVariants,
 	productImages,
 	tags,
 	productTags,
@@ -26,8 +26,6 @@ export const load: LayoutServerLoad = async ({ params }) => {
 	const adjustForm = await superValidate(zod4(adjust));
 	const damagedForm = await superValidate(zod4(damaged));
 	const galleryEdit = await superValidate(zod4(editGallery));
-	const priceEdit = await superValidate(zod4(editPrice));
-	const priceAdd = await superValidate(zod4(addPrice));
 
 	const allCategories = await db
 		.select({
@@ -61,8 +59,8 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			id: products.id,
 			name: products.name,
 			price: sql<number | null>`(
-				SELECT MIN(${prices.price}) FROM ${prices}
-				WHERE ${prices.productId} = ${products.id}
+				SELECT MIN(${productVariants.price}) FROM ${productVariants}
+				WHERE ${productVariants.productId} = ${products.id}
 			)`,
 			brand: products.brand,
 			description: products.description,
@@ -72,6 +70,19 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			supplier: suppliers.name,
 			supplierId: suppliers.id,
 			image: products.featuredImage,
+			soldBy: products.soldBy,
+			thickness: products.thickness,
+			width: products.width,
+			maxLength: products.maxLength,
+			maxLengthUnit: products.maxLengthUnit,
+			coatingType: products.coatingType,
+			colorOptions: products.colorOptions,
+			sizeRange: products.sizeRange,
+			finish: products.finish,
+			overview: products.overview,
+			performanceFeatures: products.performanceFeatures,
+			advantages: products.advantages,
+			applications: products.applications,
 			saleCount: sql<number>`(
 				SELECT COALESCE(SUM(${orderItems.quantity}), 0)
 				FROM ${orderItems}
@@ -89,15 +100,6 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		.then((rows) => rows[0]);
 
 
-
-	const priceList = await db
-		.select({
-			id: prices.id,
-			amount: prices.variant,
-			price: sql<number>`CAST(${prices.price} AS DOUBLE)`
-		})
-		.from(prices)
-		.where(eq(prices.productId, productId));
 
 	const categories = await db
 		.select({
@@ -147,7 +149,16 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			description: product?.description ?? '',
 			quantity: product?.quantity ?? 0,
 			supplier: product?.supplierId ?? undefined,
-			reorderLevel: product?.reorderLevel ?? 0
+			reorderLevel: product?.reorderLevel ?? 0,
+			soldBy: product?.soldBy ?? 'quantity',
+			thickness: product?.thickness ?? '',
+			width: product?.width ?? '',
+			maxLength: product?.maxLength != null ? Number(product.maxLength) : null,
+			maxLengthUnit: product?.maxLengthUnit ?? 'm',
+			coatingType: product?.coatingType ?? '',
+			colorOptions: product?.colorOptions ?? '',
+			sizeRange: product?.sizeRange ?? '',
+			finish: product?.finish ?? ''
 		},
 		zod4(edit),
 		{ errors: false }
@@ -163,9 +174,6 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		damagedForm,
 		allCategories,
 		images,
-		priceList,
-		priceEdit,
-		priceAdd,
 		allTags,
 		tagged,
 		categorized

@@ -159,7 +159,8 @@ export const load: LayoutServerLoad = async ({ url }) => {
 					brand: products.brand,
 					coatingType: products.coatingType,
 					thickness: products.thickness,
-					width: products.width
+					width: products.width,
+					soldBy: products.soldBy
 				})
 				.from(products)
 				.leftJoin(productCategories, eq(productCategories.id, products.categoryId))

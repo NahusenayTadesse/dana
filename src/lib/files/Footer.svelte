@@ -69,8 +69,22 @@
 	</div>
 
 	<div class="border-t border-white/10">
-		<div class="mx-auto max-w-[1280px] px-6 py-5 text-[13px] text-[#6B82A6] md:px-8">
-			{m.footer_copyright()}
+		<div
+			class="mx-auto flex max-w-[1280px] flex-col gap-3 px-6 py-5 text-[13px] text-[#6B82A6] sm:flex-row sm:items-center sm:justify-between md:px-8"
+		>
+			<span>© {new Date().getFullYear()} {m.footer_copyright()}</span>
+
+			<a
+				href="https://digitalconstruct.com"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="inline-flex w-fit items-center gap-2 transition-colors hover:text-white"
+			>
+				{m.footer_developed_by()}
+				<span class="inline-flex rounded-md bg-white px-1.5 py-1">
+					<img src="/digitalLogo.png" alt="Digital Construct" class="h-3.5 w-auto object-contain" />
+				</span>
+			</a>
 		</div>
 	</div>
 </footer>

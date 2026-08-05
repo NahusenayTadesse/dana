@@ -61,21 +61,12 @@ export function assembleProductCard<T extends { productId: number; baseQuantity:
 	const pricedVariants = variants.map((v) => v.price).filter((v): v is string => v !== null);
 	const variantQty = variants.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
 
-	const colorSwatches = Array.from(
-		new Map(
-			variants
-				.filter((v) => v.colorId !== null)
-				.map((v) => [v.colorId, { id: v.colorId, name: v.colorName, hex: v.colorHex }])
-		).values()
-	);
-
 	return {
 		...product,
 		minPrice: pricedVariants.length ? Math.min(...pricedVariants.map(Number)) : null,
 		maxPrice: pricedVariants.length ? Math.max(...pricedVariants.map(Number)) : null,
 		hasQuoteOnlyVariant: variants.some((v) => v.price === null),
 		totalQuantity: (product.baseQuantity ?? 0) + variantQty,
-		colorSwatches,
 		variants
 	};
 }

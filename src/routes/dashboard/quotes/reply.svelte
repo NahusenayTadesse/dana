@@ -15,8 +15,6 @@
 		id: number;
 		subject: string;
 		message: string;
-		quotedUnitPrice: string | null;
-		quotedQuantity: number | null;
 		createdAt: string | Date;
 	};
 
@@ -47,17 +45,6 @@
 	});
 
 	$form.quoteRequestId = id;
-
-	// If this request was already priced, prefill the last quoted figures so
-	// staff revising a price aren't starting from a blank form.
-	const lastPriced = replies.find((r) => r.quotedUnitPrice !== null);
-	if (lastPriced) {
-		$form.quotedUnitPrice = Number(lastPriced.quotedUnitPrice);
-		$form.quotedQuantity = lastPriced.quotedQuantity ?? undefined;
-	}
-
-	const formatPrice = (v: number) =>
-		new Intl.NumberFormat('en-US', { style: 'currency', currency: 'ETB' }).format(v);
 
 	const formatDate = (d: string | Date) =>
 		new Date(d).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
@@ -94,13 +81,6 @@
 							<p class="mt-1 line-clamp-3 text-xs text-muted-foreground">
 								{@html r.message}
 							</p>
-							{#if r.quotedUnitPrice !== null}
-								<div class="mt-2 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
-									Quoted: {formatPrice(Number(r.quotedUnitPrice))} × {r.quotedQuantity} = {formatPrice(
-										Number(r.quotedUnitPrice) * (r.quotedQuantity ?? 0)
-									)}
-								</div>
-							{/if}
 						</div>
 					{/each}
 				</div>
@@ -118,16 +98,6 @@
 
 				<RichTextEditor bind:value={$form.message} />
 				<InputComp {form} {errors} name="message" label="" type="hidden" />
-			</div>
-
-			<div class="rounded-lg border border-dashed p-3">
-				<p class="mb-2 text-xs text-muted-foreground">
-					Fill both fields to send a priced quote with a secure payment link. Leave both blank to send a plain reply.
-				</p>
-				<div class="grid grid-cols-2 gap-3">
-					<InputComp {form} {errors} name="quotedUnitPrice" label="Unit Price (ETB)" type="number" placeholder="e.g. 4500" />
-					<InputComp {form} {errors} name="quotedQuantity" label="Quantity" type="number" placeholder="e.g. 200" />
-				</div>
 			</div>
 
 			<input type="hidden" name="quoteRequestId" bind:value={$form.quoteRequestId} />

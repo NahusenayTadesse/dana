@@ -170,7 +170,7 @@
 					</Button>
 				</div>
 
-				<div class="grid grid-cols-1 gap-4 lg:grid-cols-1">
+				<div class="grid grid-cols-1 gap-4">
 					<div class="space-y-1.5">
 						<Label class="text-xs font-medium text-slate-500">Product</Label>
 						<ComboboxComp

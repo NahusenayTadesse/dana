@@ -128,25 +128,23 @@ const tools = [
 			{
 				name: 'searchProductsForAi',
 				description:
-					'Search the public dana Electronics product catalog. Use only for dana product-related questions such as product availability, prices, categories, tags, and recommendations.',
+					'Search the public Dana Steel Factory product catalog (PPGI/GI sheets, roofing tiles, ridge caps, flashings, gutters). Use only for Dana Steel product-related questions such as availability, prices, specs, categories, and recommendations.',
 				parameters: {
 					type: Type.OBJECT,
 					properties: {
 						query: {
 							type: Type.STRING,
 							description:
-								'The product search query, for example "charger", "power bank", "earbuds".'
+								'The product search query, for example "PPGI", "roofing tile", "gutter", "RAL 3000".'
 						},
 						categoryName: {
 							type: Type.STRING,
-							description: 'Optional product category name, for example "Mobile Accessories".'
+							description:
+								'Optional product category name, for example "PPGI sheets", "GI sheets", "Roofing tiles", "Flashings", "Gutters".'
 						},
-						tagNames: {
-							type: Type.ARRAY,
-							description: 'Optional product tags to filter by.',
-							items: {
-								type: Type.STRING
-							}
+						thickness: {
+							type: Type.STRING,
+							description: 'Optional thickness text to filter by, for example "0.4mm" or "0.5".'
 						},
 						inStockOnly: {
 							type: Type.BOOLEAN,
@@ -171,9 +169,7 @@ function cleanToolArgs(args: any) {
 	return {
 		query: typeof args.query === 'string' ? args.query : undefined,
 		categoryName: typeof args.categoryName === 'string' ? args.categoryName : undefined,
-		tagNames: Array.isArray(args.tagNames)
-			? args.tagNames.filter((tag: unknown): tag is string => typeof tag === 'string')
-			: undefined,
+		thickness: typeof args.thickness === 'string' ? args.thickness : undefined,
 		inStockOnly: typeof args.inStockOnly === 'boolean' ? args.inStockOnly : undefined,
 		limit:
 			typeof args.limit === 'number' ? Math.max(1, Math.min(8, Math.floor(args.limit))) : undefined
@@ -272,7 +268,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 					name: call.name,
 					response: {
 						error:
-							'Product search failed. Tell the user to visit the Shop page or contact dana support.'
+							'Product search failed. Tell the user to visit the Shop page or contact Dana Steel Factory support.'
 					}
 				});
 			}

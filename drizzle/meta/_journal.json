@@ -50,6 +50,20 @@
       "when": 1785113663223,
       "tag": "0006_illegal_namor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1785888090967,
+      "tag": "0007_thankful_killraven",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1785890883581,
+      "tag": "0008_lovely_mongoose",
+      "breakpoints": true
     }
   ]
 }

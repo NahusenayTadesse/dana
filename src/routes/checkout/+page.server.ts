@@ -1,14 +1,14 @@
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq } from 'drizzle-orm';
-// import { sendEmail, customerQuoteTemplate, adminQuoteTemplate } from '$lib/server/email';
+import { sendEmail, quoteRequestReceivedTemplate, adminNewQuoteRequestTemplate } from '$lib/server/email';
 
 import { SMTP_USER as USER } from '$env/static/private';
 
 import { addUser, loginSchema } from '$lib/ZodSchema';
 import { add } from './schema';
 import { db } from '$lib/server/db';
-import { quoteRequests, products, customers } from '$lib/server/db/schema';
+import { quoteRequests, orders, orderItems, products, customers } from '$lib/server/db/schema';
 import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile } from '$lib/server/upload';
 
@@ -38,12 +38,13 @@ export const actions: Actions = {
 		const { name, email, phone, tinNo, docs, selectedProducts, type } = form.data;
 
 		let customerInfo: { value: number; email: string; name: string; phone: string | null } | undefined;
-		let newQuoteIds: number[] = [];
+		let newQuoteId: number | undefined;
 
 		// Resolved outside the try so we can use them in the post-transaction emails too
 		let resolvedName: string | undefined;
 		let resolvedEmail: string | undefined;
 		let resolvedPhone: string | undefined;
+		let itemLabel = '';
 
 		try {
 			await db.transaction(async (tx) => {
@@ -127,24 +128,55 @@ export const actions: Actions = {
 					throw new Error(`Product ${missingProduct} no longer exists — please refresh your cart.`);
 				}
 
-				// --- one quote_requests row per selected product ---
-				const rows = selectedProducts.map((p) => {
-					const prod = productMap.get(Number(p.product))!;
-					return {
+				itemLabel = selectedProducts
+					.map((p) => {
+						const name = productMap.get(Number(p.product))?.name ?? `Product #${p.product}`;
+						const spec = p.amount ? ` (${p.amount})` : '';
+						return `${name}${spec} ×${p.quantity}`;
+					})
+					.join(', ');
+
+				// The whole cart is one order (and one quote request) — not a
+				// quote_requests row per product, which made a multi-item cart
+				// impossible to reason about as a single negotiation.
+				const [order] = await tx
+					.insert(orders)
+					.values({ customerId: customerInfo?.value, status: 'pending', requestStatus: 'pending' })
+					.$returningId();
+
+				await tx.insert(orderItems).values(
+					selectedProducts.map((p) => ({
+						orderId: order.id,
+						productId: Number(p.product),
+						variantId: p.variantId ?? null,
+						quantity: p.quantity,
+						amount: p.amount ?? `qty-${p.quantity}`,
+						price: p.price != null ? String(p.price) : null,
+						priceIncludesVat: p.priceIncludesVat ?? false,
+						colorId: p.colorId ?? null,
+						width: p.width != null ? String(p.width) : null,
+						widthUnit: p.widthUnit ?? undefined,
+						thickness: p.thickness != null ? String(p.thickness) : null,
+						thicknessUnit: p.thicknessUnit ?? undefined,
+						length: p.length != null ? String(p.length) : null,
+						lengthUnit: p.lengthUnit ?? undefined
+					}))
+				);
+
+				const [quote] = await tx
+					.insert(quoteRequests)
+					.values({
 						name: resolvedName!,
 						email: resolvedEmail,
 						phone: resolvedPhone!,
 						customerId: customerInfo?.value,
-						productId: Number(p.product),
-						categoryId: prod.categoryId,
-						quantityEstimate: String(p.quantity ?? p.amount ?? ''),
-						message: `Requested via checkout form.${p.amount ? ` Variant: ${p.amount}.` : ''}`,
+						orderId: order.id,
+						message: `Requested via checkout form (${selectedProducts.length} item${selectedProducts.length === 1 ? '' : 's'}).`,
 						status: 'new' as const
-					};
-				});
+					})
+					.$returningId();
 
-				const inserted = await tx.insert(quoteRequests).values(rows).$returningId();
-				newQuoteIds = inserted.map((r) => r.id);
+				newQuoteId = quote.id;
 			});
 		} catch (err) {
 			console.error('FULL ERROR', err);
@@ -159,20 +191,30 @@ export const actions: Actions = {
 			);
 		}
 
-		// --- notify customer + admin that a quote request came in (no payment step) ---
-		// if (resolvedEmail) {
-		// 	sendEmail(
-		// 		resolvedEmail,
-		// 		customerQuoteTemplate(newQuoteIds, selectedProducts).subject,
-		// 		customerQuoteTemplate(newQuoteIds, selectedProducts).html
-		// 	).catch((err) => console.error('Email Error (Customer):', err));
-		// }
+		// --- notify customer + admin that a quote request came in (no payment step yet) ---
+		if (newQuoteId != null) {
+			if (resolvedEmail) {
+				const customerTemplate = quoteRequestReceivedTemplate(newQuoteId, {
+					name: resolvedName!,
+					quantityEstimate: `${selectedProducts.length} item${selectedProducts.length === 1 ? '' : 's'}`,
+					itemLabel
+				});
+				sendEmail(resolvedEmail, customerTemplate.subject, customerTemplate.html, resolvedPhone).catch((err) =>
+					console.error('Email/SMS Error (Customer):', err)
+				);
+			}
 
-		// sendEmail(
-		// 	USER,
-		// 	adminQuoteTemplate(newQuoteIds, selectedProducts).subject,
-		// 	adminQuoteTemplate(newQuoteIds, selectedProducts).html
-		// ).catch((err) => console.error('Email Error (Admin):', err));
+			const adminTemplate = adminNewQuoteRequestTemplate(newQuoteId, {
+				name: resolvedName!,
+				email: resolvedEmail,
+				phone: resolvedPhone!,
+				quantityEstimate: `${selectedProducts.length} item${selectedProducts.length === 1 ? '' : 's'}`,
+				itemLabel
+			});
+			sendEmail(USER, adminTemplate.subject, adminTemplate.html).catch((err) =>
+				console.error('Email Error (Admin):', err)
+			);
+		}
 
 		return message(form, {
 			type: 'success',

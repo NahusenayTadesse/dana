@@ -8,6 +8,7 @@ import CatList from './catList.svelte';
 import type { ColumnDef } from '@tanstack/table-core';
 import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 import Statuses from '$lib/components/Table/statuses.svelte';
+import BigText from '$lib/components/Table/bigText.svelte';
 
 export const columns = [
 	{
@@ -69,10 +70,38 @@ export const columns = [
 		}
 	},
 	{
+		accessorKey: 'slug',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Slug',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true
+	},
+	{
 		accessorKey: 'brand',
 		header: ({ column }) =>
 			renderComponent(DataTableSort, {
 				name: 'Brand',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true
+	},
+	{
+		accessorKey: 'supplier',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Supplier',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? 'No Supplier'
+	},
+	{
+		accessorKey: 'soldBy',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Sold By',
 				onclick: column.getToggleSortingHandler()
 			}),
 		sortable: true
@@ -103,6 +132,79 @@ export const columns = [
 		}
 	},
 
+	{
+		accessorKey: 'thickness',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Thickness',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
+	},
+	{
+		accessorKey: 'width',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Width',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
+	},
+	{
+		accessorKey: 'maxLength',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Max Length',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: ({ row }) =>
+			row.original.maxLength
+				? `${row.original.maxLength} ${row.original.maxLengthUnit ?? ''}`.trim()
+				: '—'
+	},
+	{
+		accessorKey: 'coatingType',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Coating Type',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
+	},
+	{
+		accessorKey: 'colorOptions',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Color Options',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
+	},
+	{
+		accessorKey: 'sizeRange',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Size Range',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
+	},
+	{
+		accessorKey: 'finish',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Finish',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
+	},
 	{
 		accessorKey: 'prices',
 		header: ({ column }) =>
@@ -154,7 +256,46 @@ export const columns = [
 
 	{
 		accessorKey: 'description',
-		header: 'Description'
+		header: 'Description',
+		cell: ({ row }) => {
+			if (!row.original.description) return '—';
+			return renderComponent(BigText, { text: row.original.description });
+		}
+	},
+	{
+		accessorKey: 'overview',
+		header: 'Overview',
+		cell: ({ row }) => {
+			if (!row.original.overview) return '—';
+			return renderComponent(BigText, { text: row.original.overview });
+		}
+	},
+	{
+		accessorKey: 'isFeaturedOnHome',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Featured',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: ({ row }) => {
+			return renderComponent(Statuses, {
+				status: row.original.isFeaturedOnHome ? 'yes' : 'no'
+			});
+		}
+	},
+	{
+		accessorKey: 'createdAt',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Date Added',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: (info) => {
+			const value = info.getValue();
+			return value ? new Date(value).toLocaleDateString() : '—';
+		}
 	},
 
 	{

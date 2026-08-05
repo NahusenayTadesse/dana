@@ -106,7 +106,7 @@
 
     <!-- Bottom Copyright Bar -->
     <div class="mt-13 pt-6.5 border-t border-border flex flex-col sm:flex-row justify-between flex-wrap gap-3.5 text-[12.5px] text-muted-foreground/80">
-      <span>{m.copyright_text()}</span>
+      <span>© {new Date().getFullYear()} {m.copyright_text()}</span>
       <div class="flex gap-5.5">
         <a href="#privacy" class="hover:text-foreground transition-colors">{m.link_privacy()}</a>
         <a href="#terms" class="hover:text-foreground transition-colors">{m.link_terms()}</a>

@@ -22,9 +22,14 @@
 	import Copy from '$lib/Copy.svelte';
 	import OrderForm from './OrderForm.svelte';
 	import PaymentStatus from './PaymentStatus.svelte';
+	import RequestBalance from './RequestBalance.svelte';
+	import OrderAdjustments from './OrderAdjustments.svelte';
 	import { formatETB } from '$lib/global.svelte';
 
 	let { data } = $props();
+
+	const adjustmentsFor = (orderId: number) =>
+		data?.allAdjustments?.filter((a) => Number(a.orderId) === Number(orderId)) ?? [];
 
 	const filters = [
 		{ v: 'all', label: 'All', Icon: Sheet },
@@ -72,7 +77,7 @@
 			cell: ({ row }) => row.original.name ?? '—'
 		},
 		{
-			accessorKey: 'type',
+			accessorKey: 'customerType',
 			header: sortHeader('Customer Type'),
 			sortable: true,
 		},
@@ -82,6 +87,12 @@
 			header: 'Phone',
 			sortable: false,
 			cell: ({ row }) => renderComponent(Copy, { data: row.original.phone })
+		},
+		{
+			accessorKey: 'customerEmail',
+			header: 'Email',
+			sortable: false,
+			cell: ({ row }) => renderComponent(Copy, { data: row.original.customerEmail })
 		},
 		{
 			accessorKey: 'items',
@@ -112,6 +123,18 @@
 			cell: ({ row }) => renderComponent(Statuses, { status: row.original.status })
 		},
 		{
+			accessorKey: 'deliveryDate',
+			header: sortHeader('Delivery Date'),
+			sortable: true,
+			cell: ({ row }) => row.original.deliveryDate ?? '—'
+		},
+		{
+			accessorKey: 'deliveryAddress',
+			header: 'Delivery Address',
+			sortable: false,
+			cell: ({ row }) => row.original.deliveryAddress ?? '—'
+		},
+		{
 			accessorKey: 'edit',
 			header: 'Edit',
 			sortable: false,
@@ -129,6 +152,30 @@
 		},
 
 			{
+			accessorKey: 'balance',
+			header: 'Balance Payment',
+			sortable: false,
+			cell: ({ row }) =>
+				renderComponent(RequestBalance, {
+					orderId: row.original.id,
+					data: data?.requestBalanceForm
+				})
+		},
+		{
+			accessorKey: 'adjustments',
+			header: 'Adjustments',
+			sortable: false,
+			cell: ({ row }) =>
+				renderComponent(OrderAdjustments, {
+					orderId: row.original.id,
+					adjustments: adjustmentsFor(row.original.id),
+					currentTotals: data?.adjustedTotalsByOrder?.[row.original.id] ?? null,
+					addData: data?.addAdjustmentForm,
+					decideData: data?.decideAdjustmentForm
+				})
+		},
+
+			{
 			accessorKey: 'txnRef',
 			header: sortHeader('Chapa Token'),
 			sortable: true,
@@ -138,8 +185,16 @@
 </script>
 
 <svelte:head>
-	<title>Orders</title>
+	<title>Orders — Production Queue</title>
 </svelte:head>
+
+<div class="mb-4">
+	<h1 class="text-2xl font-bold tracking-tight">Production Queue</h1>
+	<p class="text-sm text-muted-foreground">
+		Only confirmed orders show here — this is what the factory builds. Orders still being
+		negotiated live on the <a href="/dashboard/quotes" class="underline">Quotes</a> page until approved.
+	</p>
+</div>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 	<div class="flex flex-wrap items-center gap-2">

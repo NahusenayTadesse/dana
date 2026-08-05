@@ -1,23 +1,18 @@
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { edit } from './schema.js';
 import { db } from '$lib/server/db';
-import {
-	orders,
-	customers,
-	paymentMethods,
-	user,
-	products,
-	orderItems
-} from '$lib/server/db/schema';
+import { orders, customers, paymentMethods, user } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import type { PageServerLoad } from '../$types';
 import { superValidate } from 'sveltekit-superforms';
 import { type Actions } from '@sveltejs/kit';
 import { fail, message } from 'sveltekit-superforms';
 import { setFlash } from 'sveltekit-flash-message/server';
-import { and } from 'drizzle-orm';
+import { fetchCustomerOrderHistory, type OrderHistoryStatus } from '$lib/server/customerOrderHistory';
 
-export const load: PageServerLoad = async ({ params }) => {
+const STATUSES = ['pending', 'delivered', 'cancelled'] as const;
+
+export const load: PageServerLoad = async ({ params, url }) => {
 	try {
 		const { id } = params;
 
@@ -61,44 +56,22 @@ export const load: PageServerLoad = async ({ params }) => {
 			.from(paymentMethods)
 			.where(eq(paymentMethods.isActive, true));
 
-		const allData = await db
-			.select({
-				id: orders.id,
-				name: customers.name,
-				status: orders.status,
-				createdAt: sql<string>`DATE_FORMAT(${customers.createdAt}, '%Y-%m-%d')`
-			})
-			.from(orders)
-			.leftJoin(customers, eq(orders.customerId, customers.id))
-			.where(and(eq(orders.status, 'pending'), eq(orders.customerId, Number(id))));
+		const raw = url.searchParams.get('status');
+		const status: OrderHistoryStatus | null = STATUSES.includes(raw as OrderHistoryStatus)
+			? (raw as OrderHistoryStatus)
+			: null;
+		const q = (url.searchParams.get('q') ?? '').trim();
+		const page = Number(url.searchParams.get('page')) || 1;
 
-		const allItems = await db
-			.select({
-				id: orderItems.id,
-				orderId: orderItems.orderId,
-				product: products.name,
-				quantity: orderItems.quantity,
-				productId: orderItems.productId,
-				price: orderItems.price,
-				total: sql<number>`${orderItems.quantity} * ${orderItems.price}`.mapWith(Number)
-			})
-			.from(orderItems)
-			.leftJoin(
-				orders,
-				and(
-					eq(orders.id, orderItems.orderId),
-					eq(orders.status, 'pending'),
-					eq(orders.customerId, Number(id))
-				)
-			)
-			.leftJoin(products, eq(orderItems.productId, products.id));
+		const history = await fetchCustomerOrderHistory({ customerId: Number(id), status, q, page, perPage: 5 });
 
 		return {
 			customer,
 			form,
 			allMethods,
-			allData,
-			allItems,
+			activeStatus: status ?? 'all',
+			q,
+			history,
 			orderCounts
 		};
 	} catch (error) {

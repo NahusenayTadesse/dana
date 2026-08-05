@@ -92,6 +92,7 @@
 	import { renderComponent } from '$lib/components/ui/data-table/index.js';
 	import EditVariant from './EditVariant.svelte';
 	import AddVariant from './AddVariant.svelte';
+	import VariantPrices from './VariantPrices.svelte';
 	import ImageViewer from '$lib/components/Table/image-viewer.svelte';
 
 	// Sortable column header helper (keeps the column defs tidy).
@@ -185,12 +186,36 @@
 					widthItems: data?.widthItems,
 					thicknessItems: data?.thicknessItems,
 					lengthItems: data?.lengthItems,
-					
+
+				})
+		},
+		{
+			accessorKey: 'prices',
+			header: 'Prices',
+			sortable: false,
+			cell: ({ row }) =>
+				renderComponent(VariantPrices, {
+					variantId: row.original.id,
+					variantLabel: row.original.sku ?? row.original.colorName ?? `Variant #${row.original.id}`,
+					rates: data?.variantPricesByVariant?.[row.original.id] ?? [],
+					upsertData: data?.upsertVariantPriceForm,
+					deleteData: data?.deleteVariantPriceForm
 				})
 		}
 	];
 
 	let images = $derived(data?.images);
+
+	const soldByItems = [
+		{ value: 'quantity', name: 'Quantity (per piece)' },
+		{ value: 'length', name: 'Length (e.g. per meter)' },
+		{ value: 'both', name: 'Both' }
+	];
+	const lengthUnitItems = [
+		{ value: 'mm', name: 'mm' },
+		{ value: 'm', name: 'm' },
+		{ value: 'ft', name: 'ft' }
+	];
 </script>
 
 <svelte:head>
@@ -406,6 +431,89 @@
 					placeholder="Enter when you want to be notified"
 				/>
 
+				<InputComp
+					{form}
+					{errors}
+					type="select"
+					name="soldBy"
+					label="Sold By"
+					placeholder="Select how this product is sold"
+					items={soldByItems}
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="text"
+					name="thickness"
+					label="Thickness"
+					placeholder="e.g. 0.5mm - 1.2mm"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="text"
+					name="width"
+					label="Width"
+					placeholder="e.g. 1219mm"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="number"
+					name="maxLength"
+					label="Max Order Length"
+					placeholder="Cap for custom quote requests"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="select"
+					name="maxLengthUnit"
+					label="Max Length Unit"
+					placeholder="Select unit"
+					items={lengthUnitItems}
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="text"
+					name="coatingType"
+					label="Coating Type"
+					placeholder="e.g. PPGI, GI"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="text"
+					name="colorOptions"
+					label="Color Options"
+					placeholder="e.g. RAL 9002, Sea Blue"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="text"
+					name="sizeRange"
+					label="Size Range"
+					placeholder="e.g. Custom Lengths"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="text"
+					name="finish"
+					label="Finish"
+					placeholder="e.g. Matt, Glossy"
+				/>
+
 				<Button form="edit" type="submit" class="mt-4">
 					{#if $delayed}
 						<LoadingBtn name="Saving Changes" />
@@ -437,7 +545,7 @@
 				<DataTable
 					{columns}
 					data={data?.variants}
-					class="w-6xl!"
+	
 					fileName="{data?.product?.name} - Variants"
 					search={true}
 				/>

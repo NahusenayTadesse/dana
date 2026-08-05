@@ -94,9 +94,17 @@ export const products = mysqlTable('products', {
 	supplierId: int('supplier_id').references(() => productSuppliers.id),
 	reorderLevel: int('reorder_level'),
 
+	// How this product is sold: by piece count ("quantity"), by length (e.g.
+	// running meters), or both at once (e.g. N pieces each of length X).
+	soldBy: mysqlEnum('sold_by', ['quantity', 'length', 'both']).notNull().default('quantity'),
+
 	// Technical specifications
-	thickness: varchar('thickness', { length: 100 }), // e.g. range in mm
-	width: varchar('width', { length: 100 }),
+	thickness: varchar('thickness', { length: 100 }), // e.g. range in mm — also caps custom quote requests
+	width: varchar('width', { length: 100 }), // also caps custom quote requests
+	// Max length a customer can request in a custom quote (mm/m/ft). No text
+	// range field for this like thickness/width, so it's explicit here.
+	maxLength: decimal('max_length', { precision: 10, scale: 2 }),
+	maxLengthUnit: mysqlEnum('max_length_unit', ['mm', 'm', 'ft']).default('m'),
 	coatingType: varchar('coating_type', { length: 100 }), // e.g. PPGI, GI
 	colorOptions: varchar('color_options', { length: 255 }),
 	sizeRange: varchar('size_range', { length: 100 }),
@@ -119,14 +127,6 @@ export const tags = mysqlTable('tags', {
 export const productTags = mysqlTable('product_tags', {
 	productId: int('product_id').references(() => products.id, { onDelete: 'cascade' }),
 	tagId: int('tag_id').references(() => tags.id, { onDelete: 'cascade' })
-});
-
-export const prices = mysqlTable('prices', {
-	id: int('id').primaryKey().autoincrement(),
-	productId: int('product_id').references(() => products.id, { onDelete: 'cascade' }),
-	price: decimal('price', { precision: 10, scale: 2 }).notNull(),
-	variant: varchar('variant', { length: 255 }).notNull(),
-	imageUrl: varchar('image_url', { length: 255 })	
 });
 
 export const productImages = mysqlTable('product_images', {
@@ -199,8 +199,36 @@ export const productVariants = mysqlTable('product_variants', {
 		table.lengthId
 	)
 ]);
- 
 
+// Standard price book for a variant: instead of one flat price, a variant
+// can carry several rate components (per piece, per meter of length, per
+// unit width/thickness, a color surcharge, ...). Whichever basis a product
+// actually sells by (see products.soldBy) get their rate row here, and the
+// sales person combines them when building a priceOffers.subtotal.
+export const variantPrices = mysqlTable(
+	'variant_prices',
+	{
+		id: int('id').primaryKey().autoincrement(),
+		variantId: int('variant_id')
+			.notNull()
+			.references(() => productVariants.id, { onDelete: 'cascade' }),
+		basis: mysqlEnum('basis', [
+			'quantity',
+			'length',
+			'width',
+			'thickness',
+			'color',
+			'weight', // price per kg/ton — common for sheet/coil steel
+			'area' // price per m² — common for roofing/flat sheet
+		]).notNull(),
+		price: decimal('price', { precision: 12, scale: 2 }).notNull(), // rate for this basis, e.g. price/meter for 'length'
+		// Client's source price sheet is inconsistent about this, so default to
+		// false rather than assuming — must be set explicitly per rate.
+		priceIncludesVat: boolean('price_includes_vat').notNull().default(false),
+		...secureFields
+	},
+	(table) => [uniqueIndex('variant_prices_variant_basis_unique').on(table.variantId, table.basis)]
+);
 
 export const lengths = mysqlTable('lengths', {
 	id: int('id').primaryKey().autoincrement(),
@@ -226,6 +254,11 @@ export const customers = mysqlTable('customers', {
 
 		.references(() => user.id),
 	address: varchar('address', { length: 255 }),
+
+	// B2B wholesale commonly runs on net terms rather than pay-on-order.
+	creditLimit: decimal('credit_limit', { precision: 12, scale: 2 }), // nullable: no credit account if unset
+	creditDays: int('credit_days'), // e.g. 30 for "net 30"
+
 	...secureFields
 });
 
@@ -275,7 +308,21 @@ export const orders = mysqlTable('orders', {
 	id: int('id').autoincrement().primaryKey(),
 	customerId: int('customer_id').references(() => customers.id),
 	status: mysqlEnum('status', ['pending', 'delivered', 'cancelled']),
+	// Tracks quote/custom-spec negotiation separately from fulfillment status
+	// above — a custom request (off-catalog length/color/thickness/width) has
+	// to be approved or rejected by staff before it becomes a real order.
+	requestStatus: mysqlEnum('request_status', ['pending', 'approved', 'rejected']).default(
+		'pending'
+	),
 	transactionId: int('transaction_id').references(() => transactions.id),
+
+	// Delivery — heavy sheet/coil steel is trucked out, and the drop-off is
+	// often not the customer's billing address and gets negotiated separately.
+	deliveryAddress: varchar('delivery_address', { length: 255 }), // nullable: falls back to customer.address if unset
+	deliveryDate: date('delivery_date'),
+	freightCost: decimal('freight_cost', { precision: 12, scale: 2 }),
+	freightPaidBy: mysqlEnum('freight_paid_by', ['company', 'customer']).default('customer'),
+
 	...secureFields
 });
 
@@ -283,10 +330,150 @@ export const orderItems = mysqlTable('order_items', {
 	id: int('id').autoincrement().primaryKey(),
 	orderId: int('order_id').references(() => orders.id),
 	productId: int('product_id').references(() => products.id),
-	quantity: int('quantity').notNull(),
+
+	// Piece count, e.g. "10 sheets". Nullable — a pure length sale (e.g. "50m
+	// of coil") may not have a meaningful piece count.
+	quantity: int('quantity'),
+
+	// Length sold, e.g. "50" meters, or "6" per piece when combined with
+	// quantity above (10 pieces x 6m each). Nullable — a pure quantity sale
+	// doesn't need this. At least one of quantity/length must be set.
+	length: decimal('length', { precision: 10, scale: 2 }),
+	lengthUnit: mysqlEnum('length_unit', ['mm', 'm', 'ft']).default('m'),
+
+	// Customer's requested spec — a custom quote isn't limited to an existing
+	// productVariants row, so these are captured directly on the line item.
+	// variantId below becomes an optional pointer to the closest catalog
+	// suggestion rather than the source of truth for what was requested.
+	colorId: int('color_id').references(() => colors.id, { onDelete: 'set null' }),
+	thickness: decimal('thickness', { precision: 10, scale: 3 }),
+	thicknessUnit: mysqlEnum('thickness_unit', ['mm', 'gauge']).default('mm'),
+	width: decimal('width', { precision: 10, scale: 2 }),
+	widthUnit: mysqlEnum('width_unit', ['mm', 'cm', 'm', 'in', 'ft']).default('mm'),
+	weight: decimal('weight', { precision: 12, scale: 3 }),
+	weightUnit: mysqlEnum('weight_unit', ['kg', 'ton']).default('kg'),
+
+	// Which dimension `price` is a rate against — quantity/length/width/etc all
+	// being independently set above would otherwise leave the total ambiguous.
+	// Snapshotted from variantPrices.basis when the line is priced.
+	priceBasis: mysqlEnum('price_basis', [
+		'quantity',
+		'length',
+		'width',
+		'thickness',
+		'color',
+		'weight',
+		'area'
+	])
+		.notNull()
+		.default('quantity'),
 	price: decimal('price', { precision: 10, scale: 2 }),
+	// Snapshotted from variantPrices.priceIncludesVat — determines whether the
+	// whole-order price offer adds 15% on top of this line or not.
+	priceIncludesVat: boolean('price_includes_vat').notNull().default(false),
 	amount: varchar('amount', { length: 255 }).notNull(),
+	// Suggested catalog variant closest to the requested spec — no longer the
+	// authoritative source, just a hint for staff during negotiation.
 	variantId: int('variant_id').references(() => productVariants.id),
+	...secureFields
+});
+
+export const promoCodes = mysqlTable('promo_codes', {
+	id: int('id').primaryKey().autoincrement(),
+	code: varchar('code', { length: 50 }).notNull().unique(),
+	discountPercentage: decimal('discount_percentage', { precision: 5, scale: 2 }).notNull(),
+	reason: varchar('reason', { length: 255 }), // e.g. "New Year promo", "reseller partner"
+	startsAt: timestamp('starts_at'),
+	expiresAt: timestamp('expires_at'),
+	maxUses: int('max_uses'), // nullable: unlimited if not set
+	timesUsed: int('times_used').notNull().default(0),
+	...secureFields
+});
+
+// A sales negotiation on an order can go through several rounds — each round
+// is its own row here (bumping `revision`), and `status` marks which one the
+// customer actually accepted. One offer covers the WHOLE order (every line in
+// orderItems), not a single product — the per-line spec/price already lives
+// on orderItems itself; this table is the resulting financial envelope.
+export const priceOffers = mysqlTable(
+	'price_offers',
+	{
+		id: int('id').primaryKey().autoincrement(),
+		orderId: int('order_id')
+			.notNull()
+			.references(() => orders.id, { onDelete: 'cascade' }),
+		revision: int('revision').notNull().default(1),
+		staffId: int('staff_id').references(() => staff.id), // salesperson who made the offer
+
+		// Sum of every order line's VAT-exclusive amount, before discount. Lines
+		// priced from a variantPrices rate that already includes VAT still
+		// contribute their VAT-exclusive equivalent here (backed out at 15%) so
+		// this figure is always a clean pre-tax number.
+		subtotal: decimal('subtotal', { precision: 12, scale: 2 }).notNull(),
+
+		// Sales person's negotiated discount off the subtotal, plus an optional
+		// promo code stacked on top. Applied proportionally to both the
+		// VAT-exclusive and VAT-inclusive totals below.
+		discountPercentage: decimal('discount_percentage', { precision: 5, scale: 2 }),
+		discountAmount: decimal('discount_amount', { precision: 12, scale: 2 }),
+		promoCodeId: int('promo_code_id').references(() => promoCodes.id, { onDelete: 'set null' }),
+
+		// The two headline figures the sales person actually needs to quote —
+		// computed per-line (lines already VAT-inclusive don't get 15% added
+		// again) then summed, after discount.
+		priceExcludingVat: decimal('price_excluding_vat', { precision: 12, scale: 2 }).notNull(),
+		vatRate: decimal('vat_rate', { precision: 5, scale: 2 }).notNull().default('15.00'),
+		vatAmount: decimal('vat_amount', { precision: 12, scale: 2 }).notNull(),
+		priceIncludingVat: decimal('price_including_vat', { precision: 12, scale: 2 }).notNull(),
+
+		withholdingRate: decimal('withholding_rate', { precision: 5, scale: 2 })
+			.notNull()
+			.default('3.00'),
+		withholdingAmount: decimal('withholding_amount', { precision: 12, scale: 2 }),
+		// Final payable figure: priceIncludingVat minus withholdingAmount.
+		total: decimal('total', { precision: 12, scale: 2 }).notNull(),
+
+		paymentTerms: varchar('payment_terms', { length: 255 }), // free text — no fixed set of terms
+		validityDays: int('validity_days'), // how many days this offer stays valid for
+		// % of total due upfront before the rest is invoiced/delivered — most
+		// clients still pay in full, hence the 100 default.
+		advancePaymentPercentage: decimal('advance_payment_percentage', { precision: 5, scale: 2 })
+			.notNull()
+			.default('100.00'),
+
+		status: mysqlEnum('status', ['pending', 'accepted', 'rejected']).notNull().default('pending'),
+		...secureFields
+	},
+	(table) => [uniqueIndex('price_offers_order_revision_unique').on(table.orderId, table.revision)]
+);
+
+// Post-dispatch correction to an order's total — e.g. a shortfall found on
+// delivery, a damaged item credited back, a freight surcharge missed at
+// invoicing. Each row is one line of adjustment; the order's true total is
+// the accepted priceOffers.total plus/minus every approved row here.
+export const orderAdjustments = mysqlTable('order_adjustments', {
+	id: int('id').primaryKey().autoincrement(),
+	orderId: int('order_id')
+		.notNull()
+		.references(() => orders.id, { onDelete: 'cascade' }),
+	type: mysqlEnum('type', ['deduction', 'addition']).notNull(),
+	amount: decimal('amount', { precision: 12, scale: 2 }).notNull(), // always positive; direction comes from `type`
+	reason: varchar('reason', { length: 255 }).notNull(),
+	notes: text('notes'), // longer explanation if reason alone isn't enough
+	causedBy: mysqlEnum('caused_by', ['customer', 'company']).notNull(), // whose error/request this corrects — matters for accounting/blame tracking
+
+	// Adjustments touch real money, so they go through the same approval gate
+	// as a price offer before they're allowed to change what's owed.
+	status: mysqlEnum('status', ['pending', 'approved', 'rejected']).notNull().default('pending'),
+	approvedBy: varchar('approved_by', { length: 255 }).references(() => user.id, {
+		onDelete: 'set null'
+	}),
+	approvedAt: timestamp('approved_at'),
+
+	// Once approved and actually settled (refund issued / extra charge paid),
+	// link the transaction that moved the money.
+	transactionId: int('transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+
 	...secureFields
 });
 
@@ -386,6 +573,12 @@ export const purchaseOrderItems = mysqlTable('purchase_order_items', {
 
 
 
+// A quote request is the customer's inquiry envelope — the actual products
+// being asked about are a whole order's worth of lines, not a single
+// product/variant (that was the old design: one quoteRequests row per
+// product, which fell apart the moment a customer wanted more than one
+// item). `orderId` is the cart/order this inquiry is for; the real line
+// items — product, spec, quantity — live on that order's orderItems.
 export const quoteRequests = mysqlTable('quote_requests', {
 	id: int('id').primaryKey().autoincrement(),
 	name: varchar('name', { length: 255 }).notNull(),
@@ -395,24 +588,16 @@ export const quoteRequests = mysqlTable('quote_requests', {
 	companyName: varchar('company_name', { length: 255 }),
 
 	customerId: int('customer_id').references(() => customers.id, { onDelete: 'set null' }), // link if requester is an existing customer
-	productId: int('product_id').references(() => products.id, { onDelete: 'set null' }),
-	categoryId: int('category_id').references(() => productCategories.id, {
-		onDelete: 'set null'
-	}),
-	quantityEstimate: varchar('quantity_estimate', { length: 100 }),
+	orderId: int('order_id').references(() => orders.id, { onDelete: 'set null' }), // the whole cart/order this quote is for
 	message: text('message'),
-
 
 	status: mysqlEnum('status', ['new', 'contacted', 'quoted', 'converted', 'lost']).default(
 		'new'
 	),
-	orderId: int('order_id').references(() => orders.id, { onDelete: 'set null' }), // set once quote converts into a real order
 	seen: boolean('seen').default(false),
-	
-	variantId: int('variant_id').references(() => productVariants.id, { onDelete: 'set null' }), 
+
 	...secureFields
 });
-
 
 export const quoteReplies = mysqlTable('quote_replies', {
 	id: int('id').primaryKey().autoincrement(),
@@ -422,10 +607,9 @@ export const quoteReplies = mysqlTable('quote_replies', {
 	subject: varchar('subject', { length: 255 }).notNull(),
 	message: text('message').notNull(), // the rich-text email body sent to the customer
 
-	// Nullable — not every reply is a price quote (e.g. "we're reviewing your request").
-	// Both need to be present together to actually finalize an order.
-	quotedUnitPrice: decimal('quoted_unit_price', { precision: 10, scale: 2 }),
-	quotedQuantity: int('quoted_quantity'),
+	// Which whole-order price offer (see priceOffers) this reply communicated —
+	// not every reply is a priced one (e.g. "we're reviewing your request").
+	priceOfferId: int('price_offer_id').references(() => priceOffers.id, { onDelete: 'set null' }),
 
 	// Set once this reply's price results in a real order + payment link being sent
 	orderId: int('order_id').references(() => orders.id, { onDelete: 'set null' }),

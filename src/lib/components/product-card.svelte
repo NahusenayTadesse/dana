@@ -15,18 +15,16 @@
 		colorName: string | null;
 		colorHex: string | null;
 		widthValue: string | number | null;
-		widthUnit: string | null;
+		widthUnit: 'mm' | 'cm' | 'm' | 'in' | 'ft' | null;
 		widthLabel: string | null;
 		thicknessValue: string | number | null;
-		thicknessUnit: string | null;
+		thicknessUnit: 'mm' | 'gauge' | null;
 		// Optional — only present if the shop query also joins `lengths`
 		lengthValue?: string | number | null;
-		lengthUnit?: string | null;
+		lengthUnit?: 'mm' | 'm' | 'ft' | null;
 		lengthLabel?: string | null;
 		isCustomLength?: boolean;
 	};
-
-	type ColorSwatch = { id: number | null; name: string | null; hex: string | null };
 
 	type Props = {
 		productId: number;
@@ -42,7 +40,7 @@
 		maxPrice: number | null;
 		hasQuoteOnlyVariant: boolean;
 		totalQuantity: number;
-		colorSwatches?: ColorSwatch[];
+		soldBy?: 'quantity' | 'length' | 'both' | null;
 		variants?: Variant[];
 	};
 
@@ -60,9 +58,13 @@
 		maxPrice,
 		hasQuoteOnlyVariant,
 		totalQuantity,
-		colorSwatches = [],
+		soldBy,
 		variants = []
 	}: Props = $props();
+
+	// Length-sold products list a rate, not a flat price — show the unit so
+	// it doesn't read as a suspiciously cheap flat price.
+	const priceUnitSuffix = $derived(soldBy === 'length' || soldBy === 'both' ? '/m' : '');
 
 	const LOW_STOCK_THRESHOLD = 5;
 
@@ -123,11 +125,6 @@
 			: 0
 	);
 
-	function selectColorSwatch(colorId: number | null) {
-		const match = variants.find((v) => v.colorId === colorId);
-		if (match) selectedVariantId = match.variantId;
-	}
-
 	function addToCart() {
 		if (justAdded || !selectedVariant || selectedVariant.price === null) return;
 
@@ -137,10 +134,21 @@
 			productName,
 			sku: selectedVariant.sku,
 			price: Number(selectedVariant.price),
+			priceIncludesVat: false,
+			colorId: selectedVariant.colorId,
+			colorName: selectedVariant.colorName,
+			width: selectedVariant.widthValue != null ? Number(selectedVariant.widthValue) : null,
+			widthUnit: selectedVariant.widthUnit,
+			thickness: selectedVariant.thicknessValue != null ? Number(selectedVariant.thicknessValue) : null,
+			thicknessUnit: selectedVariant.thicknessUnit,
+			length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
+			lengthUnit: selectedVariant.lengthUnit ?? null,
+			isCustomLength: selectedVariant.isCustomLength,
 			specLabel: variantLabel(selectedVariant),
 			imageUrl: selectedVariant.imageUrl
 		});
 
+		cart.open();
 		justAdded = true;
 		toast.success(m.product_card_added_to_cart({ productName }), {
 			description: m.product_card_total_in_cart({ total: quantityInCart + 1 })
@@ -245,11 +253,11 @@
 			{#if isQuoteOnly}
 				{m.product_card_contact_for_quote()}
 			{:else if displayPrice !== null}
-				ETB {displayPrice?.toLocaleString()}
+				ETB {displayPrice?.toLocaleString()}{priceUnitSuffix}
 			{:else if minPrice !== null}
 				{minPrice === maxPrice
-					? `ETB ${minPrice?.toLocaleString()}`
-					: m.product_card_price_from({ price: minPrice?.toLocaleString() ?? '' })}
+					? `ETB ${minPrice?.toLocaleString()}${priceUnitSuffix}`
+					: m.product_card_price_from({ price: minPrice?.toLocaleString() ?? '' }) + priceUnitSuffix}
 			{:else}
 				{m.product_card_contact_for_pricing()}
 			{/if}
@@ -268,25 +276,9 @@
 			</div>
 		{/if}
 
-		<!-- Color swatches — real hex values from the colors table, no more string guessing -->
-		{#if colorSwatches.length > 0}
-			<div class="mt-3 flex flex-wrap gap-1.5">
-				{#each colorSwatches as sw (sw.id)}
-					<button
-						type="button"
-						title={sw.name ?? ''}
-						onclick={() => selectColorSwatch(sw.id)}
-						class="h-4.5 w-4.5 rounded-md border transition-transform hover:scale-110 {selectedVariant?.colorId ===
-						sw.id
-							? 'border-blue-600 ring-2 ring-blue-500/40 dark:border-blue-400'
-							: 'border-slate-300 dark:border-white/20'}"
-						style:background-color={sw.hex ?? '#ccc'}
-					></button>
-				{/each}
-			</div>
-		{/if}
-
-		<!-- Variant picker: color + width + thickness + length combo -->
+		<!-- Variant picker: full spec detail (colour/width/thickness/length) — the
+		     card no longer shows colour swatches on its own; pick a variant here
+		     or open the product page for the full detail view. -->
 		{#if hasVariants}
 			<div class="mt-3 w-full">
 				<Select
@@ -334,7 +326,7 @@
 		<div class="mt-4.5 flex gap-2">
 			{#if isQuoteOnly}
 				<a
-					href="/quote?productId={productId}{selectedVariant
+					href="/quotes?productId={productId}{selectedVariant
 						? `&variantId=${selectedVariant.variantId}`
 						: ''}"
 					class="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 p-3 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"

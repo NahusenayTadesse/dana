@@ -42,6 +42,17 @@
 	});
 
 	let images = $state([]);
+
+	const soldByItems = [
+		{ value: 'quantity', name: 'Quantity (per piece)' },
+		{ value: 'length', name: 'Length (e.g. per meter)' },
+		{ value: 'both', name: 'Both' }
+	];
+	const lengthUnitItems = [
+		{ value: 'mm', name: 'mm' },
+		{ value: 'm', name: 'm' },
+		{ value: 'ft', name: 'ft' }
+	];
 </script>
 
 <svelte:head>
@@ -208,6 +219,16 @@
 			<InputComp
 				{form}
 				{errors}
+				type="select"
+				name="soldBy"
+				label="Sold By"
+				placeholder="Select how this product is sold"
+				items={soldByItems}
+			/>
+
+			<InputComp
+				{form}
+				{errors}
 				type="text"
 				name="thickness"
 				label="Thickness"
@@ -221,6 +242,25 @@
 				name="width"
 				label="Width"
 				placeholder="e.g. 1219mm"
+			/>
+
+			<InputComp
+				{form}
+				{errors}
+				type="number"
+				name="maxLength"
+				label="Max Order Length"
+				placeholder="Cap for custom quote requests"
+			/>
+
+			<InputComp
+				{form}
+				{errors}
+				type="select"
+				name="maxLengthUnit"
+				label="Max Length Unit"
+				placeholder="Select unit"
+				items={lengthUnitItems}
 			/>
 
 			<InputComp
