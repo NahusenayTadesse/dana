@@ -3,7 +3,7 @@ import { edit } from './schema.js';
 import { db } from '$lib/server/db';
 import { orders, customers, paymentMethods, user } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
-import type { PageServerLoad } from '../$types';
+import type { PageServerLoad } from './$types';
 import { superValidate } from 'sveltekit-superforms';
 import { type Actions } from '@sveltejs/kit';
 import { fail, message } from 'sveltekit-superforms';
@@ -118,7 +118,10 @@ export const actions: Actions = {
 					.where(eq(customers.id, Number(id)))
 					.then((rows) => rows[0]);
 
-				await tx.update(user).set({ email }).where(eq(user.id, userId.id));
+				// Guest customers have no linked login account — nothing to sync.
+				if (userId?.id) {
+					await tx.update(user).set({ email }).where(eq(user.id, userId.id));
+				}
 			});
 			// Stay on the same page and set a flash message
 			return message(form, { type: 'success', text: 'Customer updated Successfully Added' });
@@ -134,17 +137,13 @@ export const actions: Actions = {
 
 		try {
 			if (!id) {
-				setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
+				setFlash({ type: 'error', message: 'Unexpected Error: Customer ID not provided' }, cookies);
 				return fail(400);
 			}
 
-			await db.delete(customers).where(eq(customers.id, id));
+			await db.delete(customers).where(eq(customers.id, Number(id)));
 
 			setFlash({ type: 'success', message: 'Customer Deleted Successfully!' }, cookies);
-			return message(form, {
-				type: 'success',
-				text: 'Customer Deleted Successfully!'
-			});
 		} catch (err) {
 			console.error('Error deleting customer:', err);
 			setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);

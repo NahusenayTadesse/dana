@@ -35,7 +35,7 @@ export const actions: Actions = {
 					.set({
 						title,
 						slug,
-						category,
+						categoryId: category,
 						excerpt,
 						content,
 						featuredImage,
@@ -48,7 +48,7 @@ export const actions: Actions = {
 					.set({
 						title,
 						slug,
-						category,
+						categoryId: category,
 						excerpt,
 						content,
 
@@ -70,7 +70,7 @@ export const actions: Actions = {
 
 		try {
 			if (!id) {
-				setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
+				setFlash({ type: 'error', message: 'Unexpected Error: Blog ID not provided' }, cookies);
 				return fail(400);
 			}
 
@@ -100,7 +100,7 @@ export const actions: Actions = {
 			}
 
 			await db.transaction(async (tx) => {
-				let galleryImages = [];
+				let galleryImages: string[] = [];
 
 				// 1. Upload new files if they exist
 				if (gallery && gallery.length > 0) {
@@ -139,79 +139,10 @@ export const actions: Actions = {
 				{ status: 500 }
 			);
 		}
-	},
-	editPrice: async ({ request }) => {
-		const form = await superValidate(request, zod4(editPrice));
-
-		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Invalid form data' });
-		}
-
-		const { id, price, amount } = form.data;
-
-		try {
-			await db
-				.update(priceList)
-				.set({
-					id,
-					price: String(price),
-					amount
-				})
-				.where(eq(priceList.id, id));
-
-			return message(form, { type: 'success', text: 'Product Price updated Successfully!' });
-		} catch (err) {
-			console.error('Error editing product price:', err);
-			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
-		}
-	},
-	addPrice: async ({ request, params }) => {
-		const form = await superValidate(request, zod4(addPrice));
-		const { id } = params;
-
-		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Invalid form data' });
-		}
-
-		const { price, amount } = form.data;
-
-		try {
-			await db.insert(priceList).values({
-				productId: Number(id),
-				price: String(price),
-				amount
-			});
-
-			return message(form, { type: 'success', text: 'Product Price added Successfully!' });
-		} catch (err) {
-			console.error('Error adding product price:', err);
-			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
-		}
-	},
-	deletePrice: async ({ request }) => {
-		const form = await superValidate(request, zod4(editPrice));
-
-		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Invalid form data' });
-		}
-
-		const { id, price, amount } = form.data;
-
-		try {
-			await db.delete(priceList).where(eq(priceList.id, id));
-
-			return message(form, {
-				type: 'success',
-				text: `Variant ${amount} with ${price} price deleted Successfully!`
-			});
-		} catch (err) {
-			console.error('Error deleting Variant price:', err);
-			return message(form, { type: 'error', text: `Unexpected Error: ${err?.message}` });
-		}
 	}
 };
 
-const uploadGallery = async (gallery: File[] | undefined) => {
+const uploadGallery = async (gallery: File[]) => {
 	try {
 		// 1. Map each file to the upload promise
 		const uploadPromises = gallery.map(async (file) => {

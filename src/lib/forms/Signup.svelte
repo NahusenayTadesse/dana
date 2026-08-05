@@ -80,7 +80,7 @@
 				type="select"
 				items={[
 					 { value: 'individual', name: m.signup_type_customer()},
-					 { value: 'business', name: m.signup_type_business()},
+					 { value: 'company', name: m.signup_type_business()},
 				]}
 				{form}
 				{errors}
@@ -88,7 +88,7 @@
 			/>
 		
 		
-	{#if $form.type === 'business'}
+	{#if $form.type === 'company'}
 			   
 		<InputComp
 									label={m.checkout_tin_label()}

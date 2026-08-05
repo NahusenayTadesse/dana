@@ -54,7 +54,7 @@ export const actions: Actions = {
 				createdBy: locals?.user?.id
 			});
 
-			return message(form, { type: 'success', text: 'Supplier   Successfully Added' });
+			return message(form, { type: 'success', text: 'Supplier Successfully Added' });
 		} catch (err: any) {
 			return message(form, {
 				type: 'error',
@@ -75,17 +75,16 @@ export const actions: Actions = {
 				.update(supplySuppliers)
 				.set({ name, phone, description, isActive: status, createdBy: locals?.user?.id })
 				.where(eq(supplySuppliers.id, Number(id)));
-			return message(form, { type: 'success', text: 'Department Successfully Updated' });
+			return message(form, { type: 'success', text: 'Supplier Successfully Updated' });
 		} catch (err: any) {
-			if (err.code === 'ER_DUP_ENTRY') return;
-			setError(form, 'name', 'Supplier name already exists.');
-			return message(form, {
-				type: 'error',
-				text:
-					err.code === 'ER_DUP_ENTRY'
-						? 'Supplier name is already taken. Please choose another one.'
-						: err.message
-			});
+			if (err.code === 'ER_DUP_ENTRY') {
+				setError(form, 'name', 'Supplier name already exists.');
+				return message(form, {
+					type: 'error',
+					text: 'Supplier name is already taken. Please choose another one.'
+				});
+			}
+			return message(form, { type: 'error', text: err.message });
 		}
 	}
 };

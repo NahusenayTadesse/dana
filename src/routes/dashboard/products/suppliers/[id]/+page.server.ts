@@ -43,7 +43,7 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: 'Please check the form for Errors' });
 		}
 
-		const { name, subcity, email, phone, description, status } = form.data;
+		const { name, email, phone, description, status } = form.data;
 
 		try {
 			await db

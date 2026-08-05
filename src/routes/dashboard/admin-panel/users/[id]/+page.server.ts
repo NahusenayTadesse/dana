@@ -1,4 +1,4 @@
-import { message, superValidate } from 'sveltekit-superforms';
+import { message, setError, superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { editUserSchema as schema } from './schema';
 
@@ -41,15 +41,19 @@ export const load: PageServerLoad = async ({ params }) => {
 		})
 		.from(roles);
 
-	const permissionList = await db
-		.select({
-			id: permissions.id,
-			name: permissions.name,
-			description: permissions.description
-		})
-		.from(permissions)
-		.innerJoin(rolePermissions, eq(permissions.id, rolePermissions.permissionId))
-		.where(eq(rolePermissions.roleId, singleUser.roleId));
+	// No role assigned yet — skip the query rather than pass null into eq(),
+	// which would compile to `= NULL` (always false) instead of an empty list.
+	const permissionList = singleUser.roleId
+		? await db
+				.select({
+					id: permissions.id,
+					name: permissions.name,
+					description: permissions.description
+				})
+				.from(permissions)
+				.innerJoin(rolePermissions, eq(permissions.id, rolePermissions.permissionId))
+				.where(eq(rolePermissions.roleId, singleUser.roleId))
+		: [];
 
 	return {
 		singleUser,
@@ -120,7 +124,7 @@ export const actions: Actions = {
 
 		try {
 			if (!id) {
-				setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
+				setFlash({ type: 'error', message: 'Unexpected Error: User ID not provided' }, cookies);
 				return fail(400);
 			}
 
@@ -130,7 +134,7 @@ export const actions: Actions = {
 		} catch (err) {
 			console.error('Error deleting user:', err);
 			setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
-			return message(form, { type: 'error', text: 'Unexpected Error: ' + err?.message });
+			return fail(500);
 		}
 	}
 };

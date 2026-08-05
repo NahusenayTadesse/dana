@@ -6,7 +6,7 @@ export const add = z.object({
 	phone: z.string().optional(), // quote_requests.phone is NOT NULL
 	tinNo: z.coerce.string().min(10).max(10).optional(),
 	docs: z.file().max(10000000).optional(), // not needed to request a quote — keep optional
-	type: z.enum(['business', 'individual'], 'Customer type is required').default('individual'),
+	type: z.enum(['company', 'individual'], 'Customer type is required').default('individual'),
 
 	selectedProducts: z
 		.object({

@@ -7,6 +7,6 @@ export const add = z.object({
 	password: z.string('Password is required!'),
 	tinNo: z.string().min(10).max(10).optional(),
 	docs: z.file().max(10000000).optional(),
-	type: z.enum(['business', 'individual'], 'Customer type is required').default('individual')
+	type: z.enum(['company', 'individual'], 'Customer type is required').default('individual')
 
 });
