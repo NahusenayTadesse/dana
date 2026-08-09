@@ -481,6 +481,32 @@
 				<InputComp
 					{form}
 					{errors}
+					type="checkbox"
+					name="isLengthCustomizable"
+					label="Length Adjustable by Customer"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="number"
+					name="minLength"
+					label="Min Length"
+					placeholder="Floor for the length stepper"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
+					type="number"
+					name="lengthStep"
+					label="Length Step"
+					placeholder="Amount each +/- press adjusts by"
+				/>
+
+				<InputComp
+					{form}
+					{errors}
 					type="text"
 					name="coatingType"
 					label="Coating Type"

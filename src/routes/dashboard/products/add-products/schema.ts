@@ -107,6 +107,18 @@ export const add = z.object({
 		z.coerce.number().positive('Max length must be a positive number.').nullable()
 	),
 	maxLengthUnit: z.enum(['mm', 'm', 'ft']).default('m'),
+	// Lets the storefront's length stepper (e.g. /buy) dial length up/down
+	// freely between minLength and maxLength in lengthStep increments,
+	// instead of only offering the catalog's fixed length variants.
+	isLengthCustomizable: z.boolean().default(false),
+	minLength: z.preprocess(
+		emptyToNull,
+		z.coerce.number().positive('Min length must be a positive number.').nullable()
+	),
+	lengthStep: z.preprocess(
+		emptyToNull,
+		z.coerce.number().positive('Length step must be a positive number.').nullable()
+	),
 	coatingType: z.string().max(100).optional().nullable(),
 	colorOptions: z.string().max(255).optional().nullable(),
 	sizeRange: z.string().max(100).optional().nullable(),

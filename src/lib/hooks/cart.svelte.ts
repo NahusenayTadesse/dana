@@ -122,6 +122,43 @@ class UseCart {
 		}
 	};
 
+	/**
+	 * Swap a line to a different variant of the same product (e.g. a color or
+	 * length change) while keeping its quantity and its position in the list.
+	 * If the target variant is already a separate line, its quantity absorbs
+	 * this one instead of leaving two rows for the same variant.
+	 */
+	updateVariant = (oldVariantId: number, newVariant: Omit<CartItem, 'quantity'>) => {
+		const index = this.items.findIndex((i) => i.variantId === oldVariantId);
+		if (index < 0) return;
+
+		const quantity = this.items[index].quantity;
+
+		if (newVariant.variantId !== oldVariantId) {
+			const existingIndex = this.items.findIndex((i) => i.variantId === newVariant.variantId);
+			if (existingIndex >= 0) {
+				this.items[existingIndex].quantity += quantity;
+				this.items.splice(index, 1);
+				return;
+			}
+		}
+
+		this.items[index] = { ...newVariant, quantity };
+	};
+
+	/**
+	 * Dial a line's length in place, for products where length isn't limited
+	 * to fixed catalog stops (products.isLengthCustomizable) — same variant,
+	 * same price, just a different requested length.
+	 */
+	updateLength = (variantId: number, length: number, isCustomLength: boolean) => {
+		const index = this.items.findIndex((i) => i.variantId === variantId);
+		if (index < 0) return;
+
+		this.items[index].length = length;
+		this.items[index].isCustomLength = isCustomLength;
+	};
+
 	clearCart = () => {
 		this.items = [];
 	};

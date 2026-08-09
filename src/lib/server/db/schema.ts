@@ -105,6 +105,13 @@ export const products = mysqlTable('products', {
 	// range field for this like thickness/width, so it's explicit here.
 	maxLength: decimal('max_length', { precision: 10, scale: 2 }),
 	maxLengthUnit: mysqlEnum('max_length_unit', ['mm', 'm', 'ft']).default('m'),
+	// When true, the buyer can dial length up/down freely (e.g. the /buy page's
+	// +/- stepper) instead of only picking between the catalog's fixed length
+	// variants. minLength is the floor for that dial; lengthStep is the
+	// increment each +/- press moves by; maxLength (above) is the ceiling.
+	isLengthCustomizable: boolean('is_length_customizable').notNull().default(false),
+	minLength: decimal('min_length', { precision: 10, scale: 2 }),
+	lengthStep: decimal('length_step', { precision: 10, scale: 2 }),
 	coatingType: varchar('coating_type', { length: 100 }), // e.g. PPGI, GI
 	colorOptions: varchar('color_options', { length: 255 }),
 	sizeRange: varchar('size_range', { length: 100 }),

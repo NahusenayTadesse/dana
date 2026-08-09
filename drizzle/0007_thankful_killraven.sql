@@ -19,7 +19,7 @@ CREATE TABLE `order_adjustments` (
 	`deleted_by` varchar(255),
 	CONSTRAINT `order_adjustments_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
+
 CREATE TABLE `price_offers` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`order_id` int NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE `price_offers` (
 	CONSTRAINT `price_offers_id` PRIMARY KEY(`id`),
 	CONSTRAINT `price_offers_order_revision_unique` UNIQUE(`order_id`,`revision`)
 );
---> statement-breakpoint
+
 CREATE TABLE `promo_codes` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`code` varchar(50) NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE `promo_codes` (
 	CONSTRAINT `promo_codes_id` PRIMARY KEY(`id`),
 	CONSTRAINT `promo_codes_code_unique` UNIQUE(`code`)
 );
---> statement-breakpoint
+
 CREATE TABLE `variant_prices` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`variant_id` int NOT NULL,
@@ -97,43 +97,43 @@ CREATE TABLE `variant_prices` (
 	CONSTRAINT `variant_prices_id` PRIMARY KEY(`id`),
 	CONSTRAINT `variant_prices_variant_basis_unique` UNIQUE(`variant_id`,`basis`)
 );
---> statement-breakpoint
-DROP TABLE `prices`;--> statement-breakpoint
-ALTER TABLE `order_items` MODIFY COLUMN `quantity` int;--> statement-breakpoint
-ALTER TABLE `customers` ADD `credit_limit` decimal(12,2);--> statement-breakpoint
-ALTER TABLE `customers` ADD `credit_days` int;--> statement-breakpoint
-ALTER TABLE `order_items` ADD `length` decimal(10,2);--> statement-breakpoint
-ALTER TABLE `order_items` ADD `length_unit` enum('mm','m','ft') DEFAULT 'm';--> statement-breakpoint
-ALTER TABLE `order_items` ADD `color_id` int;--> statement-breakpoint
-ALTER TABLE `order_items` ADD `thickness` decimal(10,3);--> statement-breakpoint
-ALTER TABLE `order_items` ADD `thickness_unit` enum('mm','gauge') DEFAULT 'mm';--> statement-breakpoint
-ALTER TABLE `order_items` ADD `width` decimal(10,2);--> statement-breakpoint
-ALTER TABLE `order_items` ADD `width_unit` enum('mm','cm','m','in','ft') DEFAULT 'mm';--> statement-breakpoint
-ALTER TABLE `orders` ADD `request_status` enum('pending','approved','rejected') DEFAULT 'pending';--> statement-breakpoint
-ALTER TABLE `orders` ADD `delivery_address` varchar(255);--> statement-breakpoint
-ALTER TABLE `orders` ADD `delivery_date` date;--> statement-breakpoint
-ALTER TABLE `orders` ADD `freight_cost` decimal(12,2);--> statement-breakpoint
-ALTER TABLE `orders` ADD `freight_paid_by` enum('company','customer') DEFAULT 'customer';--> statement-breakpoint
-ALTER TABLE `products` ADD `sold_by` enum('quantity','length','both') DEFAULT 'quantity' NOT NULL;--> statement-breakpoint
-ALTER TABLE `products` ADD `max_length` decimal(10,2);--> statement-breakpoint
-ALTER TABLE `products` ADD `max_length_unit` enum('mm','m','ft') DEFAULT 'm';--> statement-breakpoint
-ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_approved_by_user_id_fk` FOREIGN KEY (`approved_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_transaction_id_transactions_id_fk` FOREIGN KEY (`transaction_id`) REFERENCES `transactions`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_staff_id_staff_id_fk` FOREIGN KEY (`staff_id`) REFERENCES `staff`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_promo_code_id_promo_codes_id_fk` FOREIGN KEY (`promo_code_id`) REFERENCES `promo_codes`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `promo_codes` ADD CONSTRAINT `promo_codes_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `promo_codes` ADD CONSTRAINT `promo_codes_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `promo_codes` ADD CONSTRAINT `promo_codes_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_variant_id_product_variants_id_fk` FOREIGN KEY (`variant_id`) REFERENCES `product_variants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+
+DROP TABLE `prices`;
+ALTER TABLE `order_items` MODIFY COLUMN `quantity` int;
+ALTER TABLE `customers` ADD `credit_limit` decimal(12,2);
+ALTER TABLE `customers` ADD `credit_days` int;
+ALTER TABLE `order_items` ADD `length` decimal(10,2);
+ALTER TABLE `order_items` ADD `length_unit` enum('mm','m','ft') DEFAULT 'm';
+ALTER TABLE `order_items` ADD `color_id` int;
+ALTER TABLE `order_items` ADD `thickness` decimal(10,3);
+ALTER TABLE `order_items` ADD `thickness_unit` enum('mm','gauge') DEFAULT 'mm';
+ALTER TABLE `order_items` ADD `width` decimal(10,2);
+ALTER TABLE `order_items` ADD `width_unit` enum('mm','cm','m','in','ft') DEFAULT 'mm';
+ALTER TABLE `orders` ADD `request_status` enum('pending','approved','rejected') DEFAULT 'pending';
+ALTER TABLE `orders` ADD `delivery_address` varchar(255);
+ALTER TABLE `orders` ADD `delivery_date` date;
+ALTER TABLE `orders` ADD `freight_cost` decimal(12,2);
+ALTER TABLE `orders` ADD `freight_paid_by` enum('company','customer') DEFAULT 'customer';
+ALTER TABLE `products` ADD `sold_by` enum('quantity','length','both') DEFAULT 'quantity' NOT NULL;
+ALTER TABLE `products` ADD `max_length` decimal(10,2);
+ALTER TABLE `products` ADD `max_length_unit` enum('mm','m','ft') DEFAULT 'm';
+ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_approved_by_user_id_fk` FOREIGN KEY (`approved_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_transaction_id_transactions_id_fk` FOREIGN KEY (`transaction_id`) REFERENCES `transactions`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `order_adjustments` ADD CONSTRAINT `order_adjustments_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_staff_id_staff_id_fk` FOREIGN KEY (`staff_id`) REFERENCES `staff`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_promo_code_id_promo_codes_id_fk` FOREIGN KEY (`promo_code_id`) REFERENCES `promo_codes`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `price_offers` ADD CONSTRAINT `price_offers_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `promo_codes` ADD CONSTRAINT `promo_codes_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `promo_codes` ADD CONSTRAINT `promo_codes_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `promo_codes` ADD CONSTRAINT `promo_codes_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_variant_id_product_variants_id_fk` FOREIGN KEY (`variant_id`) REFERENCES `product_variants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `variant_prices` ADD CONSTRAINT `variant_prices_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
 ALTER TABLE `order_items` ADD CONSTRAINT `order_items_color_id_colors_id_fk` FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`) ON DELETE set null ON UPDATE no action;

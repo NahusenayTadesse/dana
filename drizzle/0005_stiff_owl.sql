@@ -16,10 +16,10 @@ CREATE TABLE `quote_replies` (
 	`deleted_by` varchar(255),
 	CONSTRAINT `quote_replies_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
-ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_quote_request_id_quote_requests_id_fk` FOREIGN KEY (`quote_request_id`) REFERENCES `quote_requests`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_replied_by_user_id_user_id_fk` FOREIGN KEY (`replied_by_user_id`) REFERENCES `user`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+
+ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_quote_request_id_quote_requests_id_fk` FOREIGN KEY (`quote_request_id`) REFERENCES `quote_requests`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_replied_by_user_id_user_id_fk` FOREIGN KEY (`replied_by_user_id`) REFERENCES `user`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_created_by_user_id_fk` FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_updated_by_user_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;
 ALTER TABLE `quote_replies` ADD CONSTRAINT `quote_replies_deleted_by_user_id_fk` FOREIGN KEY (`deleted_by`) REFERENCES `user`(`id`) ON DELETE set null ON UPDATE no action;

@@ -64,6 +64,13 @@
       "when": 1785890883581,
       "tag": "0008_lovely_mongoose",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1786268639136,
+      "tag": "0009_new_maverick",
+      "breakpoints": true
     }
   ]
 }

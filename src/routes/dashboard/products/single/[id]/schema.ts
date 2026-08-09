@@ -43,6 +43,15 @@ export const edit = z.object({
 		z.coerce.number().positive('Max length must be a positive number.').nullable()
 	),
 	maxLengthUnit: z.enum(['mm', 'm', 'ft']).default('m'),
+	isLengthCustomizable: z.boolean().default(false),
+	minLength: z.preprocess(
+		emptyToNull,
+		z.coerce.number().positive('Min length must be a positive number.').nullable()
+	),
+	lengthStep: z.preprocess(
+		emptyToNull,
+		z.coerce.number().positive('Length step must be a positive number.').nullable()
+	),
 	coatingType: z.string().max(100).optional().nullable(),
 	colorOptions: z.string().max(255).optional().nullable(),
 	sizeRange: z.string().max(100).optional().nullable(),
