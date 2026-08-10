@@ -1,4 +1,5 @@
 import { setContext, getContext } from 'svelte';
+import { grossOf, netOf, round2, vatOf } from '$lib/vat';
 
 // A cart line is anchored to a specific productVariant — that's the atomic
 // sellable unit (a fixed color+width+thickness+length combo with its own
@@ -10,7 +11,11 @@ export type CartItem = {
 	productId: number;
 	productName: string;
 	sku: string | null;
-	price: number;
+	// Nullable on purpose: a quote-only variant has no listed price, and the DB
+	// hands these back as `string | null` (decimal columns), so declaring a bare
+	// `number` here made the guard in addItem look unreachable to TS while a
+	// real string value sailed straight through it into the totals.
+	price: number | null;
 	priceIncludesVat: boolean;
 	colorId: number | null;
 	colorName: string | null;
@@ -29,6 +34,23 @@ export type CartItem = {
 
 const CART_STORAGE_KEY = 'dana';
 
+/**
+ * Collapse repeated variantIds into one line, summing their quantities —
+ * the same merge addItem() performs, applied to whatever was in storage.
+ */
+function dedupeByVariant(items: CartItem[]): CartItem[] {
+	const byVariant = new Map<number, CartItem>();
+	for (const item of items) {
+		const existing = byVariant.get(item.variantId);
+		if (existing) {
+			existing.quantity += item.quantity ?? 1;
+		} else {
+			byVariant.set(item.variantId, { ...item, quantity: item.quantity ?? 1 });
+		}
+	}
+	return [...byVariant.values()];
+}
+
 class UseCart {
 	items: CartItem[] = $state([]);
 	isOpen: boolean = $state(false);
@@ -36,8 +58,41 @@ class UseCart {
 	/** Total items count */
 	totalItems = $derived(this.items.reduce((sum, item) => sum + item.quantity, 0));
 
-	/** Total price */
-	totalPrice = $derived(this.items.reduce((sum, item) => sum + item.price * item.quantity, 0));
+	// Totals are VAT-aware. A cart can hold a mix of VAT-inclusive and
+	// VAT-exclusive rates (see CartItem.priceIncludesVat), and the old
+	// `totalPrice` summed price × quantity across both — a number that was
+	// neither the net nor the gross figure and matched nothing the server
+	// later computed.
+
+	/** VAT-exclusive total. */
+	subtotalExclVat = $derived(
+		round2(
+			this.items.reduce(
+				(sum, item) => sum + netOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+				0
+			)
+		)
+	);
+
+	/** VAT component across the cart. */
+	vatTotal = $derived(
+		round2(
+			this.items.reduce(
+				(sum, item) => sum + vatOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+				0
+			)
+		)
+	);
+
+	/** VAT-inclusive total — what the customer actually pays. */
+	totalPrice = $derived(
+		round2(
+			this.items.reduce(
+				(sum, item) => sum + grossOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+				0
+			)
+		)
+	);
 
 	constructor() {
 		this.loadFromStorage();
@@ -60,7 +115,15 @@ class UseCart {
 					Array.isArray(parsed) && parsed.every((i) => typeof i?.variantId === 'number');
 
 				if (isValidShape) {
-					this.items = parsed;
+					// Both the cart drawer and the checkout summary iterate with
+					// `{#each cart.items as item (item.variantId)}`. A stored cart
+					// holding two lines with the same variantId therefore throws
+					// Svelte's `each_key_duplicate` on mount and takes the whole
+					// page down, with no way for the user to recover short of
+					// clearing site data. addItem/updateVariant both merge by
+					// variantId so this can't arise in normal use — but a cart
+					// written by an older build, or hand-edited, can.
+					this.items = dedupeByVariant(parsed);
 				} else if (Array.isArray(parsed) && parsed.length > 0) {
 					console.warn('Discarding incompatible cart from a previous version.');
 					localStorage.removeItem(CART_STORAGE_KEY);
@@ -89,7 +152,7 @@ class UseCart {
 	 * each variant already represents one exact sellable spec combination.
 	 */
 	addItem = (item: Omit<CartItem, 'quantity'>, quantity: number = 1) => {
-		if (item.price == null) {
+		if (item.price == null || Number.isNaN(Number(item.price))) {
 			console.error('Refusing to add a quote-only variant (no price) to the cart:', item);
 			return;
 		}

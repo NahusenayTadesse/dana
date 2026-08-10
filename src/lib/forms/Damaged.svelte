@@ -4,7 +4,7 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import type { DamagedForm } from '$lib/ZodSchema';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
@@ -14,7 +14,7 @@
 		data,
 		name = 'item'
 	}: {
-		data: SuperValidated<Infer<DamagedForm>>;
+		data: SuperValidated<DamagedForm>;
 		name: string;
 	} = $props();
 	const { form, errors, enhance, delayed, message } = superForm(data, {});

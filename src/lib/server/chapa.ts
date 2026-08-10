@@ -32,10 +32,6 @@ export async function initializeChapaTransaction(params: InitializeParams) {
 		const finalTitle = title || 'Order Payment';
 		const finalDescription = description || 'Payment for your order';
 		
-		// Log what we're sending
-		console.log('Sanitized title:', finalTitle);
-		console.log('Sanitized description:', finalDescription);
-		
 		const res = await fetch(`${CHAPA_BASE}/transaction/initialize`, {
 			method: 'POST',
 			headers: {
@@ -100,10 +96,9 @@ export async function verifyChapaTransaction(txRef: string) {
 	return data; // data.status === 'success' && data.data.status === 'success' → paid
 }
 
-/**
- * Best-effort check that a webhook POST actually came from Chapa. This is a
- * first line of defense against noise hitting the endpoint — it is NOT what
- * decides whether an order gets marked paid. That decision only ever comes
- * from verifyChapaTransaction() above, called after this check passes.
- */
-// src/lib/server/chapa.ts
+// Webhook signature verification lives in the route that needs it —
+// src/routes/api/chapa/webhook/+server.ts — because it has to hash the RAW
+// request body, which only the handler has access to. As the note there says,
+// that check is a first line of defence against noise hitting the endpoint; it
+// is NOT what decides whether an order is paid. That decision only ever comes
+// from verifyChapaTransaction() above, via settlePaymentAttempt().

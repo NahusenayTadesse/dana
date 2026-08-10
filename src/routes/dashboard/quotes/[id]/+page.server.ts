@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import { superValidate, message, fail } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, desc, inArray, sql } from 'drizzle-orm';
@@ -30,6 +31,7 @@ const spec = (value: string | number | null, unit: string | null) =>
 
 export const load: PageServerLoad = async ({ params }) => {
 	const quoteId = Number(params.id);
+	if (!Number.isInteger(quoteId)) error(404, 'Not found.');
 
 	const quote = await db
 		.select()

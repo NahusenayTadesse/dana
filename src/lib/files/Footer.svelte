@@ -21,7 +21,15 @@
 </script>
 
 <!-- Always-dark footer (kept navy in both themes, matching the reference) -->
-<footer class="relative z-[2] bg-[#0C1B34] text-[#B9CCEC]">
+<!--
+	The fixed overlays reserved no space, so footer content sat permanently
+	underneath them and could not be read or tapped:
+	  · mobile — BottomMenu (h-20, bottom-0) + FloatingChat pill (bottom-22)
+	    covered the phone number, email and address;
+	  · desktop — FloatingChat (lg:bottom-5) covered the copyright line.
+	Hence padding at both breakpoints, larger on mobile where both overlays stack.
+-->
+<footer class="relative z-[2] bg-[#0C1B34] pb-40 text-[#B9CCEC] lg:pb-28">
 	<div class="mx-auto grid max-w-[1280px] gap-10 px-6 py-14 sm:grid-cols-2 md:px-8 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
 		<div>
 			<a href="/" class="inline-flex rounded-xl bg-white px-3 py-2">

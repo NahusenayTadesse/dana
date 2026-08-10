@@ -1,6 +1,6 @@
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { sendEmail, quoteRequestReceivedTemplate, adminNewQuoteRequestTemplate } from '$lib/server/email';
 
 import { SMTP_USER as USER } from '$env/static/private';
@@ -10,7 +10,8 @@ import { add } from './schema';
 import { db } from '$lib/server/db';
 import { quoteRequests, orders, orderItems, products, customers } from '$lib/server/db/schema';
 import type { PageServerLoad, Actions } from './$types';
-import { saveUploadedFile } from '$lib/server/upload';
+import { saveUploadedFile, deleteUploadedFile } from '$lib/server/upload';
+import { resolveOrderLines, OrderLineError } from '$lib/server/orderLines';
 
 export const load: PageServerLoad = async () => {
 	const form = await superValidate(zod4(add));
@@ -46,6 +47,40 @@ export const actions: Actions = {
 		let resolvedPhone: string | undefined;
 		let itemLabel = '';
 
+		// Price/spec resolution happens BEFORE the transaction opens: it only
+		// reads, it's the most likely thing to reject the request, and doing it
+		// here keeps the write transaction as short as possible.
+		let lines;
+		try {
+			lines = await resolveOrderLines(selectedProducts);
+		} catch (err) {
+			return message(
+				form,
+				{
+					type: 'error',
+					text: err instanceof OrderLineError ? err.message : 'Could not process your cart.'
+				},
+				{ status: 400 }
+			);
+		}
+
+		// Uploads are written to disk OUTSIDE the transaction. Doing it inside
+		// meant a rollback left an orphaned file on disk with no row pointing at
+		// it; here, the file is the thing we clean up if the DB write fails.
+		let uploadedDocPath: string | null = null;
+		if (docs) {
+			try {
+				uploadedDocPath = await saveUploadedFile(docs);
+			} catch (err) {
+				console.error('Quote request document upload failed:', err);
+				return message(
+					form,
+					{ type: 'error', text: 'Could not save your uploaded document. Please try again.' },
+					{ status: 500 }
+				);
+			}
+		}
+
 		try {
 			await db.transaction(async (tx) => {
 				// --- find or create the customer ---
@@ -62,7 +97,47 @@ export const actions: Actions = {
 						.limit(1)
 						.then((rows) => rows[0]);
 
-					customerInfo = customer;
+					if (!customer) {
+						// Signed in, but no customers row was ever created for this
+						// user. Previously this fell through with customerInfo
+						// undefined and inserted an order with customerId: NULL —
+						// an order nobody could look up. Create the profile instead.
+						if (!locals.user.email) {
+							throw new Error('Your account has no email on file — please update your profile.');
+						}
+
+						const [inserted] = await tx
+							.insert(customers)
+							.values({
+								name: name ?? locals.user.name ?? locals.user.email,
+								email: locals.user.email,
+								phone,
+								tinNo,
+								docs: uploadedDocPath,
+								type,
+								userId: locals.user.id
+							})
+							.$returningId();
+
+						customerInfo = {
+							value: inserted.id,
+							name: name ?? locals.user.name ?? locals.user.email,
+							email: locals.user.email,
+							phone: phone ?? null
+						};
+					} else {
+						customerInfo = customer;
+
+						// A returning customer's uploaded document used to be
+						// silently dropped — the save only happened on the
+						// brand-new-customer path.
+						if (uploadedDocPath) {
+							await tx
+								.update(customers)
+								.set({ docs: uploadedDocPath })
+								.where(eq(customers.id, customer.value));
+						}
+					}
 				} else {
 					if (!email) {
 						throw new Error('Email is required to submit a quote request.');
@@ -83,16 +158,23 @@ export const actions: Actions = {
 
 					if (doesCustomerExist) {
 						customerInfo = doesCustomerExist;
+
+						// See above — a returning customer's document was being
+						// discarded without any error surfacing to them.
+						if (uploadedDocPath) {
+							await tx
+								.update(customers)
+								.set({ docs: uploadedDocPath })
+								.where(eq(customers.id, doesCustomerExist.value));
+						}
 					} else {
 						if (!name) {
 							throw new Error('Name is required to submit a quote request.');
 						}
 
-						const imageUrl = docs ? await saveUploadedFile(docs) : null;
-
 						const newCustomer = await tx
 							.insert(customers)
-							.values({ name, email, phone, tinNo, docs: imageUrl, type })
+							.values({ name, email, phone, tinNo, docs: uploadedDocPath, type })
 							.$returningId();
 
 						const inserted = newCustomer[0];
@@ -115,24 +197,24 @@ export const actions: Actions = {
 					throw new Error('Missing phone number for quote request — please update your profile.');
 				}
 
-				// --- look up product/category info for the rows + emails ---
-				const productIds = selectedProducts.map((p) => Number(p.product));
+				// --- product names for the notification emails ---
+				// Scoped to the products actually in the cart. This used to
+				// `.from(products)` with no WHERE — a full table scan, inside the
+				// transaction, on every checkout. Existence was already validated
+				// by resolveOrderLines() above.
+				const productIds = [...new Set(lines.map((l) => l.productId))];
 				const productRows = await tx
-					.select({ id: products.id, name: products.name, categoryId: products.categoryId })
-					.from(products);
+					.select({ id: products.id, name: products.name })
+					.from(products)
+					.where(inArray(products.id, productIds));
 
 				const productMap = new Map(productRows.map((p) => [p.id, p]));
 
-				const missingProduct = productIds.find((id) => !productMap.has(id));
-				if (missingProduct !== undefined) {
-					throw new Error(`Product ${missingProduct} no longer exists — please refresh your cart.`);
-				}
-
-				itemLabel = selectedProducts
-					.map((p) => {
-						const name = productMap.get(Number(p.product))?.name ?? `Product #${p.product}`;
-						const spec = p.amount ? ` (${p.amount})` : '';
-						return `${name}${spec} ×${p.quantity}`;
+				itemLabel = lines
+					.map((l) => {
+						const name = productMap.get(l.productId)?.name ?? `Product #${l.productId}`;
+						const spec = l.amount ? ` (${l.amount})` : '';
+						return `${name}${spec} ×${l.quantity}`;
 					})
 					.join(', ');
 
@@ -144,22 +226,25 @@ export const actions: Actions = {
 					.values({ customerId: customerInfo?.value, status: 'pending', requestStatus: 'pending' })
 					.$returningId();
 
+				// Every priced field here came out of the catalog in
+				// resolveOrderLines(), not off the wire.
 				await tx.insert(orderItems).values(
-					selectedProducts.map((p) => ({
+					lines.map((l) => ({
 						orderId: order.id,
-						productId: Number(p.product),
-						variantId: p.variantId ?? null,
-						quantity: p.quantity,
-						amount: p.amount ?? `qty-${p.quantity}`,
-						price: p.price != null ? String(p.price) : null,
-						priceIncludesVat: p.priceIncludesVat ?? false,
-						colorId: p.colorId ?? null,
-						width: p.width != null ? String(p.width) : null,
-						widthUnit: p.widthUnit ?? undefined,
-						thickness: p.thickness != null ? String(p.thickness) : null,
-						thicknessUnit: p.thicknessUnit ?? undefined,
-						length: p.length != null ? String(p.length) : null,
-						lengthUnit: p.lengthUnit ?? undefined
+						productId: l.productId,
+						variantId: l.variantId,
+						quantity: l.quantity,
+						amount: l.amount,
+						price: l.price,
+						priceBasis: l.priceBasis,
+						priceIncludesVat: l.priceIncludesVat,
+						colorId: l.colorId,
+						width: l.width,
+						widthUnit: l.widthUnit,
+						thickness: l.thickness,
+						thicknessUnit: l.thicknessUnit,
+						length: l.length,
+						lengthUnit: l.lengthUnit
 					}))
 				);
 
@@ -179,7 +264,15 @@ export const actions: Actions = {
 				newQuoteId = quote.id;
 			});
 		} catch (err) {
-			console.error('FULL ERROR', err);
+			console.error('Quote request failed:', err);
+
+			// The DB rolled back, so nothing references the uploaded file —
+			// remove it rather than leaving it orphaned on disk.
+			if (uploadedDocPath) {
+				await deleteUploadedFile(uploadedDocPath).catch((cleanupErr) =>
+					console.error('Failed to clean up orphaned upload:', cleanupErr)
+				);
+			}
 
 			return message(
 				form,

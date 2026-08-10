@@ -2,7 +2,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import type { DecideOrder as schema } from './schema';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import { CircleCheckBig, CircleX } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
@@ -12,7 +12,7 @@
 		orderId,
 		requestStatus
 	}: {
-		data: SuperValidated<Infer<schema>>;
+		data: SuperValidated<schema>;
 		orderId: number;
 		requestStatus: string | null;
 	} = $props();

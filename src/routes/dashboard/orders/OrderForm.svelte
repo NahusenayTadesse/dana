@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { toast } from 'svelte-sonner';
 	import { fly } from 'svelte/transition';
 
@@ -46,7 +46,7 @@
 		paymentMethodList = []
 	}: {
 		mode?: 'add' | 'edit';
-		data: SuperValidated<Infer<any>>;
+		data: SuperValidated<any>;
 		order?: Order;
 		orderItems?: LineSource[];
 		customerList?: Item[];

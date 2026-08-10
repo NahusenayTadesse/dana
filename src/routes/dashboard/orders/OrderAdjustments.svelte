@@ -3,7 +3,7 @@
 	import { Save, ReceiptText } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { superForm } from 'sveltekit-superforms';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
@@ -43,8 +43,8 @@
 		orderId: number;
 		adjustments?: Adjustment[];
 		currentTotals: Totals;
-		addData: SuperValidated<Infer<AddAdjustment>>;
-		decideData: SuperValidated<Infer<DecideAdjustmentType>>;
+		addData: SuperValidated<AddAdjustment>;
+		decideData: SuperValidated<DecideAdjustmentType>;
 	} = $props();
 
 	const typeItems = [

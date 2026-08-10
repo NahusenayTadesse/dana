@@ -9,6 +9,11 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import type { PageServerLoad, Actions } from './$types';
 
+/** Currency is 2dp everywhere else (pricing.ts, orderAdjustments.ts) — match it. */
+function round2(n: number): number {
+	return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 export const load: PageServerLoad = async ({ params }) => {
 	const link = await resolvePaymentLink(params.token);
 	if (!link) {
@@ -91,18 +96,19 @@ export const load: PageServerLoad = async ({ params }) => {
 	const advancePercentage = Number(offer.advancePaymentPercentage);
 	// A default of 100% means "pay in full" — no advance option, per the offer.
 	const advanceAvailable = advancePercentage < 100;
-	const advanceAmount = advanceAvailable ? Math.round(total * (advancePercentage / 100)) : total;
+	// round2, not Math.round: whole-unit rounding meant an advance and its
+	// balance could fail to sum to the total, leaving the order permanently a
+	// fraction short of settled.
+	const advanceAmount = advanceAvailable ? round2(total * (advancePercentage / 100)) : total;
 
 	// Anything already collected on this order (a prior advance, a prior full
-	// payment now topped up by an addition adjustment, etc). Keyed off whether
-	// money has actually landed, not the exact enum value — that stays correct
-	// even once an adjustment on top of an already-'paid' order reopens a balance.
-	const amountPaid =
-		transaction.paymentStatus === 'paid' || transaction.paymentStatus === 'partially_paid'
-			? Number(transaction.amount)
-			: 0;
+	// payment now topped up by an addition adjustment, etc). This reads the
+	// dedicated amountPaid column — `amount` is the size of the attempt
+	// currently in flight and is rewritten on every checkout, so using it here
+	// meant an abandoned balance attempt overwrote the record of the advance.
+	const amountPaid = Number(transaction.amountPaid);
 	const isBalancePayment = amountPaid > 0;
-	const remainingBalance = isBalancePayment ? Math.max(0, Math.round(total - amountPaid)) : total;
+	const remainingBalance = isBalancePayment ? Math.max(0, round2(total - amountPaid)) : total;
 
 	return {
 		token: params.token,
@@ -111,7 +117,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		offer,
 		adjusted,
 		customerName: customer.name,
-		alreadyPaid: transaction.paymentStatus === 'paid' && remainingBalance <= 0,
+		alreadyPaid: remainingBalance <= 0 && amountPaid > 0,
 		amount: amountPaid,
 		total,
 		advanceAvailable: advanceAvailable && !isBalancePayment,
@@ -158,14 +164,13 @@ export const actions: Actions = {
 			)[0]?.advancePaymentPercentage ?? 100
 		);
 
-		const amountPaid =
-			transaction.paymentStatus === 'paid' || transaction.paymentStatus === 'partially_paid'
-				? Number(transaction.amount)
-				: 0;
+		// See the load above: amountPaid is the collected total, `amount` is the
+		// in-flight attempt and must never be read as "already paid".
+		const amountPaid = Number(transaction.amountPaid);
 		const isBalancePayment = amountPaid > 0;
 		const advanceAvailable = advancePercentage < 100 && !isBalancePayment;
 
-		if (isBalancePayment && total - amountPaid <= 0) {
+		if (isBalancePayment && round2(total - amountPaid) <= 0) {
 			return fail(400, { message: 'This order has already been paid.' });
 		}
 		if (!isBalancePayment && transaction.paymentStatus === 'paid') {
@@ -176,9 +181,9 @@ export const actions: Actions = {
 		const choice = formData.get('choice'); // 'advance' | 'full'
 		const isAdvance = advanceAvailable && choice === 'advance';
 		const payAmount = isBalancePayment
-			? Math.max(0, Math.round(total - amountPaid))
+			? Math.max(0, round2(total - amountPaid))
 			: isAdvance
-				? Math.round(total * (advancePercentage / 100))
+				? round2(total * (advancePercentage / 100))
 				: total;
 
 		if (isBalancePayment && payAmount <= 0) {
@@ -216,7 +221,10 @@ export const actions: Actions = {
 				lastName: rest.join(' ') || firstName || customer.name,
 				phoneNumber: customer.phone ?? undefined,
 				txRef,
-				callbackUrl: `${url.origin}/pay/${params.token}/complete`,
+				// callbackUrl is the server-to-server webhook — this used to point
+				// at the return PAGE, which meant nothing confirmed the payment if
+				// the customer closed the tab. returnUrl is where the human lands.
+				callbackUrl: `${url.origin}/api/chapa/webhook`,
 				returnUrl: `${url.origin}/pay/${params.token}/complete`,
 				title: `Order #${order.id}`,
 				description: isBalancePayment

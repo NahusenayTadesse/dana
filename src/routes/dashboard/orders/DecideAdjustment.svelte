@@ -3,14 +3,14 @@
 	import { CircleCheckBig, CircleX } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { superForm } from 'sveltekit-superforms';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import type { DecideAdjustment as schema } from './schema';
 
 	let {
 		data,
 		adjustmentId
 	}: {
-		data: SuperValidated<Infer<schema>>;
+		data: SuperValidated<schema>;
 		adjustmentId: number;
 	} = $props();
 

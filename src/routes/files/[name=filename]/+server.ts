@@ -55,6 +55,17 @@ function parseRange(header: string, size: number): { start: number; end: number 
 // ---------------------------------------------------------------------------
 // MIME types
 // ---------------------------------------------------------------------------
+
+/**
+ * The one place a filename is turned into an extension, so the Cache-Control
+ * policy and the MIME lookup can't disagree — they used to parse the same
+ * string separately. Returns '' when there is no extension.
+ */
+function extensionOf(name: string): string {
+	const dot = name.lastIndexOf('.');
+	return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+}
+
 const mimes: Record<string, string> & { lookup: (s: string) => string } = {
 	// Text
 	txt: 'text/plain',
@@ -71,8 +82,19 @@ const mimes: Record<string, string> & { lookup: (s: string) => string } = {
 	webm: 'video/webm',
 	mp4: 'video/mp4',
 	lookup(s: string): string {
-		const ext = s.toLowerCase().split('.').at(-1);
-		return (ext && this[ext]) ?? 'application/octet-stream';
+		const ext = extensionOf(s);
+		// Own-property + typeof guards, because:
+		//  - `(ext && this[ext]) ?? fallback` returned '' for a name ending in
+		//    '.', since ?? doesn't catch the empty string — the response then
+		//    carried an empty Content-Type and browsers fell back to sniffing;
+		//  - an unguarded index hit this map's own `lookup` method (and
+		//    Object.prototype keys), so "x.lookup" stringified a function into
+		//    the header.
+		if (!ext || !Object.prototype.hasOwnProperty.call(this, ext)) {
+			return 'application/octet-stream';
+		}
+		const mime = this[ext];
+		return typeof mime === 'string' ? mime : 'application/octet-stream';
 	}
 };
 
@@ -91,7 +113,7 @@ export async function GET({ params, request }: { params: { name: string }; reque
 	const stats = getCachedStats(file_path);
 	if (!stats) return new Response('not found', { status: 404 });
 
-	const ext = params.name.toLowerCase().split('.').at(-1) ?? '';
+	const ext = extensionOf(params.name);
 	const mimeType = mimes.lookup(params.name);
 	const etag = `W/"${stats.size}-${stats.mtime.getTime()}"`;
 	const lastMod = stats.mtime.toUTCString();

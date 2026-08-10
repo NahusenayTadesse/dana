@@ -59,7 +59,7 @@
 		lengthValue?: string | number | null;
 		lengthUnit?: 'mm' | 'm' | 'ft' | null;
 		lengthLabel?: string | null;
-		isCustomLength?: boolean;
+		isCustomLength?: boolean | null;
 	};
 
 	type RelatedProduct = {
@@ -513,7 +513,20 @@
 
 	<div class="grid grid-cols-1 items-start gap-12 lg:grid-cols-2">
 		<!-- Gallery -->
-		<div class="sticky top-24">
+		<!--
+			Sticky only from lg up, where the grid is genuinely two columns and
+			pinning the gallery beside the configurator is the point.
+
+			On mobile the grid collapses to ONE column, so a sticky gallery stayed
+			pinned at top-24 while the configurator below it scrolled up into the
+			same space — and because this wrapper has no z-index while the gallery
+			card inside it is `relative`, the gallery painted OVER the configurator.
+			The result: every control in the buy panel (colour swatches, the
+			thickness/width/length sliders, quantity, and the "Add to Order Sheet"
+			button) was unclickable on phones at every scroll position — taps
+			landed on the gallery card instead.
+		-->
+		<div class="lg:sticky lg:top-24">
 			<div
 				class="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-xl dark:border-white/10 dark:bg-slate-900/60 dark:shadow-2xl"
 			>

@@ -6,7 +6,7 @@
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import type { DeleteService as schema } from './schema';
 
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
@@ -16,7 +16,7 @@
 		action = '/dashboard/customers?/addCustomer',
 		id
 	}: {
-		data: SuperValidated<Infer<schema>>;
+		data: SuperValidated<schema>;
 		action: string;
 		id: number;
 	} = $props();

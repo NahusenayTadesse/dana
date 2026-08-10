@@ -10,7 +10,7 @@
 	// import { zod4Client } from "sveltekit-superforms/adapters";
 	import type { CreateRoleSchema } from '$lib/ZodSchema';
 	// import { createRoleSchema } from "$lib/ZodSchema";
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 
 	type Permission = { id: string; name: string; description: string }; // whatever shape you use
@@ -19,7 +19,7 @@
 		permissions,
 		action = '?/addRole'
 	}: {
-		data: SuperValidated<Infer<CreateRoleSchema>>;
+		data: SuperValidated<CreateRoleSchema>;
 		permissions: Permission[];
 		action: string;
 	} = $props();

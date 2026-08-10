@@ -2,9 +2,9 @@
   import { onMount } from 'svelte';
 
   // Tuning knobs (can also be passed as props if you prefer)
-  let gap = 30;      // px between dots / grid lines
-  let radius = 130;  // px radius of cursor influence
-  let push = 26;     // max px a dot is pushed away
+  let gap = 42;      // px between dots / grid lines — sparser, so the field reads as texture
+  let radius = 100;  // px radius of cursor influence — a tighter, more local reaction
+  let push = 12;     // max px a dot is pushed away — a nudge rather than a shove
 
   let canvas;
 
@@ -33,8 +33,8 @@
     const draw = () => {
       ctx.clearRect(0, 0, w, h);
 
-      // faint grid lines (lighter than before)
-      ctx.strokeStyle = 'rgba(30,82,168,0.03)';
+      // faint grid lines
+      ctx.strokeStyle = 'rgba(30,82,168,0.015)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let x = gap / 2; x < w; x += gap) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
@@ -53,15 +53,16 @@
           tx = d.bx + Math.cos(a) * f;
           ty = d.by + Math.sin(a) * f;
         }
-        d.x += (tx - d.x) * 0.18;
-        d.y += (ty - d.y) * 0.18;
-        const r = 1.4 + near * 2.2;
+        // slower easing — the field drifts back rather than snapping
+        d.x += (tx - d.x) * 0.10;
+        d.y += (ty - d.y) * 0.10;
+        // dots barely grow near the cursor now (was 1.4 → 3.6px)
+        const r = 1.1 + near * 0.8;
         ctx.beginPath();
         ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
-        // opacity reduced roughly by half in both resting and "near cursor" states
         ctx.fillStyle = near > 0
-          ? `rgba(44,111,214,${0.14 + near * 0.18})`
-          : 'rgba(30,82,168,0.10)';
+          ? `rgba(44,111,214,${0.07 + near * 0.08})`
+          : 'rgba(30,82,168,0.05)';
         ctx.fill();
       }
 
@@ -101,8 +102,11 @@
   }
 
   @keyframes dsBlob {
+    /* drift shortened (30px/-20px → 12px/-8px) and scale pulse nearly removed
+       (1.08 → 1.02), so the blobs read as a still gradient that breathes rather
+       than something visibly moving behind the content */
     0%, 100% { transform: translate(0, 0) scale(1); }
-    50%      { transform: translate(30px, -20px) scale(1.08); }
+    50%      { transform: translate(12px, -8px) scale(1.02); }
   }
   .blob {
     position: fixed;
@@ -114,15 +118,20 @@
   .blob--blue {
     top: -160px; right: -120px;
     width: 560px; height: 560px;
-    /* opacity roughly halved: .28 -> .14 */
-    background: radial-gradient(circle, rgba(44,111,214,.14), transparent 66%);
-    animation: dsBlob 16s ease-in-out infinite;
+    background: radial-gradient(circle, rgba(44,111,214,.07), transparent 66%);
+    animation: dsBlob 30s ease-in-out infinite;
   }
   .blob--red {
     top: 280px; left: -160px;
     width: 480px; height: 480px;
-    /* opacity roughly halved: .14 -> .07 */
-    background: radial-gradient(circle, rgba(229,52,42,.07), transparent 66%);
-    animation: dsBlob 20s ease-in-out infinite reverse;
+    background: radial-gradient(circle, rgba(229,52,42,.035), transparent 66%);
+    animation: dsBlob 38s ease-in-out infinite reverse;
+  }
+
+  /* Respect users who have asked the OS for less motion: keep the static
+     gradient, drop the drift and the cursor-reactive field entirely. */
+  @media (prefers-reduced-motion: reduce) {
+    .blob { animation: none; }
+    canvas { display: none; }
   }
 </style>

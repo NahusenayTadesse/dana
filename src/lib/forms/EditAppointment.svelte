@@ -7,14 +7,14 @@ import { Input } from "$lib/components/ui/input/index.js";
 	import { Plus } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
 	import type { ExistingCustomerAppointmentForm } from "$lib/ZodSchema";
-	import  type {  Infer, SuperValidated } from "sveltekit-superforms";
+	import type { SuperValidated } from "sveltekit-superforms";
 	  import { superForm } from 'sveltekit-superforms';
 	import RadioComp from "$lib/formComponents/RadioComp.svelte";
 	import ComboboxComp from "$lib/formComponents/ComboboxComp.svelte";
 
 
 type Customer = { value: number; name: string; }   // whatever shape you use
-  let { data, customers, action="?/editForm" } : { data : SuperValidated<Infer<ExistingCustomerAppointmentForm>>, customers: Customer[], action: string } = $props();
+  let { data, customers, action="?/editForm" } : { data : SuperValidated<ExistingCustomerAppointmentForm>, customers: Customer[], action: string } = $props();
 
 	const { form, errors, enhance, delayed } = superForm(
 		data);

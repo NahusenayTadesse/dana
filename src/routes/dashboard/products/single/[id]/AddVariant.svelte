@@ -3,7 +3,7 @@
 	import { Save, Plus } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 
 	import type { AddVariant } from './schema';
@@ -20,7 +20,7 @@
 		thicknessItems = [],
 		lengthItems = []
 	}: {
-		data: SuperValidated<Infer<AddVariant>>;
+		data: SuperValidated<AddVariant>;
 		colorItems?: Item[];
 		widthItems?: Item[];
 		thicknessItems?: Item[];

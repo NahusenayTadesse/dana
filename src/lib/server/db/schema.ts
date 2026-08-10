@@ -280,8 +280,27 @@ export const discounts = mysqlTable('discounts', {
 
 export const transactions = mysqlTable('transactions', {
 	id: int('id').primaryKey().autoincrement(),
+
+	// The amount of the attempt CURRENTLY IN FLIGHT — rewritten every time the
+	// customer starts a new checkout against this order. It is NOT a record of
+	// what has been collected; read amountPaid for that.
 	amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
+
+	// Cumulative total actually confirmed by a server-to-server Chapa verify.
+	// Only ever moves up, only in settlePaymentAttempt(). These were the same
+	// column once, which meant starting (and abandoning) a balance payment
+	// overwrote the record of the advance already collected, and the order was
+	// then re-invoiced for the wrong remainder.
+	amountPaid: decimal('amount_paid', { precision: 10, scale: 2 }).notNull().default('0'),
+
 	txnRef: varchar('txn_ref', { length: 255 }),
+
+	// The txn_ref of the attempt that was last successfully settled. Doubles as
+	// the settlement mutex: settling does a conditional UPDATE that only matches
+	// when this differs from the ref being settled, so concurrent callers (the
+	// Chapa webhook and the customer's return visit racing each other) can only
+	// ever settle a given attempt once — and only one of them sends the email.
+	settledTxnRef: varchar('settled_txn_ref', { length: 255 }),
 	paymentStatus: mysqlEnum('payment_status', [
 		'pending',
 		'paid',

@@ -2,12 +2,12 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import type { RequestBalance as schema } from './schema';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import { Link2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
-	let { data, orderId }: { data: SuperValidated<Infer<schema>>; orderId: number } = $props();
+	let { data, orderId }: { data: SuperValidated<schema>; orderId: number } = $props();
 
 	const { form, enhance, delayed, message } = superForm(data, {
 		id: `request-balance-${orderId}`,

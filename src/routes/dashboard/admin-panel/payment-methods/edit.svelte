@@ -6,7 +6,7 @@
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
@@ -18,7 +18,7 @@
 		name,
 		icon = false
 	}: {
-		data: SuperValidated<Infer<schema>>;
+		data: SuperValidated<schema>;
 		action: string;
 		id: number;
 		name: string;

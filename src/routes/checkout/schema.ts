@@ -8,14 +8,16 @@ export const add = z.object({
 	docs: z.file().max(10000000).optional(), // not needed to request a quote — keep optional
 	type: z.enum(['company', 'individual'], 'Customer type is required').default('individual'),
 
+	// NOTE: `price` and `priceIncludesVat` are deliberately NOT accepted here.
+	// Every priced field is resolved server-side from the catalog in
+	// $lib/server/orderLines — see resolveOrderLines(). Anything a client sends
+	// under those names is ignored rather than trusted.
 	selectedProducts: z
 		.object({
 			amount: z.string('Variation is required').optional(), // human-readable spec label
-			price: z.number().optional(),
 			product: z.number('Product is required').int(),
 			variantId: z.number().int().optional(),
 			quantity: z.number().int().positive('Number of products must be at least 1'),
-			priceIncludesVat: z.boolean().optional(),
 			colorId: z.number().int().nullable().optional(),
 			width: z.number().nullable().optional(),
 			widthUnit: z.enum(['mm', 'cm', 'm', 'in', 'ft']).nullable().optional(),

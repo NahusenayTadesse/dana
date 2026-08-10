@@ -23,7 +23,7 @@
 		lengthValue?: string | number | null;
 		lengthUnit?: 'mm' | 'm' | 'ft' | null;
 		lengthLabel?: string | null;
-		isCustomLength?: boolean;
+		isCustomLength?: boolean | null;
 	};
 
 	type Props = {

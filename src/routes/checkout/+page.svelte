@@ -44,24 +44,13 @@
 		}
 	});
 
-	// Line-by-line VAT breakdown — VAT-inclusive rows have the 15% already
-	// baked into item.price, VAT-exclusive rows need it added on top, so
-	// cart.totalPrice alone (a flat sum of price*qty) can't be trusted as a
-	// true "excl VAT" or "incl VAT" figure once both kinds are mixed in a cart.
-	const subtotalExclVat = $derived(
-		cart?.items.reduce((sum, item) => {
-			const unitExclVat = item.priceIncludesVat ? item.price / 1.15 : item.price;
-			return sum + unitExclVat * item.quantity;
-		}, 0) ?? 0
-	);
-	const vatTotal = $derived(
-		cart?.items.reduce((sum, item) => {
-			const unitExclVat = item.priceIncludesVat ? item.price / 1.15 : item.price;
-			const unitVat = item.priceIncludesVat ? item.price - unitExclVat : item.price * 0.15;
-			return sum + unitVat * item.quantity;
-		}, 0) ?? 0
-	);
-	const grandTotal = $derived(subtotalExclVat + vatTotal);
+	// The VAT breakdown now lives on the cart itself (see $lib/vat), so this
+	// summary and the cart drawer can't drift apart — they used to disagree,
+	// because the drawer summed price × qty with no regard for whether a rate
+	// was already VAT-inclusive.
+	const subtotalExclVat = $derived(cart?.subtotalExclVat ?? 0);
+	const vatTotal = $derived(cart?.vatTotal ?? 0);
+	const grandTotal = $derived(cart?.totalPrice ?? 0);
 
 	const formattedData = $derived(
 		cart?.items.map((item) => ({
@@ -69,8 +58,9 @@
 			variantId: item.variantId,
 			quantity: item.quantity,
 			amount: item.specLabel,
-			price: item.price,
-			priceIncludesVat: item.priceIncludesVat,
+			// price / priceIncludesVat deliberately not sent: the server resolves
+			// both from the catalog (see $lib/server/orderLines) and ignores
+			// anything the browser claims about what things cost.
 			colorId: item.colorId,
 			width: item.width,
 			widthUnit: item.widthUnit,

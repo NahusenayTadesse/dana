@@ -2,7 +2,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import type { ReplySchema as schema } from './schema';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import { Send, Reply as ReplyIcon, MessageSquareText, TagIcon } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
@@ -26,7 +26,7 @@
 		productLabel,
 		replies = []
 	}: {
-		data: SuperValidated<Infer<schema>>;
+		data: SuperValidated<schema>;
 		id: number;
 		name?: string;
 		email?: string;

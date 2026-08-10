@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { transactions, user, productAdjustments } from '$lib/server/db/schema';
 import { and, asc, eq, sql } from 'drizzle-orm';
@@ -7,6 +8,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const id = Number(params.id);
+	if (!Number.isInteger(id)) error(404, 'Not found.');
 	const { range } = params as { range: string };
 
 	const [y1, m1, d1, y2, m2, d2] = range.split('-');

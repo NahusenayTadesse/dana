@@ -3,7 +3,7 @@
 	import { Save } from '@lucide/svelte';
 
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import type { EditGallery } from './schema';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
@@ -12,13 +12,13 @@
 		data,
 		images = $bindable()
 	}: {
-		data: SuperValidated<Infer<EditGallery>>;
+		data: SuperValidated<EditGallery>;
 		images: string[];
 	} = $props();
 	const { form, errors, enhance, delayed, message } = superForm(data, {});
 	import { toast } from 'svelte-sonner';
 	$effect(() => {
-		$form.existing = images;
+		$form.existing = images.join(','); // server splits on ',' — join explicitly rather than relying on Array.toString
 		if ($message) {
 			if ($message.type === 'error') {
 				toast.error($message.text);

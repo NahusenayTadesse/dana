@@ -1,10 +1,15 @@
 import { db } from '$lib/server/db';
 import { productVariants, colors, widths, thicknesses } from '$lib/server/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
+import type { ThicknessUnit, WidthUnit } from '$lib/units';
 
 // Shared between every product listing surface (shop grid, home "best sellers", etc.)
 // so price ranges / swatches / stock totals are computed the same way everywhere.
 
+// Units are the DB enum unions, not bare `string`. Widening them here meant
+// this type disagreed with every component that consumes it (all of which
+// declare the narrow union), producing assignability errors that were being
+// worked around rather than fixed.
 export type ProductVariantRow = {
 	productId: number;
 	variantId: number;
@@ -16,10 +21,10 @@ export type ProductVariantRow = {
 	colorName: string | null;
 	colorHex: string | null;
 	widthValue: string | null;
-	widthUnit: string | null;
+	widthUnit: WidthUnit | null;
 	widthLabel: string | null;
 	thicknessValue: string | null;
-	thicknessUnit: string | null;
+	thicknessUnit: ThicknessUnit | null;
 };
 
 export async function fetchVariantRowsForProducts(

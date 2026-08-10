@@ -8,13 +8,13 @@
 	// import { zod4Client } from "sveltekit-superforms/adapters";
 	import type { ServiceCategorySchema } from '$lib/ZodSchema';
 	// import { createRoleSchema } from "$lib/ZodSchema";
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 
 	let {
 		data,
 		action = '?/addCategory'
-	}: { data: SuperValidated<Infer<ServiceCategorySchema>>; action: string } = $props();
+	}: { data: SuperValidated<ServiceCategorySchema>; action: string } = $props();
 
 	const { form, errors, enhance, delayed } = superForm(data, {
 		taintedMessage: () => {

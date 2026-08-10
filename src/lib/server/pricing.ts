@@ -31,7 +31,8 @@ export type PricedLine = PricingLineInput & {
 	gross: number; // VAT-inclusive amount for this line
 };
 
-const VAT_RATE = 15;
+import { VAT_RATE } from '$lib/vat';
+
 const WITHHOLDING_RATE = 3;
 
 /** How many "units" of the basis this line represents — what unitPrice multiplies against. */
@@ -98,7 +99,10 @@ export function calculateOrderPricing({
 	const subtotal = round2(priced.reduce((sum, l) => sum + l.net, 0));
 	const grossSubtotal = round2(priced.reduce((sum, l) => sum + l.gross, 0));
 
-	const discountFraction = (discountPercentage ?? 0) / 100;
+	// A discount was previously used unclamped: 150 produced a negative total,
+	// and a negative value silently marked the price UP.
+	const safeDiscount = Math.min(100, Math.max(0, discountPercentage ?? 0));
+	const discountFraction = safeDiscount / 100;
 	const discountAmount = round2(subtotal * discountFraction);
 	const priceExcludingVat = round2(subtotal - discountAmount);
 	const priceIncludingVat = round2(grossSubtotal * (1 - discountFraction));
@@ -110,7 +114,7 @@ export function calculateOrderPricing({
 	return {
 		lines: priced,
 		subtotal,
-		discountPercentage: discountPercentage ?? 0,
+		discountPercentage: safeDiscount,
 		discountAmount,
 		priceExcludingVat,
 		vatRate,

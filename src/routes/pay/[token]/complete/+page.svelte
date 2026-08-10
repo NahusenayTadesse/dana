@@ -6,6 +6,16 @@
 	let { data } = $props();
 	let checking = $state(false);
 
+	const birr = new Intl.NumberFormat('en-ET', {
+		style: 'currency',
+		currency: 'ETB',
+		maximumFractionDigits: 2
+	});
+
+	function formatBirr(value: number | undefined) {
+		return birr.format(value ?? 0);
+	}
+
 	async function checkAgain() {
 		checking = true;
 		await invalidateAll();
@@ -19,7 +29,20 @@
 </svelte:head>
 
 <div class="mx-auto max-w-md px-4 py-24 text-center">
-	{#if data.status === 'paid'}
+	{#if data.status === 'paid' && !data.fullySettled}
+		<!-- An advance was collected but the order is NOT settled. Saying
+		     "confirmed" here sent customers away believing they were done. -->
+		<CheckCircle2 class="mx-auto mb-4 size-12 text-emerald-500" />
+		<h1 class="text-xl font-bold">Advance payment received</h1>
+		<p class="mt-2 text-sm text-muted-foreground">
+			We've received {formatBirr(data.amountPaid)} towards order #{data.orderId}. A receipt has been
+			sent to your email.
+		</p>
+		<p class="mt-4 rounded-md bg-muted px-4 py-3 text-sm font-medium">
+			Remaining balance: {formatBirr(data.remainingBalance)}
+		</p>
+		<Button href="/pay/{data.token}" class="mt-6">Pay the balance</Button>
+	{:else if data.status === 'paid'}
 		<CheckCircle2 class="mx-auto mb-4 size-12 text-emerald-500" />
 		<h1 class="text-xl font-bold">Payment received</h1>
 		<p class="mt-2 text-sm text-muted-foreground">

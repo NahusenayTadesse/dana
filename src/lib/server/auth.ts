@@ -17,14 +17,24 @@ export const auth = betterAuth({
 		enabled: true,
 		revokeSessionsOnPasswordReset: true,
 
-		sendResetPassword: async ({ user, url, token }, request) => {
+		sendResetPassword: async ({ user, url }) => {
 			const template = customerResetPasswordTemplate(url);
 
-			await sendEmail(user.email, template.subject, template.html);
+			// An unguarded await here surfaced as a generic better-auth failure
+			// with no indication of what went wrong, leaving the user unsure
+			// whether a reset email was coming at all.
+			try {
+				await sendEmail(user.email, template.subject, template.html);
+			} catch (err) {
+				console.error('Failed to send password reset email:', err);
+				throw new Error('We could not send the reset email. Please try again in a moment.');
+			}
 		},
 
-		onPasswordReset: async ({ user }, request) => {
-			console.log(`Password for user ${user.email} has been reset.`);
+		onPasswordReset: async () => {
+			// Deliberately does not log the email address — this fires on every
+			// reset and was writing user PII into stdout logs.
+			console.log('A user password was reset.');
 		}
 	},
 	plugins: [

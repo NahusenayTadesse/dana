@@ -4,7 +4,7 @@
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import type { MarkRead as schema } from './schema';
 
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import { CircleCheckBig } from '@lucide/svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
@@ -13,7 +13,7 @@
 		data,
 		id
 	}: {
-		data: SuperValidated<Infer<schema>>;
+		data: SuperValidated<schema>;
 		id: number;
 	} = $props();
 

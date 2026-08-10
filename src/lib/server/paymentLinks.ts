@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { db } from '$lib/server/db';
 import { paymentLinks } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 const TOKEN_BYTES = 32; // 256 bits — infeasible to guess/brute-force
 const EXPIRY_DAYS = 14;
@@ -47,8 +47,21 @@ export async function resolvePaymentLink(rawToken: string | undefined | null) {
 	return link;
 }
 
-export async function markPaymentLinkUsed(orderId: number) {
-	await db.update(paymentLinks).set({ usedAt: new Date() }).where(eq(paymentLinks.orderId, orderId));
+/**
+ * Burn every still-unused link for an order.
+ *
+ * Only correct once the order is FULLY settled — calling it after a partial
+ * (advance) payment invalidated links already emailed to the customer, and
+ * rewrote usedAt on links consumed earlier, destroying the audit trail of when
+ * each was actually used. The `isNull` guard preserves that history.
+ *
+ * settlePaymentAttempt() is the only caller; it gates on full settlement.
+ */
+export async function markPaymentLinksUsed(orderId: number) {
+	await db
+		.update(paymentLinks)
+		.set({ usedAt: new Date() })
+		.where(and(eq(paymentLinks.orderId, orderId), isNull(paymentLinks.usedAt)));
 }
 
 /** Convenience: build the full URL to email/text to the customer */

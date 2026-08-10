@@ -3,7 +3,7 @@
 	import { Save, Plus, SquarePen, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
-	import type { Infer, SuperValidated } from 'sveltekit-superforms';
+	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 
 	import type { addLine, updateLine } from './schema';

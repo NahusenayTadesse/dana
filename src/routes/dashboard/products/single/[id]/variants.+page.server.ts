@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 // Merge these load returns + actions into the single-product page's
 // +page.server.ts. params.id is the product id.
 
@@ -26,6 +27,7 @@ const specLabel = (
 
 export const load: PageServerLoad = async ({ params }) => {
 	const productId = Number(params.id);
+	if (!Number.isInteger(productId)) error(404, 'Not found.');
 
 	const [colorRows, widthRows, thicknessRows, lengthRows, variants] = await Promise.all([
 		db.select({ id: colors.id, name: colors.name, hexValue: colors.hexValue }).from(colors),

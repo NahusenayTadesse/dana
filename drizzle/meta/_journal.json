@@ -71,6 +71,20 @@
       "when": 1786268639136,
       "tag": "0009_new_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1786351926081,
+      "tag": "0010_nasty_master_mold",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1786352009931,
+      "tag": "0011_aromatic_iron_man",
+      "breakpoints": true
     }
   ]
 }

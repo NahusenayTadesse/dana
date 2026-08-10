@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { customers } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -8,6 +9,7 @@ const STATUSES = ['pending', 'delivered', 'cancelled'] as const;
 
 export const load: PageServerLoad = async ({ params, url }) => {
 	const customerId = Number(params.id);
+	if (!Number.isInteger(customerId)) error(404, 'Not found.');
 
 	const customer = await db
 		.select({ customerName: customers.name })
