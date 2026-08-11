@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
+	import * as m from '$lib/paraglide/messages.js';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { cn } from '$lib/utils.js';
@@ -61,7 +62,7 @@
 
 	<Popover.Content class="flex flex-wrap gap-2 border-t p-0 px-2 py-4!">
 		<div class="text-sm text-muted-foreground">
-			Ethiopian Date: <span class="font-semibold text-foreground">{displayDate}</span>
+			{m.datepicker_ethiopian_date()} <span class="font-semibold text-foreground">{displayDate}</span>
 		</div>
 
 		<Calendar

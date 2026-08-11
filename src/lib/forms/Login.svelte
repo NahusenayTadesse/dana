@@ -13,10 +13,22 @@
 	import { toast } from 'svelte-sonner';
 	import * as m from '$lib/paraglide/messages.js';
 
-	let { data, action = '?/login' }: { data: SuperValidated<Infer<LoginSchema>>; action: string } =
-		$props();
+	let {
+		data,
+		action = '?/login',
+		onSuccess
+	}: {
+		data: SuperValidated<Infer<LoginSchema>>;
+		action?: string;
+		/** Called once the session exists — lets a hosting dialog close itself. */
+		onSuccess?: () => void;
+	} = $props();
 
-	const { form, errors, enhance, allErrors, message } = superForm(data, {});
+	const { form, errors, enhance, allErrors, message } = superForm(data, {
+		onResult: ({ result }) => {
+			if (result.type === 'success' || result.type === 'redirect') onSuccess?.();
+		}
+	});
 
 	$effect(() => {
 		if ($message) {

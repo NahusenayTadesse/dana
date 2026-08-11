@@ -2,13 +2,18 @@
 	import { fade, scale, fly } from 'svelte/transition';
 	import { Button } from '$lib/components/ui/button';
 	import { XIcon, ChevronLeftIcon, ChevronRightIcon } from '@lucide/svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let {
 		images,
 		currentIndex = $bindable(0),
 		isOpen = $bindable(false),
-		title = 'Gallery'
+		title = ''
 	} = $props();
+
+	const galleryTitle = $derived(title || m.lightbox_default_title());
+
+	let dialogEl = $state<HTMLDivElement | null>(null);
 
 	let currentImage = $derived(images[currentIndex]);
 	let hasNext = $derived(currentIndex < images.length - 1);
@@ -27,6 +32,9 @@
 	$effect(() => {
 		if (isOpen) {
 			document.body.style.overflow = 'hidden';
+			// Move focus into the dialog so Escape and Tab act on it rather than
+			// on whatever was focused on the page underneath.
+			dialogEl?.focus();
 		} else {
 			document.body.style.overflow = '';
 		}
@@ -54,10 +62,12 @@
 {#if isOpen && currentImage}
 	<div
 		use:portal
-		class="fixed inset-0 z-[9999] flex h-[100dvh] w-[100dvw] flex-col overflow-hidden overscroll-none bg-black text-white"
+		bind:this={dialogEl}
+		tabindex="-1"
+		class="fixed inset-0 z-[9999] flex h-[100dvh] w-[100dvw] flex-col overflow-hidden overscroll-none bg-black text-white outline-none"
 		role="dialog"
 		aria-modal="true"
-		aria-label="Image lightbox"
+		aria-label={m.lightbox_aria()}
 		transition:fade={{ duration: 180 }}
 	>
 		<header
@@ -65,10 +75,10 @@
 		>
 			<div class="min-w-0">
 				<p class="truncate text-sm font-medium text-white/90 sm:text-base">
-					{title}
+					{galleryTitle}
 				</p>
 				<p class="text-xs text-white/60 sm:text-sm">
-					{currentIndex + 1} of {images.length}
+					{m.lightbox_counter({ current: currentIndex + 1, total: images.length })}
 				</p>
 			</div>
 
@@ -77,16 +87,25 @@
 				size="icon"
 				class="rounded-full bg-white/10 text-white backdrop-blur-md hover:bg-white/20 hover:text-white"
 				onclick={close}
-				aria-label="Close lightbox"
+				aria-label={m.lightbox_close()}
 			>
 				<XIcon class="size-5 sm:size-6" />
 			</Button>
 		</header>
 
-		<main
-			class="flex min-h-0 flex-1 items-center justify-center px-3 py-20 sm:px-6 sm:py-24"
-			onclick={close}
-		>
+		<main class="relative flex min-h-0 flex-1 items-center justify-center px-3 py-20 sm:px-6 sm:py-24">
+			<!-- Click-outside-to-close as a real button rather than a handler on
+			     <main>: a non-interactive element with a mouse handler is
+			     unreachable by keyboard and invisible to assistive tech. Sitting
+			     behind the image also removes the need for the stopPropagation
+			     handler the <img> used to carry. -->
+			<button
+				type="button"
+				class="absolute inset-0 z-0 cursor-default"
+				onclick={close}
+				aria-label={m.lightbox_close()}
+			></button>
+
 			{#if hasPrev}
 				<Button
 					variant="ghost"
@@ -96,7 +115,7 @@
 						e.stopPropagation();
 						prev();
 					}}
-					aria-label="Previous image"
+					aria-label={m.lightbox_previous()}
 				>
 					<ChevronLeftIcon class="size-7" />
 				</Button>
@@ -105,10 +124,9 @@
 			{#key currentIndex}
 				<img
 					src="/files/{currentImage}"
-					alt="{title} - Image {currentIndex + 1}"
-					class="max-h-full max-w-full rounded-xl object-contain shadow-2xl select-none"
+					alt={m.lightbox_image_alt({ title: galleryTitle, index: currentIndex + 1 })}
+					class="relative z-10 max-h-full max-w-full rounded-xl object-contain shadow-2xl select-none"
 					transition:scale={{ duration: 180, start: 0.96 }}
-					onclick={(e) => e.stopPropagation()}
 				/>
 			{/key}
 
@@ -121,7 +139,7 @@
 						e.stopPropagation();
 						next();
 					}}
-					aria-label="Next image"
+					aria-label={m.lightbox_next()}
 				>
 					<ChevronRightIcon class="size-7" />
 				</Button>
@@ -143,12 +161,12 @@
 								index === currentIndex ? 'border-white opacity-100' : 'border-white/10 opacity-55'
 							]}
 							onclick={() => (currentIndex = index)}
-							aria-label="View image {index + 1}"
+							aria-label={m.lightbox_view_image({ index: index + 1 })}
 							aria-current={index === currentIndex ? 'true' : undefined}
 						>
 							<img
 								src="/files/{image}"
-								alt="Thumbnail {index + 1}"
+								alt={m.lightbox_thumbnail_alt({ index: index + 1 })}
 								class="size-full object-cover"
 							/>
 						</button>

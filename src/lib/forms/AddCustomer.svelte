@@ -10,6 +10,7 @@
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import SelectComp from '$lib/formComponents/SelectComp.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import { gender } from '$lib/global.svelte';
 
 	let {
@@ -79,7 +80,7 @@
 	{@render selects('gender', gender)}
 	<Button type="submit" class="mt-4" form="edit">
 		{#if $delayed}
-			<LoadingBtn name="Adding Customer" />
+			<LoadingBtn name={m.add_customer_loading()} />
 		{:else}
 			<Plus class="h-4 w-4" />
 

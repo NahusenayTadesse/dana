@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
+	import * as m from '$lib/paraglide/messages.js';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
@@ -84,9 +85,9 @@
 			</div>
 			<div class="mt-4 grid grid-cols-2 gap-2">
 				<Button variant="secondary" size="sm" onclick={() => (selectedDates = [today(tz)])}>
-					Today Only
+					{m.datepicker_today_only()}
 				</Button>
-				<Button variant="ghost" size="sm" onclick={() => (selectedDates = [])}>Clear All</Button>
+				<Button variant="ghost" size="sm" onclick={() => (selectedDates = [])}>{m.datepicker_clear_all()}</Button>
 			</div>
 			<ScrollArea>
 				<Calendar

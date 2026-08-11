@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fade, fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import * as m from '$lib/paraglide/messages.js';
 
   // Every image file actually present in /static/assets — keep this list in sync
   // with the folder contents (SvelteKit can't glob the static dir at build time).
@@ -38,8 +39,8 @@
   const images = imageFiles.map((file, i) => ({
     id: i + 1,
     src: encodeURI(`/assets/${file}`),
-    title: `Asset Gallery #${i + 1}`,
-    subtitle: `High-resolution preview`
+    title: m.team_gallery_image_title({ index: i + 1 }),
+    subtitle: m.team_gallery_image_subtitle()
   }));
 
   // Svelte 5 Rune State for active lightbox
@@ -170,27 +171,36 @@
   <!-- Lightbox Modal -->
   {#if selectedIndex !== null}
     <!-- Backdrop -->
-    <div 
+    <div
       in:fade={{ duration: 250 }}
       out:fade={{ duration: 200 }}
       class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-8"
-      onclick={closeLightbox}
-      role="presentation"
     >
+      <!-- Click-outside-to-close as a real button behind the card: a click
+           handler on the backdrop div was unreachable by keyboard, and it
+           forced the card to carry a stopPropagation handler of its own. -->
+      <button
+        type="button"
+        class="absolute inset-0 z-0 cursor-default"
+        onclick={closeLightbox}
+        aria-label={m.lightbox_close()}
+      ></button>
+
       <!-- Modal Card -->
-      <div 
+      <div
         in:scale={{ start: 0.93, duration: 300, easing: cubicOut }}
         out:scale={{ start: 0.95, duration: 200 }}
-        class="relative max-w-5xl w-full max-h-[85vh] flex flex-col items-center justify-center"
-        onclick={(e) => e.stopPropagation()}
+        class="relative z-10 max-w-5xl w-full max-h-[85vh] flex flex-col items-center justify-center outline-none"
         role="dialog"
         aria-modal="true"
+        aria-label={m.lightbox_aria()}
+        tabindex="-1"
       >
         <!-- Close Button -->
         <button 
           onclick={closeLightbox}
           class="absolute -top-12 right-0 text-white/70 hover:text-white p-2 rounded-full transition-transform hover:scale-110 active:scale-95"
-          aria-label="Close modal"
+          aria-label={m.lightbox_close()}
         >
           <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
@@ -207,7 +217,7 @@
           <div class="absolute bottom-0 inset-x-0 p-5 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex justify-between items-end">
             <div>
               <p class="font-mono text-xs text-primary-foreground/70 uppercase">
-                Image {selectedIndex + 1} of {images.length}
+                {m.lightbox_counter({ current: selectedIndex + 1, total: images.length })}
               </p>
               <h3 class="text-xl font-bold text-white">
                 {images[selectedIndex].title}
@@ -220,7 +230,7 @@
         <button 
           onclick={prevImage}
           class="absolute left-2 sm:-left-6 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/60 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 transition-all hover:scale-110 active:scale-90 backdrop-blur-md"
-          aria-label="Previous image"
+          aria-label={m.lightbox_previous()}
         >
           <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </button>
@@ -228,7 +238,7 @@
         <button 
           onclick={nextImage}
           class="absolute right-2 sm:-right-6 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/60 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 transition-all hover:scale-110 active:scale-90 backdrop-blur-md"
-          aria-label="Next image"
+          aria-label={m.lightbox_next()}
         >
           <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
         </button>

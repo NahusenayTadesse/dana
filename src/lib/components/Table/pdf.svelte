@@ -1,75 +1,39 @@
 <script lang="ts">
-	import jsPDF from 'jspdf';
-	import autoTable from 'jspdf-autotable';
 	import { Button } from '$lib/components/ui/button/index';
-	import { FileDown, Download, Grid3x3 } from '@lucide/svelte';
+	import { Printer, Download, Grid3x3 } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index';
 	import { page } from '$app/state';
-	import Papa from 'papaparse';
+	import { downloadCSV, printElement, tableToRows } from '$lib/print';
+	import * as m from '$lib/paraglide/messages.js';
 
 	const {
 		fileName = page.url.pathname.split('/').pop() || 'export',
 		tableId,
-		data
-	}: { fileName: string; tableId: string; data: any } = $props();
+		data,
+		title = ''
+	}: { fileName?: string; tableId?: string; data?: any; title?: string } = $props();
 
-	function generatedPdf() {
-		const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+	function prettify(name: string) {
+		return name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+	}
 
-		autoTable(doc, {
-			html: tableId,
-			styles: {
-				font: 'helvetica',
-				fontSize: 10,
-				textColor: [40, 40, 40],
-				halign: 'left',
-				valign: 'middle',
-				cellPadding: 4
-			},
-			headStyles: {
-				fillColor: [0, 0, 0],
-				textColor: 255,
-				fontStyle: 'bold'
-			},
-			alternateRowStyles: {
-				fillColor: [245, 245, 245]
-			},
-			margin: { top: 20 }
-		});
-
-		doc.save(`${fileName}.pdf`);
+	/**
+	 * Print-to-PDF: hands the live table to the browser's print dialog, where
+	 * "Save as PDF" produces a faithful copy of what's on screen. Replaces the
+	 * old jsPDF/autoTable path, which flattened images and styling away.
+	 */
+	function printToPdf() {
+		if (!tableId) return;
+		printElement(tableId, { fileName, title: title || prettify(fileName) });
 	}
 
 	function exportTableToCSV() {
-		let csvData;
-
-		if (tableId) {
-			const tableElement = document.querySelector(tableId) as HTMLTableElement;
-
-			if (!tableElement) {
-				console.error(`Table with selector ${tableId} not found.`);
-				return;
-			}
-
-			const rows = Array.from(tableElement.querySelectorAll('tr'));
-			csvData = rows.map((row) => {
-				const cells = Array.from(row.querySelectorAll('th, td'));
-				return cells.map((cell) => (cell as HTMLElement).innerText.trim());
-			});
-		} else {
-			csvData = data;
+		const rows = tableId ? tableToRows(tableId) : data;
+		if (!rows || rows.length === 0) {
+			console.error(`Nothing to export for ${tableId ?? 'the supplied data'}.`);
+			return;
 		}
-
-		const csv = Papa.unparse(csvData);
-
-		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = `${fileName}.csv`;
-		link.click();
-
-		URL.revokeObjectURL(url);
+		downloadCSV(rows, fileName);
 	}
 </script>
 
@@ -84,15 +48,17 @@
 	<DropdownMenu.Content class="flex w-auto flex-col gap-2 p-2">
 		<DropdownMenu.Item class="capitalize">
 			{#snippet child({ props })}
-				<Button {...props} variant="default" onclick={generatedPdf}>
-					<FileDown class="size-4 text-white dark:text-black" /> Download in PDF
+				<Button {...props} variant="default" onclick={printToPdf}>
+					<Printer class="size-4 text-white dark:text-black" />
+					{m.receipt_save_pdf()}
 				</Button>
 			{/snippet}
 		</DropdownMenu.Item>
 		<DropdownMenu.Item class="capitalize">
 			{#snippet child({ props })}
 				<Button {...props} variant="default" onclick={exportTableToCSV}>
-					<Grid3x3 class="size-4 text-white dark:text-black" /> Export to CSV
+					<Grid3x3 class="size-4 text-white dark:text-black" />
+					{m.receipt_export_csv()}
 				</Button>
 			{/snippet}
 		</DropdownMenu.Item>

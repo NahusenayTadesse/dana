@@ -77,8 +77,6 @@
 		"chapa-nodejs": "^2.1.1",
 		"chart.js": "^4.5.1",
 		"embla-carousel-autoplay": "^8.6.0",
-		"jspdf": "^4.2.1",
-		"jspdf-autotable": "^5.0.8",
 		"mode-watcher": "^1.1.0",
 		"nodemailer": "^8.0.10",
 		"papaparse": "^5.5.3",

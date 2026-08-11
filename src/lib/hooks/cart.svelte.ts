@@ -6,7 +6,22 @@ import { grossOf, netOf, round2, vatOf } from '$lib/vat';
 // price/sku). Fields below mirror orderItems' spec columns directly so the
 // cart, checkout, and the order it produces stay in the same shape end to
 // end — no more collapsing the spec into an opaque display string.
+//
+// A variantId alone is NOT the line's identity though: a line's length can be
+// dialled off-catalog after it was added (see updateLength, for products with
+// products.isLengthCustomizable), so one variant can legitimately appear as
+// several lines — 3 sheets at 2m and 2 sheets at 3.5m are two things the
+// customer wants, not one line of 5. Colour is folded into the same key so a
+// colour swap that lands on a variant already in the cart still merges. See
+// cartLineKey below; `lineId` is the stable handle every mutation takes.
 export type CartItem = {
+	/**
+	 * Stable per-line handle, assigned on add and never reused. Deliberately
+	 * independent of the spec: editing a line's length changes what it merges
+	 * with, but must not change its identity mid-edit — that would remount the
+	 * row and drop focus out of the input being typed in.
+	 */
+	lineId: string;
 	variantId: number;
 	productId: number;
 	productName: string;
@@ -34,21 +49,68 @@ export type CartItem = {
 
 const CART_STORAGE_KEY = 'dana';
 
+/** The spec fields that decide whether two lines are the same order item. */
+export type CartLineSpec = Pick<
+	CartItem,
+	'variantId' | 'colorId' | 'length' | 'lengthUnit' | 'isCustomLength'
+>;
+
 /**
- * Collapse repeated variantIds into one line, summing their quantities —
- * the same merge addItem() performs, applied to whatever was in storage.
+ * Merge key for a cart line. Two lines collapse into one only when they are
+ * the same variant AND the same colour AND the same requested length — so
+ * "2m in Signal Red" and "3.5m in Signal Red" stay two separate order items,
+ * as do two colours of the same size.
+ *
+ * Length is normalised through Number() so a stored "2" and a typed 2 don't
+ * read as different lines.
  */
-function dedupeByVariant(items: CartItem[]): CartItem[] {
-	const byVariant = new Map<number, CartItem>();
+export function cartLineKey(item: CartLineSpec): string {
+	const length = item.length == null ? '' : String(Number(item.length));
+	return [
+		item.variantId,
+		item.colorId ?? '',
+		length,
+		item.lengthUnit ?? '',
+		item.isCustomLength ? 'custom' : 'catalog'
+	].join('|');
+}
+
+let lineCounter = 0;
+
+function newLineId(): string {
+	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+		return crypto.randomUUID();
+	}
+	return `line-${++lineCounter}-${performance.now().toString(36)}`;
+}
+
+/**
+ * Collapse lines that share a cartLineKey into one, summing their quantities —
+ * the same merge addItem() performs, applied to whatever was in storage. Also
+ * hands every surviving line a unique lineId, since a cart written by an older
+ * build has none at all.
+ */
+function normalizeStoredItems(items: CartItem[]): CartItem[] {
+	// Plain array scans rather than a Map/Set: a cart holds a handful of lines,
+	// and svelte/prefer-svelte-reactivity flags built-in collections here.
+	const out: CartItem[] = [];
+
 	for (const item of items) {
-		const existing = byVariant.get(item.variantId);
+		const key = cartLineKey(item);
+		const existing = out.find((i) => cartLineKey(i) === key);
 		if (existing) {
 			existing.quantity += item.quantity ?? 1;
-		} else {
-			byVariant.set(item.variantId, { ...item, quantity: item.quantity ?? 1 });
+			continue;
 		}
+
+		const lineId =
+			typeof item.lineId === 'string' && item.lineId && !out.some((i) => i.lineId === item.lineId)
+				? item.lineId
+				: newLineId();
+		out.push({ ...item, lineId, quantity: item.quantity ?? 1 });
 	}
-	return [...byVariant.values()];
+
+	return out;
 }
 
 class UseCart {
@@ -115,15 +177,14 @@ class UseCart {
 					Array.isArray(parsed) && parsed.every((i) => typeof i?.variantId === 'number');
 
 				if (isValidShape) {
-					// Both the cart drawer and the checkout summary iterate with
-					// `{#each cart.items as item (item.variantId)}`. A stored cart
-					// holding two lines with the same variantId therefore throws
-					// Svelte's `each_key_duplicate` on mount and takes the whole
-					// page down, with no way for the user to recover short of
-					// clearing site data. addItem/updateVariant both merge by
-					// variantId so this can't arise in normal use — but a cart
-					// written by an older build, or hand-edited, can.
-					this.items = dedupeByVariant(parsed);
+					// Every list iterates with `{#each cart.items as item (item.lineId)}`.
+					// A stored cart holding two lines with the same lineId therefore
+					// throws Svelte's `each_key_duplicate` on mount and takes the
+					// whole page down, with no way for the user to recover short of
+					// clearing site data. Normal use can't produce one — but a cart
+					// written by an older build (no lineId at all), or hand-edited,
+					// can.
+					this.items = normalizeStoredItems(parsed);
 				} else if (Array.isArray(parsed) && parsed.length > 0) {
 					console.warn('Discarding incompatible cart from a previous version.');
 					localStorage.removeItem(CART_STORAGE_KEY);
@@ -147,38 +208,57 @@ class UseCart {
 	open = () => (this.isOpen = true);
 	close = () => (this.isOpen = false);
 
+	/** The line holding an exact variant+colour+length combination, if any. */
+	findLine = (spec: CartLineSpec): CartItem | undefined => {
+		const key = cartLineKey(spec);
+		return this.items.find((i) => cartLineKey(i) === key);
+	};
+
 	/**
-	 * Add item to cart. A variantId is now a unique enough key on its own —
-	 * each variant already represents one exact sellable spec combination.
+	 * How many units of an exact spec are in the cart — what an "in cart" badge
+	 * on a product card should show for the combination it currently has
+	 * selected.
 	 */
-	addItem = (item: Omit<CartItem, 'quantity'>, quantity: number = 1) => {
+	quantityOf = (spec: CartLineSpec): number => this.findLine(spec)?.quantity ?? 0;
+
+	/** Total units of a variant across every length/colour line it appears in. */
+	quantityOfVariant = (variantId: number): number =>
+		this.items.reduce((sum, i) => (i.variantId === variantId ? sum + i.quantity : sum), 0);
+
+	/**
+	 * Add item to cart. Merges into an existing line only when the variant,
+	 * colour AND requested length all match — a different length (or colour) of
+	 * the same variant becomes its own line, because it's its own order item.
+	 */
+	addItem = (item: Omit<CartItem, 'quantity' | 'lineId'>, quantity: number = 1) => {
 		if (item.price == null || Number.isNaN(Number(item.price))) {
 			console.error('Refusing to add a quote-only variant (no price) to the cart:', item);
 			return;
 		}
 
-		const existingIndex = this.items.findIndex((i) => i.variantId === item.variantId);
+		const key = cartLineKey(item);
+		const existingIndex = this.items.findIndex((i) => cartLineKey(i) === key);
 
 		if (existingIndex >= 0) {
 			this.items[existingIndex].quantity += quantity;
 		} else {
-			this.items.push({ ...item, quantity });
+			this.items.push({ ...item, lineId: newLineId(), quantity });
 		}
 	};
 
-	/** Remove a specific variant line from cart */
-	removeItem = (variantId: number) => {
-		this.items = this.items.filter((item) => item.variantId !== variantId);
+	/** Remove one line from the cart. */
+	removeItem = (lineId: string) => {
+		this.items = this.items.filter((item) => item.lineId !== lineId);
 	};
 
-	/** Update quantity for a specific variant line */
-	updateQuantity = (variantId: number, quantity: number) => {
+	/** Update quantity for one line. */
+	updateQuantity = (lineId: string, quantity: number) => {
 		if (quantity <= 0) {
-			this.removeItem(variantId);
+			this.removeItem(lineId);
 			return;
 		}
 
-		const index = this.items.findIndex((i) => i.variantId === variantId);
+		const index = this.items.findIndex((i) => i.lineId === lineId);
 
 		if (index >= 0) {
 			this.items[index].quantity = quantity;
@@ -186,40 +266,52 @@ class UseCart {
 	};
 
 	/**
-	 * Swap a line to a different variant of the same product (e.g. a color or
-	 * length change) while keeping its quantity and its position in the list.
-	 * If the target variant is already a separate line, its quantity absorbs
-	 * this one instead of leaving two rows for the same variant.
+	 * Fold a line into another line that now carries the same
+	 * variant+colour+length, if there is one — an edit is allowed to collapse
+	 * two lines back together, it just must never leave two rows the customer
+	 * can't tell apart. Returns true when the line was absorbed and removed.
 	 */
-	updateVariant = (oldVariantId: number, newVariant: Omit<CartItem, 'quantity'>) => {
-		const index = this.items.findIndex((i) => i.variantId === oldVariantId);
+	private mergeDuplicateOf = (index: number): boolean => {
+		const key = cartLineKey(this.items[index]);
+		const twinIndex = this.items.findIndex((i, n) => n !== index && cartLineKey(i) === key);
+		if (twinIndex < 0) return false;
+
+		this.items[twinIndex].quantity += this.items[index].quantity;
+		this.items.splice(index, 1);
+		return true;
+	};
+
+	/**
+	 * Swap a line to a different variant of the same product (e.g. a color or
+	 * length change) while keeping its quantity, its lineId and its position in
+	 * the list. If that lands on a spec another line already holds, the two
+	 * merge rather than leaving indistinguishable rows.
+	 */
+	updateVariant = (lineId: string, newVariant: Omit<CartItem, 'quantity' | 'lineId'>) => {
+		const index = this.items.findIndex((i) => i.lineId === lineId);
 		if (index < 0) return;
 
-		const quantity = this.items[index].quantity;
-
-		if (newVariant.variantId !== oldVariantId) {
-			const existingIndex = this.items.findIndex((i) => i.variantId === newVariant.variantId);
-			if (existingIndex >= 0) {
-				this.items[existingIndex].quantity += quantity;
-				this.items.splice(index, 1);
-				return;
-			}
-		}
-
-		this.items[index] = { ...newVariant, quantity };
+		const { quantity } = this.items[index];
+		this.items[index] = { ...newVariant, lineId, quantity };
+		this.mergeDuplicateOf(index);
 	};
 
 	/**
 	 * Dial a line's length in place, for products where length isn't limited
 	 * to fixed catalog stops (products.isLengthCustomizable) — same variant,
-	 * same price, just a different requested length.
+	 * same price, just a different requested length. Since length is part of a
+	 * line's merge key, dialling one line onto another's length merges them.
 	 */
-	updateLength = (variantId: number, length: number, isCustomLength: boolean) => {
-		const index = this.items.findIndex((i) => i.variantId === variantId);
+	updateLength = (lineId: string, length: number, isCustomLength: boolean, specLabel?: string) => {
+		const index = this.items.findIndex((i) => i.lineId === lineId);
 		if (index < 0) return;
 
 		this.items[index].length = length;
 		this.items[index].isCustomLength = isCustomLength;
+		// The label is what reaches staff as orderItems.amount — leaving the old
+		// one behind would have them cut the length the line started at.
+		if (specLabel) this.items[index].specLabel = specLabel;
+		this.mergeDuplicateOf(index);
 	};
 
 	clearCart = () => {

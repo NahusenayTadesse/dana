@@ -92,10 +92,13 @@
 <div class="blob blob--red"></div>
 
 <style>
+  /* z-index -1, not 0: a fixed element at 0 still paints above static page
+     content in the same stacking context, so these decorations washed over
+     body text. pointer-events:none only stopped them swallowing clicks. */
   canvas {
     position: fixed;
     inset: 0;
-    z-index: 0;
+    z-index: -1;
     pointer-events: none;
     width: 100%;
     height: 100%;
@@ -113,7 +116,7 @@
     border-radius: 50%;
     filter: blur(20px);
     pointer-events: none;
-    z-index: 0;
+    z-index: -1;
   }
   .blob--blue {
     top: -160px; right: -120px;

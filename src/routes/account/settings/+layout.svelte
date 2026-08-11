@@ -4,7 +4,8 @@
 	import Logout from '$lib/forms/Logout.svelte';
 	// import DialogComp from "$lib/formComponents/DialogComp.svelte";
 	// import AddCustomer from "$lib/forms/AddCustomer.svelte";
-	import { Plus, Sheet, SquarePen, User } from '@lucide/svelte';
+	import { SquarePen, User } from '@lucide/svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	let { children } = $props();
 </script>
 
@@ -12,13 +13,13 @@
 	<Button
 		href="/account/settings"
 		variant={page.url.pathname === '/account/settings' ? 'default' : 'outline'}
-		><User /> Profile Details</Button
+		><User /> {m.account_settings_profile_details()}</Button
 	>
 
 	<Button
 		href="/account/settings/change-password"
 		variant={page.url.pathname === '/account/settings/change-password' ? 'default' : 'outline'}
-		><SquarePen /> Change Password</Button
+		><SquarePen /> {m.change_password_title()}</Button
 	>
 
 	<Logout />

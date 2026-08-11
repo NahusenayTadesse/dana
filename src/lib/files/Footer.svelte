@@ -6,7 +6,10 @@
 		email = 'info@danasteel.com'
 	} = $props();
 
+	// /buy leads the column: it is the only link here that takes an order rather
+	// than describing the company, so it should be the first thing found.
 	const company = [
+		{ label: m.footer_buy_link, href: '/buy' },
 		{ label: m.footer_link_products, href: '/shop' },
 		{ label: m.footer_link_factory, href: '/factory' },
 		{ label: m.footer_link_about, href: '/about' },
@@ -26,10 +29,12 @@
 	underneath them and could not be read or tapped:
 	  · mobile — BottomMenu (h-20, bottom-0) + FloatingChat pill (bottom-22)
 	    covered the phone number, email and address;
-	  · desktop — FloatingChat (lg:bottom-5) covered the copyright line.
+	  · desktop — FloatingChat (md:bottom-5) covered the copyright line.
 	Hence padding at both breakpoints, larger on mobile where both overlays stack.
+	The breakpoint is `md` because that is where BottomMenu hides; if that moves,
+	this, FloatingChat and the floating cart button all move with it.
 -->
-<footer class="relative z-[2] bg-[#0C1B34] pb-40 text-[#B9CCEC] lg:pb-28">
+<footer class="relative z-[2] bg-[#0C1B34] pb-40 text-[#B9CCEC] md:pb-28">
 	<div class="mx-auto grid max-w-[1280px] gap-10 px-6 py-14 sm:grid-cols-2 md:px-8 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
 		<div>
 			<a href="/" class="inline-flex rounded-xl bg-white px-3 py-2">
@@ -90,7 +95,7 @@
 			>
 				{m.footer_developed_by()}
 				<span class="inline-flex rounded-md bg-white px-1.5 py-1">
-					<img src="/digitalLogo.png" alt="Digital Construct" class="h-3.5 w-auto object-contain" />
+					<img src="/digitalLogo.png" alt={m.alt_digital_construct()} class="h-3.5 w-auto object-contain" />
 				</span>
 			</a>
 		</div>

@@ -14,7 +14,6 @@
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { IconBrandFacebook, IconBrandInstagram, IconBrandTiktok } from '@tabler/icons-svelte';
 	import { fly } from 'svelte/transition';
-	import ImgSeparator from '$lib/components/imgSeparator.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data } = $props();
@@ -290,7 +289,6 @@
 			</div>
 		</div>
 
-		<ImgSeparator />
 
 		<section transition:fly={{ y: 30, duration: 800, delay: 500 }} class="relative mt-16 w-full">
 			<div class="absolute inset-0 -z-10 rounded-3xl bg-primary/5 blur-xl"></div>

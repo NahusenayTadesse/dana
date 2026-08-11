@@ -10,16 +10,20 @@
 	let deleting = $state(false);
 
 	import { toast } from 'svelte-sonner';
+	import * as m from '$lib/paraglide/messages.js';
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Trigger class={buttonVariants({ variant: 'destructive' })}><X /> Sign out</Dialog.Trigger>
+	<Dialog.Trigger class={buttonVariants({ variant: 'destructive' })}>
+		<X />
+		{m.logout_trigger()}
+	</Dialog.Trigger>
 	<Dialog.Content class="w-full">
 		<Dialog.Header>
-			<Dialog.Title>Sign Out</Dialog.Title>
+			<Dialog.Title>{m.logout_title()}</Dialog.Title>
 		</Dialog.Header>
 		<ScrollArea class="h-auto rounded-md border p-2">
-			<h5 class="text-center">Are you sure you want to Logout?</h5>
+			<h5 class="text-center">{m.logout_confirm()}</h5>
 			<div class="flex flex-row items-center justify-center gap-4 pt-4">
 				<form
 					method="post"
@@ -31,9 +35,9 @@
 							await update(); // 2. apply action result to page
 							deleting = false;
 							if (result) {
-								toast.success('Logged out successfully');
+								toast.success(m.logout_success());
 							} else {
-								toast.error('Failed to log out');
+								toast.error(m.logout_failed());
 							}
 							// 3. stop spinner
 						};
@@ -41,14 +45,15 @@
 				>
 					<Button type="submit" disabled={deleting} variant="destructive" size="lg">
 						{#if deleting}
-							<LoadingBtn name="Signing Out" />
+							<LoadingBtn name={m.logout_loading()} />
 						{:else}
-							<LogOut /> Sign Out
+							<LogOut />
+							{m.logout_title()}
 						{/if}
 					</Button>
 				</form>
 
-				<Button onclick={() => (open = false)} size="lg">Cancel</Button>
+				<Button onclick={() => (open = false)} size="lg">{m.common_cancel()}</Button>
 			</div>
 		</ScrollArea>
 	</Dialog.Content>

@@ -8,8 +8,10 @@
 	import { cn } from '$lib/utils.js';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import Button from '$lib/components/ui/button/button.svelte';
-	import { isMobile } from '$lib/global.svelte';
+	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
 	import { goto } from '$app/navigation';
+
+	const isMobile = new IsMobile();
 
 	let {
 		id = null,
@@ -48,7 +50,6 @@
 				});
 	}
 
-	let number = isMobile;
 </script>
 
 <Popover.Root bind:open>
@@ -80,7 +81,7 @@
 		<RangeCalendar
 			bind:value
 			class="relative w-auto rounded-lg border pb-16 shadow-sm"
-			numberOfMonths={isMobile() ? 1 : 2}
+			numberOfMonths={isMobile.current ? 1 : 2}
 		/>
 		<Button
 			disabled={!value.start || !value.end}

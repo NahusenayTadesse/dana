@@ -3,6 +3,7 @@
 	import { MinusIcon, PlusIcon, TrashIcon } from '@lucide/svelte';
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
+	import { netOf, vatOf, grossOf } from '$lib/vat';
 	import * as m from '$lib/paraglide/messages.js';
 
 	const { item }: { item: CartItem } = $props();
@@ -15,15 +16,12 @@
 		}).format(price);
 	};
 
-	// Every priced item is quoted at its stored rate — VAT-inclusive rows
-	// already have the 15% baked in, VAT-exclusive rows need it added on
-	// top. Broken out per line so the buyer sees exactly what they're
-	// paying for, not just a single opaque total.
-	const unitExclVat = $derived(item.priceIncludesVat ? item.price / 1.15 : item.price);
-	const unitVat = $derived(item.priceIncludesVat ? item.price - unitExclVat : item.price * 0.15);
-	const lineExclVat = $derived(unitExclVat * item.quantity);
-	const lineVat = $derived(unitVat * item.quantity);
-	const lineTotal = $derived(lineExclVat + lineVat);
+	// Through $lib/vat rather than an inline 1.15/0.15: a rate may be quoted
+	// either VAT-inclusive or VAT-exclusive, and this row has to agree with the
+	// cart totals, the checkout summary and the server.
+	const unitExclVat = $derived(netOf(Number(item.price), item.priceIncludesVat));
+	const unitVat = $derived(vatOf(Number(item.price), item.priceIncludesVat));
+	const lineTotal = $derived(grossOf(Number(item.price), item.priceIncludesVat) * item.quantity);
 
 	const widthText = $derived(item.width != null ? `${item.width}${item.widthUnit ?? ''}` : null);
 	const thicknessText = $derived(
@@ -31,97 +29,121 @@
 			? `${item.thickness}${item.thicknessUnit === 'gauge' ? ' ga' : (item.thicknessUnit ?? '')}`
 			: null
 	);
-	const lengthText = $derived(item.length != null ? `${item.length}${item.lengthUnit ?? ''}` : null);
+	const lengthText = $derived(
+		item.length != null ? `${item.length}${item.lengthUnit ?? ''}` : null
+	);
 
-	const decreaseQuantity = () => cart.updateQuantity(item.variantId, item.quantity - 1);
-	const increaseQuantity = () => cart.updateQuantity(item.variantId, item.quantity + 1);
-	const removeItem = () => cart.removeItem(item.variantId);
+	const decreaseQuantity = () => cart.updateQuantity(item.lineId, item.quantity - 1);
+	const increaseQuantity = () => cart.updateQuantity(item.lineId, item.quantity + 1);
+	const removeItem = () => cart.removeItem(item.lineId);
 </script>
 
-<tr class="border-b border-border/60 align-top last:border-b-0">
-	<td class="py-3 pr-3">
-		<div class="flex items-center gap-3">
-			{#if item.imageUrl}
-				<img
-					src="/files/{item.imageUrl}"
-					alt={item.productName}
-					class="size-12 shrink-0 rounded-lg border border-border object-cover"
-				/>
-			{:else}
-				<div
-					class="flex size-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[9px] text-muted-foreground"
-				>
-					{m.checkout_col_no_image()}
-				</div>
-			{/if}
-			<div class="min-w-0">
-				<div class="font-semibold">{item.productName}</div>
-				<div class="text-xs text-muted-foreground">
-					{item.sku ? `${m.checkout_col_sku()}: ${item.sku}` : `ID: ${item.productId}`}
-				</div>
+<!--
+	Stacked on a phone, a grid row from `sm` up — the same treatment
+	buy-order-row.svelte already uses. This was a `<tr>` in a `min-w-[760px]`
+	table inside a full-width drawer, which on a phone pushed the quantity
+	stepper, the price, the line total and the delete button off-screen behind a
+	horizontal scroll most people never find.
+-->
+<div
+	class="grid grid-cols-1 gap-3 px-3 py-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_auto_minmax(0,7rem)_auto] sm:items-center sm:gap-4"
+>
+	<!-- Product, and on mobile the delete button sits beside it. -->
+	<div class="flex items-center gap-3">
+		{#if item.imageUrl}
+			<img
+				src="/files/{item.imageUrl}"
+				alt={item.productName}
+				class="size-12 shrink-0 rounded-lg border border-border object-cover"
+			/>
+		{:else}
+			<div
+				class="flex size-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[9px] text-muted-foreground"
+			>
+				{m.checkout_col_no_image()}
+			</div>
+		{/if}
+		<div class="min-w-0 flex-1">
+			<div class="truncate font-semibold">{item.productName}</div>
+			<div class="truncate text-xs text-muted-foreground">
+				{item.sku ? `${m.checkout_col_sku()}: ${item.sku}` : `ID: ${item.productId}`}
 			</div>
 		</div>
-	</td>
+		<div class="sm:hidden">
+			{@render removeButton()}
+		</div>
+	</div>
 
-	<td class="py-3 pr-3 text-sm">
+	<!-- Spec: one line rather than four columns. The full per-axis breakdown
+	     lives on /checkout and the printable receipt; the drawer is for a glance. -->
+	<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm">
 		{#if item.colorName}
 			<span class="flex items-center gap-1.5">
-				<span class="size-2.5 shrink-0 rounded-full border border-foreground/10 bg-primary/60"></span>
+				<span class="size-2.5 shrink-0 rounded-full border border-foreground/10 bg-primary/60"
+				></span>
 				{item.colorName}
 			</span>
-		{:else}
-			<span class="text-muted-foreground">—</span>
 		{/if}
-	</td>
-
-	<td class="py-3 pr-3 text-sm">{widthText ?? '—'}</td>
-
-	<td class="py-3 pr-3 text-sm">{thicknessText ?? '—'}</td>
-
-	<td class="py-3 pr-3 text-sm">
+		{#if widthText}<span class="text-muted-foreground">{widthText}</span>{/if}
+		{#if thicknessText}<span class="text-muted-foreground">{thicknessText}</span>{/if}
 		{#if lengthText}
-			{lengthText}
-			{#if item.isCustomLength}
-				<span class="ml-1 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-					{m.product_detail_cut_to_order()}
-				</span>
-			{/if}
-		{:else}
+			<span class="text-muted-foreground">
+				{lengthText}
+				{#if item.isCustomLength}
+					<span
+						class="ml-1 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400"
+					>
+						{m.product_detail_cut_to_order()}
+					</span>
+				{/if}
+			</span>
+		{/if}
+		{#if !item.colorName && !widthText && !thicknessText && !lengthText}
 			<span class="text-muted-foreground">—</span>
 		{/if}
-	</td>
+	</div>
 
-	<td class="py-3 pr-3">
-		<div class="flex items-center justify-end gap-1.5">
-			<Button size="icon" variant="outline" class="size-6" onclick={decreaseQuantity}>
+	<div class="flex items-center justify-between gap-3 sm:justify-center">
+		<span class="text-xs font-medium text-muted-foreground sm:hidden">{m.cart_col_qty()}</span>
+		<div class="flex items-center gap-1.5">
+			<Button size="icon" variant="outline" class="size-7" onclick={decreaseQuantity}>
 				<MinusIcon class="size-3" />
 			</Button>
 			<span class="w-7 text-center text-sm font-semibold">{item.quantity}</span>
-			<Button size="icon" variant="outline" class="size-6" onclick={increaseQuantity}>
+			<Button size="icon" variant="outline" class="size-7" onclick={increaseQuantity}>
 				<PlusIcon class="size-3" />
 			</Button>
 		</div>
-	</td>
+	</div>
 
-	<td class="py-3 pr-3 text-right whitespace-nowrap">
-		<div class="font-medium">{formatPrice(unitExclVat)}</div>
-		<div class="text-[10px] text-muted-foreground">
-			{item.priceIncludesVat ? m.cart_vat_included() : `+${formatPrice(unitVat)} ${m.checkout_col_vat_short()}`}
+	<!-- Unit price and line total together, so the arithmetic is visible instead
+	     of split across two columns the reader has to reconcile. -->
+	<div
+		class="flex items-baseline justify-between gap-2 border-t border-border/40 pt-2 sm:block sm:border-0 sm:pt-0 sm:text-right"
+	>
+		<span class="text-xs text-muted-foreground sm:hidden">{m.cart_col_total()}</span>
+		<div class="text-right">
+			<div class="text-[11px] whitespace-nowrap text-muted-foreground">
+				{formatPrice(unitExclVat)} × {item.quantity}
+				{item.priceIncludesVat ? '' : ` · +${formatPrice(unitVat)} ${m.checkout_col_vat_short()}`}
+			</div>
+			<div class="font-semibold whitespace-nowrap">{formatPrice(lineTotal)}</div>
 		</div>
-	</td>
+	</div>
 
-	<td class="py-3 pr-3 text-right font-semibold whitespace-nowrap">
-		{formatPrice(lineTotal)}
-	</td>
+	<div class="hidden sm:block">
+		{@render removeButton()}
+	</div>
+</div>
 
-	<td class="py-3 text-right">
-		<Button
-			size="icon"
-			variant="ghost"
-			class="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-			onclick={removeItem}
-		>
-			<TrashIcon class="size-4" />
-		</Button>
-	</td>
-</tr>
+{#snippet removeButton()}
+	<Button
+		size="icon"
+		variant="ghost"
+		class="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+		onclick={removeItem}
+		aria-label={m.buy_row_remove_line()}
+	>
+		<TrashIcon class="size-4" />
+	</Button>
+{/snippet}

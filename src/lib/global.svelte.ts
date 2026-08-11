@@ -88,11 +88,6 @@ export const currentMonthFilter = (dateField: MySqlColumn, start?: string, end?:
   `;
 };
 
-export function isMobile() {
-	if (typeof window === 'undefined') return false; // SSR guard
-	return window.innerWidth <= 768;
-}
-
 import crypto from 'crypto';
 
 export function generatePassword(

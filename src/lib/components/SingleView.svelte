@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages.js';
+
 	let { title, children, class: className = '', photo = '' } = $props();
 </script>
 
@@ -36,7 +38,7 @@
 				<img
 					src="/files/{photo}"
 					loading="lazy"
-					alt="{title} photo"
+					alt={m.single_view_photo_alt({ title })}
 					class="relative z-10 block h-22 w-22 rounded-full
                  border-2 border-white/10 object-cover"
 				/>

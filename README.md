@@ -1,8 +1,8 @@
 # ⚙️ Environment Setup
 
-This guide explains how to configure the **dana Electronics** project on your computer for local development.
+This guide explains how to configure the **Dana Steel Factory** project on your computer for local development.
 
-Unlike many web applications, **dana Electronics does not require a local MySQL installation.** The application is designed to connect directly to the remote database hosted on the production server. This significantly simplifies the setup process and allows developers to begin working immediately.
+Unlike many web applications, **Dana Steel Factory does not require a local MySQL installation.** The application is designed to connect directly to the remote database hosted on the production server. This significantly simplifies the setup process and allows developers to begin working immediately.
 
 > **Who is this guide for?**
 >
@@ -144,7 +144,7 @@ dana/
 
 # 🗄 Database Configuration
 
-One of the advantages of the dana Electronics platform is that **you do not need to create or import a local database.**
+One of the advantages of the Dana Steel Factory platform is that **you do not need to create or import a local database.**
 
 Instead, the application connects directly to the remote MySQL server hosted in cPanel.
 
@@ -377,7 +377,7 @@ again.
 
 Congratulations!
 
-Your local development environment is now configured and connected to the dana Electronics platform.
+Your local development environment is now configured and connected to the Dana Steel Factory platform.
 
 You can now begin developing new features, fixing bugs, or testing changes while using the shared production database.
 
@@ -385,7 +385,7 @@ You can now begin developing new features, fixing bugs, or testing changes while
 
 # 🚀 Deploying Updates to the Production Website
 
-This section explains how to deploy a new version of the **dana Electronics** website to the production server.
+This section explains how to deploy a new version of the **Dana Steel Factory** website to the production server.
 
 The deployment process is designed to safely replace the website's compiled application while preserving all existing configuration, uploaded files, and server settings.
 
@@ -479,7 +479,7 @@ Open:
 Setup Node.js App
 ```
 
-Locate the existing dana Electronics application.
+Locate the existing Dana Steel Factory application.
 
 Click:
 
@@ -651,7 +651,7 @@ If you only modified the application code, simply replacing the build folder and
 
 # Deployment Complete
 
-Your latest version of the dana Electronics website has now been deployed successfully.
+Your latest version of the Dana Steel Factory website has now been deployed successfully.
 
 The website should now be running the updated code while preserving all existing configuration, uploaded files, and production data.
 # dana

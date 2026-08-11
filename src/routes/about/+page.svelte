@@ -9,13 +9,14 @@
         ArrowRightIcon,
         SparklesIcon,
         ZapIcon,
-        BatteryChargingIcon,
+        PaintRollerIcon,
         CheckIcon,
-        CpuIcon,
-        ScanQrCodeIcon,
-        CableIcon,
-        SmartphoneIcon,
-        HeadphonesIcon,
+        HouseIcon,
+        ClipboardCheckIcon,
+        WrenchIcon,
+        BookOpenIcon,
+        UsersIcon,
+        LifeBuoyIcon,
         LayersIcon,
         ChevronLeftIcon,
         ChevronRightIcon
@@ -102,7 +103,7 @@
             text: m.about_page_benefit_availability_text
         },
         {
-            icon: HeadphonesIcon,
+            icon: UsersIcon,
             title: m.about_page_benefit_support_title,
             text: m.about_page_benefit_support_text
         }
@@ -133,22 +134,22 @@
 
     const productLayers = [
         {
-            icon: BatteryChargingIcon,
+            icon: PaintRollerIcon,
             title: m.about_page_layer_power_title,
             text: m.about_page_layer_power_text
         },
         {
-            icon: CableIcon,
+            icon: LayersIcon,
             title: m.about_page_layer_mobile_title,
             text: m.about_page_layer_mobile_text
         },
         {
-            icon: CpuIcon,
+            icon: HouseIcon,
             title: m.about_page_layer_storage_title,
             text: m.about_page_layer_storage_text
         },
         {
-            icon: HeadphonesIcon,
+            icon: WrenchIcon,
             title: m.about_page_layer_audio_title,
             text: m.about_page_layer_audio_text
         }
@@ -156,12 +157,12 @@
 
     const journey = [
         {
-            icon: SmartphoneIcon,
+            icon: BookOpenIcon,
             title: m.about_page_journey_explore_title,
             text: m.about_page_journey_explore_text
         },
         {
-            icon: ScanQrCodeIcon,
+            icon: ClipboardCheckIcon,
             title: m.about_page_journey_choose_title,
             text: m.about_page_journey_choose_text
         },
@@ -258,21 +259,21 @@
                         <div class="overflow-hidden rounded-xl border border-primary/10">
                             <img
                                 src="/images/front desk.webp"
-                                alt="Front Desk"
+                                alt={m.alt_front_desk()}
                                 class="h-28 w-full object-cover transition-transform duration-500 hover:scale-105"
                             />
                         </div>
                         <div class="overflow-hidden rounded-xl border border-primary/10">
                             <img
                                 src="/images/working.webp"
-                                alt="Team Working"
+                                alt={m.alt_workplace_operations()}
                                 class="h-28 w-full object-cover transition-transform duration-500 hover:scale-105"
                             />
                         </div>
                         <div class="overflow-hidden rounded-xl border border-primary/10">
                             <img
                                 src="/images/portolio 1.webp"
-                                alt="Portfolio Highlight"
+                                alt={m.alt_portfolio_ecosystem()}
                                 class="h-28 w-full object-cover transition-transform duration-500 hover:scale-105"
                             />
                         </div>
@@ -287,7 +288,7 @@
                                 <div
                                     class="mb-4 flex size-11 items-center justify-center rounded-xl border border-primary/10 bg-primary/10 text-primary transition group-hover:scale-110"
                                 >
-                                    <svelte:component this={item.icon} class="size-5" />
+                                    <item.icon class="size-5" />
                                 </div>
                                 <h3 class="text-sm font-bold">{item.title()}</h3>
                                 <p class="mt-2 text-xs leading-relaxed text-muted-foreground">{item.text()}</p>
@@ -343,7 +344,7 @@
                             {:else if activeTab === 'products'}
                                 <ZapIcon class="size-6" />
                             {:else}
-                                <HeadphonesIcon class="size-6" />
+                                <LifeBuoyIcon class="size-6" />
                             {/if}
                         </div>
 
@@ -369,14 +370,14 @@
                     <div class="relative overflow-hidden rounded-2xl border border-primary/10 md:col-span-5">
                         <img
                             src="/images/products show.webp"
-                            alt="Products Detail Showcase"
+                            alt={m.alt_product_showcase()}
                             class="h-full w-full object-cover"
                         />
                         <div
                             class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"
                         ></div>
                         <div class="absolute bottom-4 left-4 right-4 text-xs text-muted-foreground">
-                            Precision Quality Assurance
+                            {m.about_page_precision_quality()}
                         </div>
                     </div>
                 </div>
@@ -429,7 +430,7 @@
             >
                 <img
                     src="/images/manufacture top view.webp"
-                    alt="Facility Top View"
+                    alt={m.alt_facility_top_view()}
                     class="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 <div class="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent"></div>
@@ -448,7 +449,7 @@
             >
                 <img
                     src="/images/manufacture.webp"
-                    alt="Manufacturing Process"
+                    alt={m.alt_manufacturing_process()}
                     class="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 <div class="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent"></div>
@@ -462,7 +463,7 @@
             >
                 <img
                     src="/images/welcome.webp"
-                    alt="Welcome Reception"
+                    alt={m.alt_welcome_reception()}
                     class="h-56 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
             </div>
@@ -472,7 +473,7 @@
             >
                 <img
                     src="/images/client.webp"
-                    alt="Client Engagement"
+                    alt={m.alt_client_collaboration()}
                     class="h-56 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
             </div>
@@ -508,7 +509,7 @@
                 <div class="relative mt-8 overflow-hidden rounded-2xl border border-primary/20 shadow-xl">
                     <img
                         src={productShowcaseImages[currentProductImageIndex]}
-                        alt="Product Showcase Slider"
+                        alt={m.alt_product_showcase()}
                         class="h-64 w-full object-cover transition-all duration-500"
                     />
                     <div class="absolute bottom-3 right-3 flex items-center gap-2">
@@ -545,7 +546,7 @@
                             <div
                                 class="mb-5 flex size-12 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary transition duration-500 group-hover:scale-110 group-hover:rotate-6"
                             >
-                                <svelte:component this={layer.icon} class="size-6" />
+                                <layer.icon class="size-6" />
                             </div>
                             <span class="font-mono text-xs text-muted-foreground">0{i + 1}</span>
                             <h3 class="mt-2 text-lg font-black">{layer.title()}</h3>
@@ -588,7 +589,7 @@
                     <div
                         class="mt-5 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xl transition duration-500 group-hover:scale-110"
                     >
-                        <svelte:component this={step.icon} class="size-6" />
+                        <step.icon class="size-6" />
                     </div>
                     <h3 class="mt-6 text-xl font-black">{step.title()}</h3>
                     <p class="mt-3 text-sm leading-relaxed text-muted-foreground">{step.text()}</p>

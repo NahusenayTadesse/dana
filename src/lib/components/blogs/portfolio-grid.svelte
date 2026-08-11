@@ -2,6 +2,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import PortfolioCard from './portfolio-card.svelte';
 	import { FolderOpenIcon } from '@lucide/svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	type BlogItem = {
 		id: number;
 		title: string;
@@ -32,9 +33,9 @@
 		<div class="mb-4 flex size-20 items-center justify-center rounded-full bg-muted">
 			<FolderOpenIcon class="size-10 text-muted-foreground" />
 		</div>
-		<h3 class="mb-2 text-xl font-semibold text-foreground">No blogs found</h3>
+		<h3 class="mb-2 text-xl font-semibold text-foreground">{m.portfolio_grid_empty_title()}</h3>
 		<p class="max-w-sm text-muted-foreground">
-			Try adjusting your search or filter criteria to find what you're looking for.
+			{m.portfolio_grid_empty_hint()}
 		</p>
 	</div>
 {/if}

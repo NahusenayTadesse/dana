@@ -1,5 +1,7 @@
 <!-- src/lib/components/GallerySeparator.svelte -->
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages.js';
+
 	const arrayMaker = () => {
 		const length = 10;
 		return Array.from({ length }, (_, i) => `product (${i + 1}).webp`);
@@ -35,7 +37,7 @@
 				>
 					<img
 						src="/products/{image}"
-						alt="Gallery separator"
+						alt={m.separator_gallery_alt()}
 						class="h-full w-full object-contain p-2"
 						draggable="false"
 					/>

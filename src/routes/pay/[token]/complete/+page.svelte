@@ -2,6 +2,7 @@
 	import { CheckCircle2, Clock, XCircle } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { invalidateAll } from '$app/navigation';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { data } = $props();
 	let checking = $state(false);
@@ -24,7 +25,7 @@
 </script>
 
 <svelte:head>
-	<title>Payment Status</title>
+	<title>{m.pay_status_meta_title()}</title>
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
@@ -33,37 +34,39 @@
 		<!-- An advance was collected but the order is NOT settled. Saying
 		     "confirmed" here sent customers away believing they were done. -->
 		<CheckCircle2 class="mx-auto mb-4 size-12 text-emerald-500" />
-		<h1 class="text-xl font-bold">Advance payment received</h1>
+		<h1 class="text-xl font-bold">{m.pay_status_advance_title()}</h1>
 		<p class="mt-2 text-sm text-muted-foreground">
-			We've received {formatBirr(data.amountPaid)} towards order #{data.orderId}. A receipt has been
-			sent to your email.
+			{m.pay_status_advance_description({
+				amount: formatBirr(data.amountPaid),
+				id: String(data.orderId)
+			})}
 		</p>
 		<p class="mt-4 rounded-md bg-muted px-4 py-3 text-sm font-medium">
-			Remaining balance: {formatBirr(data.remainingBalance)}
+			{m.pay_status_remaining_balance({ amount: formatBirr(data.remainingBalance) })}
 		</p>
-		<Button href="/pay/{data.token}" class="mt-6">Pay the balance</Button>
+		<Button href="/pay/{data.token}" class="mt-6">{m.pay_status_pay_balance()}</Button>
 	{:else if data.status === 'paid'}
 		<CheckCircle2 class="mx-auto mb-4 size-12 text-emerald-500" />
-		<h1 class="text-xl font-bold">Payment received</h1>
+		<h1 class="text-xl font-bold">{m.pay_status_paid_title()}</h1>
 		<p class="mt-2 text-sm text-muted-foreground">
-			Order #{data.orderId} is confirmed. A receipt has been sent to your email.
+			{m.pay_status_paid_description({ id: String(data.orderId) })}
 		</p>
 	{:else if data.status === 'failed'}
 		<XCircle class="mx-auto mb-4 size-12 text-rose-500" />
-		<h1 class="text-xl font-bold">Payment didn't go through</h1>
+		<h1 class="text-xl font-bold">{m.pay_status_failed_title()}</h1>
 		<p class="mt-2 text-sm text-muted-foreground">
-			No charge was completed for order #{data.orderId}. You can try again below.
+			{m.pay_status_failed_description({ id: String(data.orderId) })}
 		</p>
-		<Button href="/pay/{data.token}" class="mt-6">Try Again</Button>
+		<Button href="/pay/{data.token}" class="mt-6">{m.pay_status_try_again()}</Button>
 	{:else}
 		<Clock class="mx-auto mb-4 size-12 text-primary" />
-		<h1 class="text-xl font-bold">Confirming your payment</h1>
-		<p class="mt-2 text-sm text-muted-foreground">{data.reason ?? 'This can take a moment.'}</p>
+		<h1 class="text-xl font-bold">{m.pay_status_pending_title()}</h1>
+		<p class="mt-2 text-sm text-muted-foreground">{data.reason ?? m.pay_status_pending_hint()}</p>
 		<div class="mt-6 flex justify-center gap-2">
 			<Button onclick={checkAgain} disabled={checking}>
-				{checking ? 'Checking…' : 'Check again'}
+				{checking ? m.pay_status_checking() : m.pay_status_check_again()}
 			</Button>
-			<Button href="/pay/{data.token}" variant="outline">Back to payment</Button>
+			<Button href="/pay/{data.token}" variant="outline">{m.pay_status_back()}</Button>
 		</div>
 	{/if}
 </div>

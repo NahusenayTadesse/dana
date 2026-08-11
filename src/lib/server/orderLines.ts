@@ -82,6 +82,41 @@ function basisPreference(soldBy: 'quantity' | 'length' | 'both'): PricingBasis[]
 type DbLike = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
+ * A cut-to-order length the customer asked for on a variant-backed line, or
+ * null to fall back to the variant's own catalog length.
+ *
+ * The cart keys its lines by variant AND length, so one variant can arrive as
+ * several lines at different lengths — 3 sheets at 2m and 2 at 3.5m. Taking
+ * the spec purely from the variant would flatten those back into identical
+ * order items, which is exactly what the customer did not order.
+ *
+ * SECURITY: length is a price multiplier whenever the resolved rate is charged
+ * per length or per area (see pricing.ts unitsFor), so a free-text length from
+ * the browser is a way to underpay. It is honoured only when the admin marked
+ * the product cut-to-order, and only inside the [minLength, maxLength] window
+ * they configured — the floor is what stops a "0.01m" line. Anything outside
+ * that is ignored in favour of the variant's length rather than rejected, so a
+ * stale cart can't hard-fail a checkout.
+ */
+function requestedLengthFor(
+	product: { isLengthCustomizable: boolean; minLength: string | null; maxLength: string | null },
+	line: RequestedLine
+): number | null {
+	if (!product.isLengthCustomizable) return null;
+
+	const requested = line.length == null ? NaN : Number(line.length);
+	if (!Number.isFinite(requested) || requested <= 0) return null;
+
+	const floor = product.minLength != null ? Number(product.minLength) : null;
+	const ceiling = product.maxLength != null ? Number(product.maxLength) : null;
+
+	if (floor != null && requested < floor) return null;
+	if (ceiling != null && requested > ceiling) return null;
+
+	return requested;
+}
+
+/**
  * Turn client-requested cart lines into insert-ready order items, with every
  * priced field resolved from the database.
  *
@@ -106,7 +141,18 @@ export async function resolveOrderLines(
 	}
 
 	const productRows = await tx
-		.select({ id: products.id, name: products.name, soldBy: products.soldBy })
+		.select({
+			id: products.id,
+			name: products.name,
+			soldBy: products.soldBy,
+			// Needed to decide whether a client-requested length on a
+			// variant-backed line may override the variant's own — see
+			// requestedLengthFor() below.
+			isLengthCustomizable: products.isLengthCustomizable,
+			minLength: products.minLength,
+			maxLength: products.maxLength,
+			maxLengthUnit: products.maxLengthUnit
+		})
 		.from(products)
 		.where(and(inArray(products.id, productIds), eq(products.isActive, true)));
 
@@ -225,6 +271,8 @@ export async function resolveOrderLines(
 		// A custom line's spec IS the customer's ask (that is the whole point of
 		// a quote request), so it is carried through as submitted — it is
 		// unpriced above, and staff review it before it becomes a real order.
+		const customLength = variant ? requestedLengthFor(product, line) : null;
+
 		const spec = variant
 			? {
 					colorId: variant.colorId,
@@ -232,8 +280,10 @@ export async function resolveOrderLines(
 					widthUnit: variant.widthUnit ?? undefined,
 					thickness: variant.thicknessValue,
 					thicknessUnit: variant.thicknessUnit ?? undefined,
-					length: variant.lengthValue,
-					lengthUnit: variant.lengthUnit ?? undefined
+					length: customLength != null ? String(customLength) : variant.lengthValue,
+					lengthUnit:
+						variant.lengthUnit ??
+						(customLength != null ? (product.maxLengthUnit ?? undefined) : undefined)
 				}
 			: {
 					colorId: line.colorId ?? null,

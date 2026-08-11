@@ -247,6 +247,141 @@
 	}
 }
 
+/* Height of the sticky site header (header.svelte uses h-16). Anything else
+   that pins to the top offsets by this instead of hardcoding a number, so the
+   two can't drift apart. */
+:root {
+	--header-h: 4rem;
+}
+
 @view-transition {
 	navigation: auto;
+}
+
+/* ============================================================
+   PRINT / SAVE-AS-PDF
+   The app clones whatever is being exported into a `.print-sheet`
+   attached to <body> (see $lib/print.ts) and sets `.printing` on
+   <html>. Everything else is hidden, so the browser's own PDF
+   writer renders the real DOM — images, badges and colours
+   included — instead of a redrawn approximation.
+   ============================================================ */
+.print-sheet {
+	display: none;
+}
+
+@media print {
+	html.printing,
+	html.printing body {
+		background: #fff !important;
+		color: #111 !important;
+		height: auto !important;
+		overflow: visible !important;
+	}
+
+	html.printing body > * {
+		display: none !important;
+	}
+
+	html.printing body > .print-sheet {
+		display: block !important;
+		position: static !important;
+		width: 100% !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		color: #111 !important;
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+
+	html.printing .print-sheet * {
+		color: #111 !important;
+		border-color: #d4d4d4 !important;
+		box-shadow: none !important;
+		max-height: none !important;
+		overflow: visible !important;
+		animation: none !important;
+		transition: none !important;
+	}
+
+	html.printing .print-sheet-header {
+		margin-bottom: 12px;
+		border-bottom: 2px solid #111 !important;
+		padding-bottom: 8px;
+	}
+
+	html.printing .print-sheet-header h1 {
+		font-size: 18pt;
+		font-weight: 700;
+	}
+
+	html.printing .print-sheet-header p {
+		font-size: 9pt;
+		color: #555 !important;
+	}
+
+	html.printing .print-sheet table {
+		width: 100% !important;
+		border-collapse: collapse !important;
+		font-size: 9pt;
+		table-layout: auto !important;
+	}
+
+	html.printing .print-sheet th,
+	html.printing .print-sheet td {
+		border: 1px solid #d4d4d4 !important;
+		padding: 4px 6px !important;
+		vertical-align: top !important;
+		white-space: normal !important;
+		word-break: break-word;
+	}
+
+	html.printing .print-sheet thead {
+		display: table-header-group;
+	}
+
+	html.printing .print-sheet thead th {
+		background: #f1f1f1 !important;
+		font-weight: 700;
+		text-align: left !important;
+	}
+
+	html.printing .print-sheet tr {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+
+	html.printing .print-sheet img {
+		max-width: 90px !important;
+		max-height: 90px !important;
+		height: auto !important;
+		object-fit: contain;
+	}
+
+	/* Receipts are portrait documents; wide data tables are landscape. */
+	html.printing .print-sheet .receipt {
+		font-size: 10pt;
+		max-width: 100%;
+	}
+
+	html.printing .print-sheet .receipt img {
+		max-width: 140px !important;
+		max-height: 60px !important;
+	}
+
+	@page {
+		size: A4 landscape;
+		margin: 12mm;
+	}
+
+	/* Receipts print portrait. `@page` can't read a class, so callers that want
+	   portrait add `printing-portrait` to <html> and this named page applies. */
+	html.printing-portrait {
+		page: portrait-page;
+	}
+}
+
+@page portrait-page {
+	size: A4 portrait;
+	margin: 14mm;
 }

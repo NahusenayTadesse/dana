@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import * as m from '$lib/paraglide/messages.js';
 	import { Input } from '$lib/components/ui/input/index';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import {
@@ -142,7 +143,7 @@
 	{#if $file.length > 0 || images.length > 0}
 		<div class="space-y-4">
 			<div class="flex items-center justify-between">
-				<h3 class="text-sm font-semibold tracking-tight">Gallery Preview</h3>
+				<h3 class="text-sm font-semibold tracking-tight">{m.upload_gallery_preview()}</h3>
 				{#if $file.length > 0}
 					<Button
 						variant="ghost"
@@ -150,7 +151,7 @@
 						class="h-8 text-xs text-muted-foreground hover:text-destructive"
 						onclick={() => ($file = [])}
 					>
-						<BrushCleaning class="mr-2 h-3.5 w-3.5" /> Clear New
+						<BrushCleaning class="mr-2 h-3.5 w-3.5" /> {m.upload_clear_new()}
 					</Button>
 				{/if}
 			</div>
@@ -162,7 +163,7 @@
 						class="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
 						transition:fade
 					>
-						<img src="/files/{img}" class="h-full w-full object-cover" alt="Server asset" />
+						<img src="/files/{img}" class="h-full w-full object-cover" alt={m.upload_server_asset_alt()} />
 						<div
 							class="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
 						>
@@ -176,7 +177,9 @@
 							</Button>
 						</div>
 						<div class="absolute right-0 bottom-0 left-0 bg-background/80 p-1 text-center">
-							<span class="text-[10px] font-medium text-muted-foreground uppercase">Existing</span>
+							<span class="text-[10px] font-medium text-muted-foreground uppercase"
+							>{m.upload_existing()}</span
+						>
 						</div>
 					</div>
 				{/each}
@@ -191,7 +194,7 @@
 							<img
 								src={URL.createObjectURL(f)}
 								class="h-full w-full object-cover"
-								alt="Local preview"
+								alt={m.upload_local_preview_alt()}
 							/>
 						{:else}
 							<div class="flex h-full flex-col items-center justify-center gap-2 bg-muted/50">

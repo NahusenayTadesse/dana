@@ -27,7 +27,8 @@
 		search = true,
 		class: className = '',
 		fileName = 'File',
-		selected = $bindable()
+		selected = $bindable(),
+		serverPaginated = false
 	}: DataTableProps<TData, TValue> = $props();
 	// let filterSchema = $derived(
 	//   discoverFilterSchema(data).filter(meta => !filterBlacklist.includes(meta.key))
@@ -39,9 +40,44 @@
 	import { ChevronDownIcon, Frown, ListOrdered } from '@lucide/svelte';
 	import * as Resizable from '$lib/components/ui/resizable/index.js';
 	import ResizableHandle from '../ui/resizable/resizable-handle.svelte';
-	import { isMobile } from '$lib/global.svelte';
+	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
-	let pagination = $state<PaginationState>({ pageIndex: 0, pageSize: data.length });
+	// Reactive: the old isMobile() was a one-shot innerWidth read that returned
+	// false on the server and never updated, so a phone rendered the desktop
+	// branch — an empty second pane taking half the width beside the table — and
+	// rotating the device changed nothing.
+	const isMobile = new IsMobile();
+
+	// Default is "everything on one page", which is what every call site expects.
+	// It has to be resynced rather than captured once: `data` is a prop, and a
+	// table that mounted against an empty array (an awaited load, a filter that
+	// briefly matches nothing) would otherwise keep pageSize 0 and render no
+	// rows at all once the data arrived. Server-paginated callers
+	// (OrderHistoryTable) hand over a new slice per page for the same reason.
+	const DEFAULT_PAGE_SIZE = 25;
+
+	// The initial read is deliberate, not a missed reactive dependency: effects
+	// don't run during SSR, so seeding from the first `data` is what keeps the
+	// server-rendered row count equal to the hydrated one. The $effect below
+	// owns every change after that.
+	// svelte-ignore state_referenced_locally
+	let pagination = $state<PaginationState>({
+		pageIndex: 0,
+		pageSize: data.length || DEFAULT_PAGE_SIZE
+	});
+
+	// Compared against, rather than resetting unconditionally, so a page size the
+	// user picked from the "Pages" menu survives re-renders — only a genuine
+	// change in the data resets it.
+	// svelte-ignore state_referenced_locally
+	let lastDataLength = data.length;
+	$effect(() => {
+		if (data.length === lastDataLength) return;
+		lastDataLength = data.length;
+		pagination = { pageIndex: 0, pageSize: data.length || DEFAULT_PAGE_SIZE };
+	});
+
 	let columnFilters = $state<ColumnFiltersState>([]);
 
 	type DataTableProps<TData, TValue> = {
@@ -51,6 +87,13 @@
 		class?: string;
 		fileName?: string;
 		selected?: TData[];
+		/**
+		 * The caller owns pagination and is handing over one page at a time.
+		 * Suppresses the row-count badge, the page-size menu and this table's own
+		 * pager — all three describe the slice, not the result set, and sitting
+		 * them next to the caller's "Showing 11–20 of 63" reads as a contradiction.
+		 */
+		serverPaginated?: boolean;
 	};
 
 	let sorting = $state<SortingState>([]);
@@ -127,7 +170,14 @@
 		getFilteredRowModel: getFilteredRowModel()
 	});
 
-	const uniqueTableId = `table-${Math.random().toString(36).substring(2, 15)}`;
+	// $props.id() rather than Math.random(): the latter produced a different id on
+	// the server than on the client, so the rendered attribute mismatched on
+	// hydration and Pdf's `document.querySelector('#…')` could come back null,
+	// silently no-opping both Print and CSV export.
+	// Must be a bare declaration initializer — Svelte rejects $props.id() nested
+	// in an expression — so the prefix is applied on the next line.
+	const instanceId = $props.id();
+	const uniqueTableId = `table-${instanceId}`;
 
 	function getTableBreakpoints<T>(data: T[]): number[] {
 		const totalItems = data.length;
@@ -168,7 +218,7 @@
 	class="mt-4 flex w-full min-w-full gap-0 rounded-lg lg:w-fit lg:min-w-2xl {className}"
 >
 	<Resizable.Pane
-		defaultSize={isMobile()
+		defaultSize={isMobile.current
 			? 100
 			: table.getAllColumns().filter((col) => col.getIsVisible()).length * 20}
 		class="bg-background"
@@ -187,7 +237,7 @@
 						{#if search}
 							<Input
 								type="search"
-								placeholder="Search Table..."
+								placeholder={m.table_search_placeholder()}
 								class="w-64 lg:w-full"
 								bind:value={globalFilter}
 								oninput={() => table.setGlobalFilter(globalFilter)}
@@ -197,7 +247,7 @@
 								<DropdownMenu.Trigger>
 									{#snippet child({ props })}
 										<Button {...props} variant="outline" class="ml-auto"
-											>Columns <ChevronDownIcon class="size-5" />
+											>{m.table_columns()} <ChevronDownIcon class="size-5" />
 										</Button>
 									{/snippet}
 								</DropdownMenu.Trigger>
@@ -215,53 +265,67 @@
 								</DropdownMenu.Content>
 							</DropdownMenu.Root>
 
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger>
-									{#snippet child({ props })}
-										<Button {...props} variant="outline" class="ml-auto"
-											>Pages <ChevronDownIcon class="size-5" />
-										</Button>
-									{/snippet}
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="center" class="flex w-4! flex-col">
-									{#each getTableBreakpoints(data) as column (column)}
-										<DropdownMenu.Item
-											class="w-4! capitalize"
-											onclick={() => {
-												table.setPageSize(column);
-											}}
-										>
-											{#snippet child({ props })}
-												<Button
-													{...props}
-													variant={pagination.pageSize === column ? 'default' : 'ghost'}
-													size="icon"
-													class="max-w-16"
-													>{column}
-												</Button>
-											{/snippet}
-										</DropdownMenu.Item>
-									{/each}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
+							<!-- Both of these describe the rows this table is holding. When the
+							     caller paginates server-side that is one page, not the result
+							     set, and the caller shows the real totals itself. -->
+							{#if !serverPaginated}
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button {...props} variant="outline" class="ml-auto"
+												>{m.table_pages()} <ChevronDownIcon class="size-5" />
+											</Button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="center" class="flex w-4! flex-col">
+										{#each getTableBreakpoints(data) as column (column)}
+											<DropdownMenu.Item
+												class="w-4! capitalize"
+												onclick={() => {
+													table.setPageSize(column);
+												}}
+											>
+												{#snippet child({ props })}
+													<Button
+														{...props}
+														variant={pagination.pageSize === column ? 'default' : 'ghost'}
+														size="icon"
+														class="max-w-16"
+														>{column}
+													</Button>
+												{/snippet}
+											</DropdownMenu.Item>
+										{/each}
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							{/if}
 							<Pdf {fileName} tableId="#{uniqueTableId}" {data} />
-							<Button variant="outline">
-								<ListOrdered />
-								{table.getFilteredRowModel().rows.length} Results
-							</Button>
+							{#if !serverPaginated}
+								<Button variant="outline">
+									<ListOrdered />
+									{m.table_results({ count: table.getFilteredRowModel().rows.length })}
+								</Button>
+							{/if}
 						</div>
 					</ScrollArea>
 				
 				<div class="rounded-md border">
-					<Table.Root id={uniqueTableId} class="relative max-h-96">
-						<Table.Header>
+					<!-- The height cap goes on the scroll container, not the <table>: a
+					     table box ignores max-height, so the old `max-h-96` on Table.Root
+					     (which lands on the <table>) did nothing and long tables still
+					     rendered at full height. -->
+					<Table.Root id={uniqueTableId} containerClass="max-h-96">
+						<Table.Header class="sticky top-0 z-30 bg-background">
 							{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
 								<Table.Row>
 									{#each headerGroup.headers as header, index}
+										<!-- Pin the leftmost column, not the one beside it: pinning
+										     index 1 let column 0 slide underneath its opaque
+										     background on horizontal scroll. -->
 										<Table.Head
 											colspan={header.colSpan}
-											class="{index === 1
-												? 'sticky left-0 z-10 bg-background'
+											class="{index === 0
+												? 'sticky left-0 z-20 bg-background'
 												: ''} p-0 px-2 text-start"
 										>
 											{#if !header.isPlaceholder}
@@ -280,7 +344,7 @@
 								<Table.Row data-state={row.getIsSelected() && 'selected'}>
 									{#each row.getVisibleCells() as cell, index}
 										<Table.Cell
-											class="word-break capitalize {index === 1
+											class="word-break capitalize {index === 0
 												? 'sticky left-0 z-10 bg-background'
 												: ''}"
 										>
@@ -295,7 +359,8 @@
 								<Table.Row>
 									<Table.Cell colspan={columns.length} class="text-center font-2xl">
 										<div class="flex flex-row items-center justify-center gap-2">
-											<Frown class="animate-bounce" /> Nothing found here.
+											<Frown class="animate-bounce" />
+											{m.table_empty()}
 										</div>
 									</Table.Cell>
 								</Table.Row>
@@ -303,17 +368,24 @@
 						</Table.Body>
 					</Table.Root>
 
+					<!-- In normal flow, not absolutely positioned: the wrapper isn't a
+					     containing block, so `absolute -bottom-5` sent these buttons to
+					     the bottom of the viewport instead of under the table. -->
 					{#if table.getPageCount() > 1}
-						<div
-							class="absolute -bottom-5 flex w-full items-end justify-end space-x-2 justify-self-center py-4"
-						>
+						<div class="flex items-center justify-end gap-2 border-t px-2 py-2">
+							<span class="mr-auto text-xs text-muted-foreground">
+								{m.table_page_of({
+									page: pagination.pageIndex + 1,
+									total: table.getPageCount()
+								})}
+							</span>
 							<Button
 								variant="outline"
 								size="sm"
 								onclick={() => table.previousPage()}
 								disabled={!table.getCanPreviousPage()}
 							>
-								Previous
+								{m.table_previous()}
 							</Button>
 							<Button
 								variant="outline"
@@ -321,7 +393,7 @@
 								onclick={() => table.nextPage()}
 								disabled={!table.getCanNextPage()}
 							>
-								Next
+								{m.table_next()}
 							</Button>
 						</div>
 					{/if}
@@ -330,7 +402,7 @@
 		</ScrollArea>
 	</Resizable.Pane>
 	<ResizableHandle withHandle />
-	{#if isMobile()}
+	{#if isMobile.current}
 		<Resizable.Pane defaultSize={0}></Resizable.Pane>
 	{:else}
 		<Resizable.Pane></Resizable.Pane>

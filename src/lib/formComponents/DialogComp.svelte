@@ -14,7 +14,13 @@
 		variant = 'default',
 		IconComp,
 		size = 'md',
-		class: className = ''
+		class: className = '',
+		/**
+		 * Bindable so a caller can close the sheet itself once the form inside it
+		 * succeeds — otherwise the customer is left staring at the form they just
+		 * submitted, with the updated page hidden behind it.
+		 */
+		open = $bindable(false)
 	}: {
 		title: string;
 		children: Snippet;
@@ -23,6 +29,7 @@
 		/** Pick per call site: sm for tiny forms, xl/full for big ones */
 		size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 		class?: string;
+		open?: boolean;
 	} = $props();
 
 	const sizes = {
@@ -34,7 +41,7 @@
 	};
 </script>
 
-<Sheet.Root>
+<Sheet.Root bind:open>
 	<Sheet.Trigger class="w-auto border-0">
 		{#snippet child({ props })}
 			<Button size="sm" class="border-0" {variant} {...props}>
@@ -56,11 +63,7 @@
 	-->
 	<Sheet.Content
 		side="right"
-		class={cn(
-			'flex w-full flex-col gap-0 sm:max-w-[95vw]',
-			sizes[size],
-			className
-		)}
+		class={cn('flex w-full flex-col gap-0 sm:max-w-[95vw]', sizes[size], className)}
 	>
 		<Sheet.Header class="shrink-0 border-b px-4 py-3">
 			<Sheet.Title>{title}</Sheet.Title>

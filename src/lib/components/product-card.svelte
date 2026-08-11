@@ -119,9 +119,17 @@
 		selectedVariant?.price != null ? Number(selectedVariant.price) : null
 	);
 
+	// The exact combination this card would add, not the variant across every
+	// length it might sit in the cart at — those are separate lines now.
 	const quantityInCart = $derived(
 		selectedVariant
-			? (cart?.items.find((i) => i.variantId === selectedVariant.variantId)?.quantity ?? 0)
+			? (cart?.quantityOf({
+					variantId: selectedVariant.variantId,
+					colorId: selectedVariant.colorId,
+					length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
+					lengthUnit: selectedVariant.lengthUnit ?? null,
+					isCustomLength: selectedVariant.isCustomLength ?? false
+				}) ?? 0)
 			: 0
 	);
 
@@ -139,7 +147,8 @@
 			colorName: selectedVariant.colorName,
 			width: selectedVariant.widthValue != null ? Number(selectedVariant.widthValue) : null,
 			widthUnit: selectedVariant.widthUnit,
-			thickness: selectedVariant.thicknessValue != null ? Number(selectedVariant.thicknessValue) : null,
+			thickness:
+				selectedVariant.thicknessValue != null ? Number(selectedVariant.thicknessValue) : null,
 			thicknessUnit: selectedVariant.thicknessUnit,
 			length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
 			lengthUnit: selectedVariant.lengthUnit ?? null,
@@ -233,8 +242,7 @@
 				{/if}
 			</span>
 			{#if brand}
-				<span class="text-[11.5px] font-semibold text-slate-400 dark:text-slate-500"
-					>· {brand}</span
+				<span class="text-[11.5px] font-semibold text-slate-400 dark:text-slate-500">· {brand}</span
 				>
 			{/if}
 		</div>
@@ -257,7 +265,8 @@
 			{:else if minPrice !== null}
 				{minPrice === maxPrice
 					? `ETB ${minPrice?.toLocaleString()}${priceUnitSuffix}`
-					: m.product_card_price_from({ price: minPrice?.toLocaleString() ?? '' }) + priceUnitSuffix}
+					: m.product_card_price_from({ price: minPrice?.toLocaleString() ?? '' }) +
+						priceUnitSuffix}
 			{:else}
 				{m.product_card_contact_for_pricing()}
 			{/if}
@@ -290,14 +299,16 @@
 						class="h-auto w-full rounded-xl border border-slate-200 bg-white p-2 text-slate-900 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
 					>
 						<div class="flex w-full items-center justify-between gap-2 text-left">
-              <div
-                class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
-              >								{selectedVariant ? variantLabel(selectedVariant) : m.product_card_choose_option()}
+							<div
+								class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
+							>
+								{selectedVariant ? variantLabel(selectedVariant) : m.product_card_choose_option()}
 							</div>
 							{#if selectedVariant?.sku}
-    <div class="shrink-0 font-mono text-[10px] text-slate-400">
-                  {selectedVariant.sku}
-                </div>							{/if}
+								<div class="shrink-0 font-mono text-[10px] text-slate-400">
+									{selectedVariant.sku}
+								</div>
+							{/if}
 						</div>
 					</SelectTrigger>
 					<SelectContent

@@ -50,7 +50,7 @@
           >
             <img 
               src={item.src} 
-              alt="Facility preview" 
+              alt={m.alt_facility_preview()} 
               class="h-full w-full object-cover" 
             />
           </button>
@@ -120,21 +120,21 @@
         <div class="relative overflow-hidden rounded-xl border border-border/50 group h-28">
           <img 
             src="/images/working.webp" 
-            alt="Workplace operations" 
+            alt={m.alt_workplace_operations()} 
             class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
           />
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-          <span class="absolute bottom-2 left-3 text-xs font-semibold text-white">Daily Operations</span>
+          <span class="absolute bottom-2 left-3 text-xs font-semibold text-white">{m.about_caption_daily_operations()}</span>
         </div>
 
         <div class="relative overflow-hidden rounded-xl border border-border/50 group h-28">
           <img 
             src="/images/client.webp" 
-            alt="Client Relations" 
+            alt={m.alt_client_relations()} 
             class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
           />
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-          <span class="absolute bottom-2 left-3 text-xs font-semibold text-white">Client Partnerships</span>
+          <span class="absolute bottom-2 left-3 text-xs font-semibold text-white">{m.about_caption_client_partnerships()}</span>
         </div>
       </div>
       

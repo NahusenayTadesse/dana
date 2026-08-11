@@ -5,6 +5,7 @@
  import { resetMode, setMode } from "mode-watcher";
  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
  import { buttonVariants } from "$lib/components/ui/button/index.js";
+ import * as m from "$lib/paraglide/messages.js";
 </script>
  
 <DropdownMenu.Root>
@@ -17,12 +18,12 @@
   <MoonIcon
    class="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 !transition-all dark:rotate-0 dark:scale-100"
   />
-  <span class="sr-only">Toggle theme</span>
+  <span class="sr-only">{m.theme_toggle()}</span>
  </DropdownMenu.Trigger>
  <DropdownMenu.Content align="end">
-  <DropdownMenu.Item onclick={() => setMode("light")}>Light</DropdownMenu.Item
+  <DropdownMenu.Item onclick={() => setMode("light")}>{m.theme_light()}</DropdownMenu.Item
   >
-  <DropdownMenu.Item onclick={() => setMode("dark")}>Dark</DropdownMenu.Item>
-  <DropdownMenu.Item onclick={() => resetMode()}>System</DropdownMenu.Item>
+  <DropdownMenu.Item onclick={() => setMode("dark")}>{m.theme_dark()}</DropdownMenu.Item>
+  <DropdownMenu.Item onclick={() => resetMode()}>{m.theme_system()}</DropdownMenu.Item>
  </DropdownMenu.Content>
 </DropdownMenu.Root>

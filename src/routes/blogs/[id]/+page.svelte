@@ -3,20 +3,10 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Separator } from '$lib/components/ui/separator';
-	import {
-		ArrowLeftIcon,
-		CalendarIcon,
-		BatteryChargingIcon,
-		ZapIcon,
-		ShieldCheckIcon,
-		BookOpenIcon,
-		ArrowRightIcon,
-		Bolt,
-		BatteryCharging
-	} from '@lucide/svelte';
+	import { ArrowLeftIcon, CalendarIcon, ArrowRightIcon, Factory } from '@lucide/svelte';
 	import Gallery from '$lib/components/gallery.svelte';
 	import { formatEthiopianDate } from '$lib/global.svelte.js';
-	import ImgSeparator from '$lib/components/imgSeparator.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	const { data } = $props();
 
@@ -27,32 +17,28 @@
 		item?.createdAt ? formatEthiopianDate(new Date(item.createdAt)) : null
 	);
 
-	const pageTitle = $derived(`${post?.title ?? 'dana Technology Guide'} | dana Blog`);
-	const pageDescription = $derived(
-		post?.excerpt ||
-			'Read dana guides about electronics, mobile accessories, power solutions, storage devices, audio products, smart technology, warranty support, and everyday digital convenience.'
+	const pageTitle = $derived(
+		m.blog_post_meta_title({ title: post?.title ?? m.blog_post_default_title() })
 	);
+	const pageDescription = $derived(post?.excerpt || m.blog_post_meta_description());
 </script>
 
 <svelte:head>
 	<title>{pageTitle}</title>
 	<meta name="title" content={pageTitle} />
 	<meta name="description" content={pageDescription} />
-	<meta
-		name="keywords"
-		content="dana blog, dana Electronics, electronics Ethiopia, Addis Ababa electronics, mobile accessories, power solutions, storage devices, audio products, smart electronics"
-	/>
+	<meta name="keywords" content={m.blog_post_meta_keywords()} />
 
 	<meta property="og:type" content="article" />
-	<meta property="og:url" content={`https://danaelectronics.com/blogs/${post?.slug ?? ''}`} />
+	<meta property="og:url" content={`https://dana.et/blogs/${post?.slug ?? ''}`} />
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={pageDescription} />
 	<meta
 		property="og:image"
 		content={`https://dana.et/files/${post?.featuredImage ?? 'logo.png'}`}
 	/>
-	<meta property="article:section" content={post?.category || 'Electronics Guide'} />
-	<meta property="article:author" content="dana Electronics" />
+	<meta property="article:section" content={post?.category || m.blog_post_default_section()} />
+	<meta property="article:author" content={m.brand_name()} />
 
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:url" content={`https://dana.et/blogs/${post?.slug ?? ''}`} />
@@ -64,7 +50,7 @@
 	/>
 
 	<link rel="canonical" href={`https://dana.et/blogs/${post?.slug ?? ''}`} />
-	<meta name="author" content="dana Electronics" />
+	<meta name="author" content={m.brand_name()} />
 </svelte:head>
 
 <div
@@ -91,7 +77,7 @@
 						href="/blogs"
 					>
 						<ArrowLeftIcon class="mr-2 size-4" />
-						Back to Insights
+						{m.blog_post_back_to_insights()}
 					</Button>
 				</div>
 				{#if item?.category}
@@ -110,8 +96,8 @@
 					<div
 						class="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-bold tracking-widest text-primary uppercase backdrop-blur-xl"
 					>
-						<BatteryCharging class="size-4" />
-						dana Electronics
+						<Factory class="size-4" />
+						{m.brand_name()}
 					</div>
 
 					<h1 class="text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
@@ -134,7 +120,7 @@
 								<CalendarIcon class="size-5" />
 							</div>
 							<div>
-								<p class="text-xs text-muted-foreground">Published</p>
+								<p class="text-xs text-muted-foreground">{m.blog_post_published()}</p>
 								<p class="text-sm font-bold">{formattedDate}</p>
 							</div>
 						</div>
@@ -167,7 +153,6 @@
 			class="mx-auto max-w-4xl rounded-3xl border border-primary/10 bg-card/50 p-6 shadow-2xl backdrop-blur-2xl lg:p-10"
 			in:fly={{ y: 36, duration: 600, delay: 150 }}
 		>
-			<ImgSeparator />
 
 			<article
 				class="prose prose-sm prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary max-w-none text-muted-foreground"
@@ -186,16 +171,14 @@
 			<div
 				class="rounded-3xl border border-primary/10 bg-primary/5 p-6 text-center backdrop-blur-xl"
 			>
-				<h2 class="text-2xl font-black tracking-tight">Need help choosing a dana product?</h2>
+				<h2 class="text-2xl font-black tracking-tight">{m.blog_post_cta_heading()}</h2>
 				<p class="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-					Explore our products or contact dana support for help choosing the right electronics,
-					mobile accessories, power solutions, storage devices, audio products, or smart technology
-					solutions.
+					{m.blog_post_cta_description()}
 				</p>
 
 				<div class="mt-6 flex flex-col gap-3 sm:flex-row">
 					<Button class="group flex-1 rounded-full" href="/shop" size="lg">
-						View Products
+						{m.blog_post_cta_view_products()}
 						<ArrowRightIcon class="ml-2 size-4 transition-transform group-hover:translate-x-1" />
 					</Button>
 
@@ -205,7 +188,7 @@
 						size="lg"
 						href="/blogs"
 					>
-						Read More Insights
+						{m.blog_post_cta_read_more()}
 					</Button>
 				</div>
 			</div>

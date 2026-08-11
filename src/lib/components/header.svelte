@@ -4,6 +4,7 @@
 		XIcon,
 		House as HomeIcon,
 		ShoppingBagIcon,
+		ShoppingCartIcon,
 		InfoIcon,
 		ContactIcon,
 		LogInIcon,
@@ -34,9 +35,13 @@
 		isOpen = false;
 	};
 
+	// /buy sits right after /shop: browse the catalog, then build the order.
+	// It's the page that actually takes an order, so it stays ahead of the
+	// informational links rather than trailing them.
 	const menuItems = [
 		{ label: m.header_nav_home, href: '/', icon: HomeIcon },
 		{ label: m.header_nav_shop, href: '/shop', icon: ShoppingBagIcon },
+		{ label: m.header_nav_buy, href: '/buy', icon: ShoppingCartIcon },
 		{ label: m.header_nav_about_us, href: '/about', icon: InfoIcon },
 		{ label: m.header_nav_blog, href: '/blogs', icon: InfoIcon },
 		{ label: m.header_nav_contact_us, href: '/contact-us', icon: ContactIcon }

@@ -10,32 +10,33 @@
 		AwardIcon
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
+	import * as m from '$lib/paraglide/messages.js';
 
 	const coreValues = [
 		{
 			icon: ShieldCheckIcon,
-			title: 'Quality',
-			text: 'We never compromise on product standards.'
+			title: m.mission_value_quality_title,
+			text: m.mission_value_quality_text
 		},
 		{
 			icon: HandshakeIcon,
-			title: 'Integrity',
-			text: 'We build relationships based on honesty and transparency.'
+			title: m.mission_value_integrity_title,
+			text: m.mission_value_integrity_text
 		},
 		{
 			icon: SparklesIcon,
-			title: 'Innovation',
-			text: 'We continuously embrace new technologies and opportunities.'
+			title: m.mission_value_innovation_title,
+			text: m.mission_value_innovation_text
 		},
 		{
 			icon: HeartHandshakeIcon,
-			title: 'Customer Focus',
-			text: 'Customer satisfaction remains at the center of everything we do.'
+			title: m.mission_value_customer_title,
+			text: m.mission_value_customer_text
 		},
 		{
 			icon: AwardIcon,
-			title: 'Excellence',
-			text: 'We strive for excellence in products, service, and support.'
+			title: m.mission_value_excellence_title,
+			text: m.mission_value_excellence_text
 		}
 	];
 </script>
@@ -59,16 +60,15 @@
 			<span
 				class="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-xs font-bold tracking-widest text-primary uppercase backdrop-blur-xl"
 			>
-				About dana Electronics
+				{m.mission_badge()}
 			</span>
 
 			<h2 class="max-w-4xl text-3xl font-black tracking-tight sm:text-5xl">
-				Innovation, Quality, and Customer-Focused Service
+				{m.mission_heading()}
 			</h2>
 
 			<p class="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-				At dana Electronics, our mission, vision, and values guide how we deliver dependable
-				electronic products and build lasting trust with every customer.
+				{m.mission_intro()}
 			</p>
 		</div>
 
@@ -84,13 +84,14 @@
 							<TargetIcon class="size-7" />
 						</div>
 
-						<p class="text-xs font-bold tracking-widest text-primary uppercase">Our Mission</p>
+						<p class="text-xs font-bold tracking-widest text-primary uppercase">
+							{m.mission_our_mission_label()}
+						</p>
 
-						<h3 class="mt-3 text-2xl font-black tracking-tight">Enhancing Everyday Life</h3>
+						<h3 class="mt-3 text-2xl font-black tracking-tight">{m.mission_our_mission_title()}</h3>
 
 						<p class="mt-4 text-sm leading-relaxed text-muted-foreground">
-							To provide dependable electronic products that enhance everyday life through
-							innovation, quality, and customer-focused service.
+							{m.mission_our_mission_text()}
 						</p>
 					</CardContent>
 				</Card>
@@ -106,15 +107,16 @@
 							<EyeIcon class="size-7" />
 						</div>
 
-						<p class="text-xs font-bold tracking-widest text-primary uppercase">Our Vision</p>
+						<p class="text-xs font-bold tracking-widest text-primary uppercase">
+							{m.mission_our_vision_label()}
+						</p>
 
 						<h3 class="mt-3 text-2xl font-black tracking-tight">
-							Ethiopia’s Preferred Electronics Brand
+							{m.mission_our_vision_title()}
 						</h3>
 
 						<p class="mt-4 text-sm leading-relaxed text-muted-foreground">
-							To be recognized as Ethiopia’s preferred electronics brand known for quality, trust,
-							and innovation.
+							{m.mission_our_vision_text()}
 						</p>
 					</CardContent>
 				</Card>
@@ -126,8 +128,10 @@
 			class="rounded-3xl border border-primary/10 bg-card/40 p-6 shadow-xl backdrop-blur-2xl sm:p-8"
 		>
 			<div class="mb-8 text-center">
-				<p class="text-xs font-bold tracking-widest text-primary uppercase">Our Core Values</p>
-				<h3 class="mt-3 text-3xl font-black tracking-tight">The Principles Behind Our Brand</h3>
+				<p class="text-xs font-bold tracking-widest text-primary uppercase">
+					{m.mission_core_values_label()}
+				</p>
+				<h3 class="mt-3 text-3xl font-black tracking-tight">{m.mission_core_values_title()}</h3>
 			</div>
 
 			<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
@@ -139,12 +143,12 @@
 						<div
 							class="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition duration-500 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground"
 						>
-							<svelte:component this={value.icon} class="size-6" />
+							<value.icon class="size-6" />
 						</div>
 
-						<h4 class="text-sm font-bold">{value.title}</h4>
+						<h4 class="text-sm font-bold">{value.title()}</h4>
 
-						<p class="mt-2 text-xs leading-relaxed text-muted-foreground">{value.text}</p>
+						<p class="mt-2 text-xs leading-relaxed text-muted-foreground">{value.text()}</p>
 					</div>
 				{/each}
 			</div>

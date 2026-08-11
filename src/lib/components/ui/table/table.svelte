@@ -5,12 +5,22 @@
 	let {
 		ref = $bindable(null),
 		class: className,
+		/**
+		 * Classes for the scroll container around the table. `class` lands on the
+		 * <table> itself, where height constraints are ignored — anything that
+		 * needs to bound or scroll the table (max-h, sticky-header contexts) has
+		 * to go here instead.
+		 */
+		containerClass,
 		children,
 		...restProps
-	}: WithElementRef<HTMLTableAttributes> = $props();
+	}: WithElementRef<HTMLTableAttributes> & { containerClass?: string } = $props();
 </script>
 
-<div data-slot="table-container" class="relative w-full overflow-x-auto">
+<div
+	data-slot="table-container"
+	class={cn("relative w-full overflow-x-auto", containerClass)}
+>
 	<table bind:this={ref} data-slot="table" class={cn("w-full caption-bottom text-sm", className)} {...restProps}>
 		{@render children?.()}
 	</table>

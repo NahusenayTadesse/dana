@@ -108,7 +108,7 @@
 	}
 </script>
 
-<div class="fixed left-5 bottom-22 z-50 lg:bottom-5">
+<div class="fixed left-5 bottom-22 z-50 md:bottom-5">
 	{#if open}
 		<Card.Root
 			class="mb-4 flex h-[min(42rem,calc(100vh-6rem))] w-[calc(100vw-2.5rem)] max-w-sm flex-col overflow-hidden border bg-background shadow-2xl sm:w-96"

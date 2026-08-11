@@ -2,6 +2,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { type Item } from '$lib/global.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let {
 		items = [],
@@ -57,7 +58,7 @@
 			indeterminate={someSelected}
 			onCheckedChange={toggleSelectAll}
 		/>
-		Select All
+		{m.common_select_all()}
 	</Label>
 </div>
 

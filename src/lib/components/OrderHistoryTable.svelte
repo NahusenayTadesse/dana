@@ -13,12 +13,11 @@
 		Search,
 		X
 	} from '@lucide/svelte';
-	import OrderItems from '$lib/components/order-items.svelte';
-	import Statuses from '$lib/components/Table/statuses.svelte';
-	import RequestAdjustment from '$lib/components/RequestAdjustment.svelte';
-	import { formatETB } from '$lib/global.svelte';
+	import DataTable from '$lib/components/Table/data-table.svelte';
+	import { orderHistoryColumns } from '$lib/components/Table/order-history-columns';
 	import type { CustomerOrderHistory } from '$lib/server/customerOrderHistory';
 	import type { SuperValidated } from 'sveltekit-superforms';
+	import * as m from '$lib/paraglide/messages.js';
 
 	type Props = {
 		data: CustomerOrderHistory;
@@ -35,10 +34,10 @@
 	let { data, activeStatus, q, basePath, requestAdjustmentData }: Props = $props();
 
 	const filters = [
-		{ v: 'all', label: 'All', Icon: Sheet },
-		{ v: 'pending', label: 'Pending', Icon: Loader },
-		{ v: 'delivered', label: 'Delivered', Icon: CircleCheckBig },
-		{ v: 'cancelled', label: 'Cancelled', Icon: OctagonMinus }
+		{ v: 'all', label: m.order_filter_all, Icon: Sheet },
+		{ v: 'pending', label: m.order_filter_pending, Icon: Loader },
+		{ v: 'delivered', label: m.order_filter_delivered, Icon: CircleCheckBig },
+		{ v: 'cancelled', label: m.order_filter_cancelled, Icon: OctagonMinus }
 	];
 
 	const mkHref = (opts: { status?: string; q?: string; page?: number } = {}) => {
@@ -64,8 +63,7 @@
 	const rangeStart = $derived(data.totalOrders === 0 ? 0 : (data.page - 1) * data.perPage + 1);
 	const rangeEnd = $derived(Math.min(data.page * data.perPage, data.totalOrders));
 
-	const orderTotal = (order: CustomerOrderHistory['orders'][number]) =>
-		order.offer ? Number(order.offer.total) : order.total;
+	const columns = $derived(orderHistoryColumns(requestAdjustmentData));
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -73,7 +71,7 @@
 		{#each filters as f}
 			<Button variant={activeStatus === f.v ? 'default' : 'outline'} href={mkHref({ status: f.v })}>
 				<f.Icon class="h-4 w-4" />
-				{f.label}
+				{f.label()}
 			</Button>
 		{/each}
 	</div>
@@ -85,104 +83,69 @@
 	{/if}
 	<div class="relative w-full max-w-md">
 		<Search class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-		<Input name="q" value={q} placeholder="Search orders, totals, tokens…" class="pl-9" />
+		<Input name="q" value={q} placeholder={m.order_history_search_placeholder()} class="pl-9" />
 		{#if q}
 			<a
 				href={mkHref({ q: '' })}
 				class="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted"
-				aria-label="Clear search"
+				aria-label={m.order_history_clear_search()}
 			>
 				<X class="h-4 w-4" />
 			</a>
 		{/if}
 	</div>
-	<Button type="submit" variant="outline">Search</Button>
+	<Button type="submit" variant="outline">{m.order_history_search()}</Button>
 </form>
 
 {#if q}
 	<p class="mb-3 text-sm text-muted-foreground">
-		{data.totalOrders} result{data.totalOrders === 1 ? '' : 's'} for "{q}"
+		{m.order_history_results_for({ count: data.totalOrders, query: q })}
 	</p>
 {/if}
 
 {#if data.orders.length === 0}
-	<div class="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No orders found.</div>
-{:else}
-	<div class="overflow-x-auto rounded-xl border border-border">
-		<table class="w-full min-w-[720px] border-collapse text-left text-sm">
-			<thead>
-				<tr class="bg-muted/40">
-					<th class="px-4 py-3 font-semibold text-muted-foreground">Order</th>
-					<th class="px-4 py-3 font-semibold text-muted-foreground">Items</th>
-					<th class="px-4 py-3 font-semibold text-muted-foreground">Placed</th>
-					<th class="px-4 py-3 font-semibold text-muted-foreground">Delivery</th>
-					<th class="px-4 py-3 font-semibold text-muted-foreground">Status</th>
-					<th class="px-4 py-3 font-semibold text-muted-foreground">Payment</th>
-					<th class="px-4 py-3 text-right font-semibold text-muted-foreground">Total</th>
-					{#if requestAdjustmentData}
-						<th class="px-4 py-3 font-semibold text-muted-foreground">Adjustment</th>
-					{/if}
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.orders as order (order.id)}
-					<tr class="border-t border-border">
-						<td class="px-4 py-3 font-mono text-xs text-muted-foreground">#{order.id}</td>
-						<td class="px-4 py-3"><OrderItems items={order.items} currency="ETB" /></td>
-						<td class="px-4 py-3 whitespace-nowrap">
-							{new Date(order.createdAt).toLocaleDateString()}
-						</td>
-						<td class="px-4 py-3 whitespace-nowrap">
-							{order.deliveryDate ?? '—'}
-						</td>
-						<td class="px-4 py-3"><Statuses status={order.status ?? 'pending'} /></td>
-						<td class="px-4 py-3">
-							{#if order.paymentStatus}
-								<Statuses status={order.paymentStatus} />
-							{:else}
-								<span class="text-xs text-muted-foreground">—</span>
-							{/if}
-						</td>
-						<td class="px-4 py-3 text-right font-semibold">{formatETB(orderTotal(order))}</td>
-						{#if requestAdjustmentData}
-							<td class="px-4 py-3">
-								{#if order.status === 'pending'}
-									<RequestAdjustment data={requestAdjustmentData} orderId={order.id} />
-								{:else}
-									<span class="text-xs text-muted-foreground">—</span>
-								{/if}
-							</td>
-						{/if}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+	<div class="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+		{m.order_history_no_orders_found()}
 	</div>
+{:else}
+	<!-- serverPaginated: this component owns the filters, the search box and the
+	     pager below, so DataTable must not advertise counts for its slice. -->
+	<DataTable
+		data={data.orders}
+		{columns}
+		search={false}
+		serverPaginated
+		fileName="order-history"
+	/>
 {/if}
 
 <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
 	<p class="text-sm text-muted-foreground">
 		{#if data.totalOrders === 0}
-			No orders
+			{m.order_history_no_orders()}
 		{:else}
-			Showing {rangeStart}–{rangeEnd} of {data.totalOrders}
+			{m.order_history_showing({
+				from: rangeStart,
+				to: rangeEnd,
+				total: data.totalOrders
+			})}
 		{/if}
 	</p>
 
 	{#if data.totalPages > 1}
 		<div class="flex items-center gap-1">
 			{#if data.page > 1}
-				<Button variant="outline" size="icon" href={mkHref({ page: 1 })} aria-label="First page">
+				<Button variant="outline" size="icon" href={mkHref({ page: 1 })} aria-label={m.pagination_first_page()}>
 					<ChevronsLeft class="h-4 w-4" />
 				</Button>
-				<Button variant="outline" size="icon" href={mkHref({ page: data.page - 1 })} aria-label="Previous page">
+				<Button variant="outline" size="icon" href={mkHref({ page: data.page - 1 })} aria-label={m.pagination_previous_page()}>
 					<ChevronLeft class="h-4 w-4" />
 				</Button>
 			{:else}
-				<Button variant="outline" size="icon" disabled aria-label="First page">
+				<Button variant="outline" size="icon" disabled aria-label={m.pagination_first_page()}>
 					<ChevronsLeft class="h-4 w-4" />
 				</Button>
-				<Button variant="outline" size="icon" disabled aria-label="Previous page">
+				<Button variant="outline" size="icon" disabled aria-label={m.pagination_previous_page()}>
 					<ChevronLeft class="h-4 w-4" />
 				</Button>
 			{/if}
@@ -202,17 +165,17 @@
 			{/if}
 
 			{#if data.page < data.totalPages}
-				<Button variant="outline" size="icon" href={mkHref({ page: data.page + 1 })} aria-label="Next page">
+				<Button variant="outline" size="icon" href={mkHref({ page: data.page + 1 })} aria-label={m.pagination_next_page()}>
 					<ChevronRight class="h-4 w-4" />
 				</Button>
-				<Button variant="outline" size="icon" href={mkHref({ page: data.totalPages })} aria-label="Last page">
+				<Button variant="outline" size="icon" href={mkHref({ page: data.totalPages })} aria-label={m.pagination_last_page()}>
 					<ChevronsRight class="h-4 w-4" />
 				</Button>
 			{:else}
-				<Button variant="outline" size="icon" disabled aria-label="Next page">
+				<Button variant="outline" size="icon" disabled aria-label={m.pagination_next_page()}>
 					<ChevronRight class="h-4 w-4" />
 				</Button>
-				<Button variant="outline" size="icon" disabled aria-label="Last page">
+				<Button variant="outline" size="icon" disabled aria-label={m.pagination_last_page()}>
 					<ChevronsRight class="h-4 w-4" />
 				</Button>
 			{/if}

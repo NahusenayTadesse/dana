@@ -1,3 +1,4 @@
+import { redirect } from '@sveltejs/kit';
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, inArray } from 'drizzle-orm';
@@ -12,16 +13,54 @@ import { quoteRequests, orders, orderItems, products, customers } from '$lib/ser
 import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile, deleteUploadedFile } from '$lib/server/upload';
 import { resolveOrderLines, OrderLineError } from '$lib/server/orderLines';
+import { loadBuyProductList } from '$lib/server/buy-listing';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
 	const form = await superValidate(zod4(add));
 	const signupForm = await superValidate(zod4(addUser));
 	const loginForm = await superValidate(zod4(loginSchema));
 
+	// What the submit will require of a signed-in customer, resolved up front.
+	// Without this the page showed a bare "Request quote" button and the action
+	// threw "Missing phone number — please update your profile", an error the
+	// customer could neither see coming nor act on from this page. The action
+	// already falls back to form values, so rendering the gaps as inputs is
+	// enough to make those throws unreachable in normal use.
+	let profile: { name: string | null; email: string | null; phone: string | null } | null = null;
+	if (locals?.user) {
+		const row = await db
+			.select({ name: customers.name, email: customers.email, phone: customers.phone })
+			.from(customers)
+			.where(eq(customers.userId, locals.user.id))
+			.limit(1)
+			.then((rows) => rows[0]);
+
+		profile = {
+			name: row?.name ?? locals.user.name ?? null,
+			email: row?.email ?? locals.user.email ?? null,
+			phone: row?.phone ?? null
+		};
+	}
+
+	// The manifest here uses the same grouped order blocks as /buy, and those
+	// need the variant matrix: without it a block can't offer the colours a
+	// product comes in, and length edits lose their catalog stops and min/max
+	// clamps — a customer could dial in a length the factory doesn't make.
+	const productList = await loadBuyProductList();
+
 	return {
 		form,
 		signupForm,
-		loginForm
+		loginForm,
+		productList,
+		profile,
+		missingProfileFields: profile
+			? {
+					name: !profile.name,
+					email: !profile.email,
+					phone: !profile.phone
+				}
+			: null
 	};
 };
 
@@ -103,7 +142,9 @@ export const actions: Actions = {
 						// undefined and inserted an order with customerId: NULL —
 						// an order nobody could look up. Create the profile instead.
 						if (!locals.user.email) {
-							throw new Error('Your account has no email on file — please update your profile.');
+							throw new Error(
+								'Your account has no email on file. Add one in Account → Settings, then submit again.'
+							);
 						}
 
 						const [inserted] = await tx
@@ -190,11 +231,17 @@ export const actions: Actions = {
 				resolvedEmail = customerInfo?.email ?? email;
 				resolvedPhone = customerInfo?.phone ?? phone;
 
+				// Safety net only — the checkout page now renders inputs for whatever
+				// is missing from the profile, so these should be unreachable.
 				if (!resolvedName) {
-					throw new Error('Missing name for quote request — please update your profile.');
+					throw new Error(
+						'We still need a name for this request. Add one below, or update your profile in Account → Settings.'
+					);
 				}
 				if (!resolvedPhone) {
-					throw new Error('Missing phone number for quote request — please update your profile.');
+					throw new Error(
+						'We still need a phone number for this request. Add one below, or update your profile in Account → Settings.'
+					);
 				}
 
 				// --- product names for the notification emails ---
@@ -309,9 +356,11 @@ export const actions: Actions = {
 			);
 		}
 
-		return message(form, {
-			type: 'success',
-			text: 'Thanks! Your quote request has been submitted — our team will reach out shortly.'
-		});
+		// Redirect rather than returning a success message. Returning one left the
+		// customer on /checkout with the cart cleared underneath them, so the page
+		// re-rendered into its empty-cart state — "your order is empty, browse the
+		// shop" — moments after they submitted. The confirmation page states the
+		// reference, what was sent, and what happens next.
+		redirect(303, `/checkout/submitted?ref=${newQuoteId ?? ''}`);
 	}
 };

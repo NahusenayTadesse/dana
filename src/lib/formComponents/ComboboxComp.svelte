@@ -26,6 +26,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn } from '$lib/utils.js';
 	import { selectItem } from '$lib/global.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	type Item = {
 		value: string | number;
@@ -60,7 +61,9 @@
 	const titleName = $derived(prettyName.replace(/\b\w/g, (c) => c.toUpperCase()));
 
 	const selected = $derived(items.find((f) => String(f.value) === String(value)));
-	const triggerContent = $derived(selected?.name ?? placeholder ?? `Select ${prettyName}`);
+	const triggerContent = $derived(
+		selected?.name ?? placeholder ?? m.common_select_field({ field: prettyName })
+	);
 
 	// Refocus the trigger after selecting so keyboard users can keep
 	// navigating the rest of the form.
@@ -100,12 +103,15 @@
 		class="w-[var(--bits-popover-anchor-width)] min-w-[var(--bits-popover-anchor-width)] p-0"
 	>
 		<Command.Root>
-			<Command.Input placeholder={searchPlaceholder ?? `Search ${titleName}...`} class="h-9" />
+			<Command.Input
+				placeholder={searchPlaceholder ?? m.common_search_field({ field: titleName })}
+				class="h-9"
+			/>
 			<Command.List
 				class="max-h-[min(280px,var(--bits-popover-content-available-height,280px))] overflow-y-auto"
 			>
 				<Command.Empty class="py-4 text-center text-sm text-muted-foreground">
-					{emptyText ?? `No ${prettyName} found.`}
+					{emptyText ?? m.common_no_field_found({ field: prettyName })}
 				</Command.Empty>
 				<Command.Group>
 					{#each items as item (item.value)}

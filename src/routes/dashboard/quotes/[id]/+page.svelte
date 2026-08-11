@@ -13,19 +13,21 @@
 	import LineForm from './LineForm.svelte';
 	import DecideOrder from './DecideOrder.svelte';
 	import SendOffer from './SendOffer.svelte';
+	import DataTable from '$lib/components/Table/data-table.svelte';
+	import { lineColumns } from './lineColumns';
 
 	let { data } = $props();
 
-	const specLabel = (item: (typeof data.items)[number]) =>
-		[
-			item.colorName,
-			item.thickness != null ? `${Number(item.thickness)}${item.thicknessUnit === 'gauge' ? 'ga' : item.thicknessUnit}` : null,
-			item.width != null ? `${Number(item.width)}${item.widthUnit}` : null,
-			item.length != null ? `${Number(item.length)}${item.lengthUnit}` : null,
-			item.weight != null ? `${Number(item.weight)}${item.weightUnit}` : null
-		]
-			.filter(Boolean)
-			.join(' · ');
+	const itemColumns = $derived(
+		lineColumns({
+			updateLineForm: data.updateLineForm,
+			orderId: data.order?.id ?? 0,
+			productList: data.productList,
+			variantList: data.variantList,
+			ratesByVariant: data.ratesByVariant,
+			colorList: data.colorList
+		})
+	);
 
 	let startingOrder = $state(false);
 
@@ -129,43 +131,11 @@
 				No lines yet — add at least one product before building a price offer.
 			</p>
 		{:else}
-			<div class="overflow-x-auto rounded-xl border border-border">
-				<table class="w-full text-sm">
-					<thead class="bg-muted/40">
-						<tr>
-							<th class="p-2 text-left">Product</th>
-							<th class="p-2 text-left">Spec</th>
-							<th class="p-2 text-left">Basis</th>
-							<th class="p-2 text-left">Rate</th>
-							<th class="p-2 text-left">VAT</th>
-							<th class="p-2 text-left">Edit</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.items as item (item.id)}
-							<tr class="border-t border-border">
-								<td class="p-2">{item.productName}</td>
-								<td class="p-2 text-muted-foreground">{specLabel(item) || '—'}</td>
-								<td class="p-2">{item.priceBasis}</td>
-								<td class="p-2">{item.price != null ? formatETB(Number(item.price)) : '—'}</td>
-								<td class="p-2">{item.priceIncludesVat ? 'Included' : 'Excluded'}</td>
-								<td class="p-2">
-									<LineForm
-										mode="edit"
-										data={data.updateLineForm}
-										orderId={data.order.id}
-										line={item}
-										productList={data.productList}
-										variantList={data.variantList}
-										ratesByVariant={data.ratesByVariant}
-										colorList={data.colorList}
-									/>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+			<DataTable
+				data={data.items}
+				columns={itemColumns}
+				fileName="quote-{data.quote?.id}-order-lines"
+			/>
 		{/if}
 	</section>
 

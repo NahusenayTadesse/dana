@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Signup from '$lib/forms/Signup.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	import type { PageData } from './$types';
 
@@ -7,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Signup</title>
+	<title>{m.signup_title()}</title>
 </svelte:head>
 
 <div class="flex my-4 w-full items-center justify-center px-4">

@@ -5,13 +5,10 @@
 		PlusIcon,
 		MinusIcon,
 		FileText,
+		Download,
 		Printer,
-
 		Share,
-
 		Share2
-
-
 	} from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
@@ -200,10 +197,16 @@
 	}
 
 	const thicknessOptions = $derived(
-		distinctSorted(variantsForSelectedColor.map((v) => (v.thicknessValue != null ? Number(v.thicknessValue) : null)))
+		distinctSorted(
+			variantsForSelectedColor.map((v) =>
+				v.thicknessValue != null ? Number(v.thicknessValue) : null
+			)
+		)
 	);
 	const widthOptions = $derived(
-		distinctSorted(variantsForSelectedColor.map((v) => (v.widthValue != null ? Number(v.widthValue) : null)))
+		distinctSorted(
+			variantsForSelectedColor.map((v) => (v.widthValue != null ? Number(v.widthValue) : null))
+		)
 	);
 	const catalogLengthOptions = $derived(
 		distinctSorted(
@@ -213,9 +216,15 @@
 		)
 	);
 
-	const thicknessUnit = $derived(variantsForSelectedColor.find((v) => v.thicknessValue != null)?.thicknessUnit ?? 'mm');
-	const widthUnit = $derived(variantsForSelectedColor.find((v) => v.widthValue != null)?.widthUnit ?? 'mm');
-	const catalogLengthUnit = $derived(variantsForSelectedColor.find((v) => v.lengthValue != null)?.lengthUnit ?? 'm');
+	const thicknessUnit = $derived(
+		variantsForSelectedColor.find((v) => v.thicknessValue != null)?.thicknessUnit ?? 'mm'
+	);
+	const widthUnit = $derived(
+		variantsForSelectedColor.find((v) => v.widthValue != null)?.widthUnit ?? 'mm'
+	);
+	const catalogLengthUnit = $derived(
+		variantsForSelectedColor.find((v) => v.lengthValue != null)?.lengthUnit ?? 'm'
+	);
 
 	// Seed the sliders from the actual default variant (not just "smallest
 	// available"), computed once up front from the raw variants list so it
@@ -240,7 +249,9 @@
 	let thicknessIndex = $state(
 		Math.max(0, initialThicknessOptions.indexOf(Number(defaultVariant?.thicknessValue ?? NaN)))
 	);
-	let widthIndex = $state(Math.max(0, initialWidthOptions.indexOf(Number(defaultVariant?.widthValue ?? NaN))));
+	let widthIndex = $state(
+		Math.max(0, initialWidthOptions.indexOf(Number(defaultVariant?.widthValue ?? NaN)))
+	);
 	let lengthIndex = $state(
 		Math.max(0, initialLengthOptions.indexOf(Number(defaultVariant?.lengthValue ?? NaN)))
 	); // index into catalogLengthOptions, when not using custom length
@@ -277,8 +288,10 @@
 	const configuredVariant = $derived(
 		variantsForSelectedColor.find(
 			(v) =>
-				(thicknessOptions.length === 0 || (v.thicknessValue != null && Number(v.thicknessValue) === selectedThickness)) &&
-				(widthOptions.length === 0 || (v.widthValue != null && Number(v.widthValue) === selectedWidth)) &&
+				(thicknessOptions.length === 0 ||
+					(v.thicknessValue != null && Number(v.thicknessValue) === selectedThickness)) &&
+				(widthOptions.length === 0 ||
+					(v.widthValue != null && Number(v.widthValue) === selectedWidth)) &&
 				(catalogLengthOptions.length === 0 ||
 					isCustomLength ||
 					(v.lengthValue != null && Number(v.lengthValue) === effectiveLength) ||
@@ -301,7 +314,9 @@
 
 	// A custom (off-catalog) length has no priced variant to match — that's a
 	// quote request too, same as a variant that's explicitly quote-only.
-	const isQuoteOnly = $derived(isCustomLength || !selectedVariant || selectedVariant.price === null);
+	const isQuoteOnly = $derived(
+		isCustomLength || !selectedVariant || selectedVariant.price === null
+	);
 	const inStock = $derived(
 		selectedVariant ? selectedVariant.quantity > 0 : !hasVariants && product.quantity > 0
 	);
@@ -309,9 +324,19 @@
 		selectedVariant?.price != null ? Number(selectedVariant.price) : null
 	);
 
+	// Counted against the exact combination configured right now, not the
+	// variant as a whole: the same variant can sit in the cart at several
+	// lengths, and "5 already in your cart" would be a lie about a length the
+	// customer isn't looking at.
 	const quantityInCart = $derived(
 		selectedVariant
-			? (cart.items.find((i) => i.variantId === selectedVariant.variantId)?.quantity ?? 0)
+			? cart.quantityOf({
+					variantId: selectedVariant.variantId,
+					colorId: selectedVariant.colorId,
+					length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
+					lengthUnit: selectedVariant.lengthUnit ?? null,
+					isCustomLength: selectedVariant.isCustomLength ?? false
+				})
 			: 0
 	);
 
@@ -387,7 +412,8 @@
 				colorName: selectedVariant.colorName,
 				width: selectedVariant.widthValue != null ? Number(selectedVariant.widthValue) : null,
 				widthUnit: selectedVariant.widthUnit,
-				thickness: selectedVariant.thicknessValue != null ? Number(selectedVariant.thicknessValue) : null,
+				thickness:
+					selectedVariant.thicknessValue != null ? Number(selectedVariant.thicknessValue) : null,
 				thicknessUnit: selectedVariant.thicknessUnit,
 				length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
 				lengthUnit: selectedVariant.lengthUnit ?? null,
@@ -428,8 +454,7 @@
 
 		const specRowsHtml = specRows
 			.map(
-				(row) =>
-					`<tr><td>${escapeHtml(row.k)}</td><td>${escapeHtml(String(row.v ?? ''))}</td></tr>`
+				(row) => `<tr><td>${escapeHtml(row.k)}</td><td>${escapeHtml(String(row.v ?? ''))}</td></tr>`
 			)
 			.join('');
 
@@ -565,7 +590,7 @@
 						>
 							<img
 								src="/files/{img}"
-								alt="Product thumbnail option"
+								alt={m.alt_product_thumbnail()}
 								class="h-full w-full object-cover"
 							/>
 						</button>
@@ -663,7 +688,9 @@
 							>
 							{#if thicknessOptions.length > 1}
 								<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">
-									{thicknessOptions[0]}–{thicknessOptions[thicknessOptions.length - 1]}{thicknessUnit}
+									{thicknessOptions[0]}–{thicknessOptions[
+										thicknessOptions.length - 1
+									]}{thicknessUnit}
 								</span>
 							{/if}
 						</div>
@@ -684,7 +711,10 @@
 									class={numberInputClass}
 									value={thicknessOptions[thicknessIndex]}
 									onchange={(e) =>
-										(thicknessIndex = nearestIndex(Number(e.currentTarget.value), thicknessOptions))}
+										(thicknessIndex = nearestIndex(
+											Number(e.currentTarget.value),
+											thicknessOptions
+										))}
 								/>
 								<span
 									class="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-slate-400 dark:text-slate-500"
@@ -790,7 +820,10 @@
 									step="0.1"
 									onchange={(e) => {
 										const raw = Number(e.currentTarget.value);
-										customLength = Math.min(maxLengthValue, Math.max(0.1, Number.isNaN(raw) ? 0.1 : raw));
+										customLength = Math.min(
+											maxLengthValue,
+											Math.max(0.1, Number.isNaN(raw) ? 0.1 : raw)
+										);
 										customLengthTouched = true;
 									}}
 								/>
@@ -804,7 +837,10 @@
 								class={stepperBtnClass}
 								disabled={customLength >= maxLengthValue}
 								onclick={() => {
-									customLength = Math.min(maxLengthValue, Math.round((customLength + 0.5) * 10) / 10);
+									customLength = Math.min(
+										maxLengthValue,
+										Math.round((customLength + 0.5) * 10) / 10
+									);
 									customLengthTouched = true;
 								}}
 								aria-label={m.product_detail_increase()}
@@ -827,7 +863,9 @@
 							>
 							{#if catalogLengthOptions.length > 1}
 								<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">
-									{catalogLengthOptions[0]}–{catalogLengthOptions[catalogLengthOptions.length - 1]}{catalogLengthUnit}
+									{catalogLengthOptions[0]}–{catalogLengthOptions[
+										catalogLengthOptions.length - 1
+									]}{catalogLengthUnit}
 								</span>
 							{/if}
 						</div>
@@ -848,7 +886,10 @@
 									class={numberInputClass}
 									value={catalogLengthOptions[lengthIndex]}
 									onchange={(e) =>
-										(lengthIndex = nearestIndex(Number(e.currentTarget.value), catalogLengthOptions))}
+										(lengthIndex = nearestIndex(
+											Number(e.currentTarget.value),
+											catalogLengthOptions
+										))}
 								/>
 								<span
 									class="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-slate-400 dark:text-slate-500"
@@ -869,7 +910,9 @@
 					</div>
 				{/if}
 
-				<div class="mt-4.5 flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-900">
+				<div
+					class="mt-4.5 flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-900"
+				>
 					<span class="font-semibold">
 						{selectedVariant
 							? variantLabel(selectedVariant, { skipColor: true })
@@ -911,7 +954,9 @@
 								: ''}{!selectedVariant
 								? `&note=${encodeURIComponent(
 										`Requested spec: ` +
-											(selectedThickness != null ? `${selectedThickness}${thicknessUnit} thickness, ` : '') +
+											(selectedThickness != null
+												? `${selectedThickness}${thicknessUnit} thickness, `
+												: '') +
 											(selectedWidth != null ? `${selectedWidth}${widthUnit} width, ` : '') +
 											(useCustomLength
 												? `${customLength}${maxLengthUnit} length (cut to order)`
@@ -945,36 +990,43 @@
 						type="button"
 						onclick={handleShare}
 						class="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm font-bold text-slate-700 hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-					>  <Share2 size={16	} />
+					>
+						<Share2 size={16} />
 						{m.product_detail_share_link()}
 					</button>
 				</div>
 			</div>
 
-			<button type="button" onclick={printSpecSheet} class="mt-4.5 flex flex-wrap gap-3">
-				<div
-					class="flex min-w-[200px] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-white/10 dark:bg-slate-900"
+			<!-- Reads as clickable now: hover/active states, a pointer cursor and a
+			     download icon on the right. It was a bordered info card that happened
+			     to be a <button>, with nothing to suggest it did anything. -->
+			<button
+				type="button"
+				onclick={printSpecSheet}
+				class="mt-4.5 flex w-full min-w-[200px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-100 active:scale-[0.99] dark:border-white/10 dark:bg-slate-900 dark:hover:border-white/20 dark:hover:bg-slate-800"
+			>
+				<span
+					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-500"
 				>
-					<span
-						class="flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-500"
-					>
-						<FileText size={17} />
+					<FileText size={17} />
+				</span>
+				<span class="min-w-0 flex-1">
+					<span class="block text-sm font-bold text-slate-800 dark:text-slate-200">
+						{m.product_detail_tech_spec_sheet_title()}
 					</span>
-					<div>
-						<div class="text-sm font-bold text-slate-800 dark:text-slate-200">
-							{m.product_detail_tech_spec_sheet_title()}
-						</div>
-						<div class="text-xs text-slate-500 dark:text-slate-400">
-							{m.product_detail_tech_spec_sheet_sub()}
-						</div>
-					</div>
-				</div>
+					<span class="block text-xs text-slate-500 dark:text-slate-400">
+						{m.product_detail_tech_spec_sheet_sub()}
+					</span>
+				</span>
+				<Download size={16} class="shrink-0 text-slate-400 dark:text-slate-500" />
 			</button>
 		</div>
 	</div>
 
 	{#if accessories && accessories.length > 0}
-		<div class="mt-14 rounded-3xl border border-blue-100 bg-blue-50/60 p-6 dark:border-blue-500/15 dark:bg-blue-500/[0.04] sm:p-8">
+		<div
+			class="mt-14 rounded-3xl border border-blue-100 bg-blue-50/60 p-6 sm:p-8 dark:border-blue-500/15 dark:bg-blue-500/[0.04]"
+		>
 			<div class="mb-1 flex flex-wrap items-center gap-3">
 				<h2 class="text-2xl font-extrabold text-slate-900 dark:text-white">
 					{m.product_detail_accessories_title()}
@@ -1197,9 +1249,14 @@
 													1
 												);
 												cart.open();
-												toast.success(m.product_detail_added_to_cart({ productName: product.name }), {
-													description: m.product_detail_added_to_order_sheet_toast({ quantity: 1 })
-												});
+												toast.success(
+													m.product_detail_added_to_cart({ productName: product.name }),
+													{
+														description: m.product_detail_added_to_order_sheet_toast({
+															quantity: 1
+														})
+													}
+												);
 											}}
 										>
 											{m.product_detail_add_button()}

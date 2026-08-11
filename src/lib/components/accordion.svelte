@@ -113,7 +113,7 @@
 					>
 						<div class="flex items-center gap-4 text-left">
 							<div class="shrink-0 rounded-lg bg-primary/10 p-2">
-								<svelte:component this={feature.icon} class="size-5 text-primary" />
+								<feature.icon class="size-5 text-primary" />
 							</div>
 							<h3 class="text-lg font-semibold text-foreground">{feature.title}</h3>
 						</div>

@@ -19,7 +19,6 @@
 	import Faq from '$lib/components/faq.svelte';
 	import Slider from '$lib/components/slider.svelte';
 	import Testimonial from '$lib/components/testimonial.svelte';
-	import ImgSeparator from '$lib/components/imgSeparator.svelte';
 	import BlogCard from '$lib/components/blogs/portfolio-card.svelte';
 	import ProductSeparator from '$lib/components/productSeparator.svelte';
 	import WaneSection from '$lib/components/waneSection.svelte';

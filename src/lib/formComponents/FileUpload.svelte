@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import * as m from '$lib/paraglide/messages.js';
 	import { Input } from '$lib/components/ui/input/index';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import {
@@ -153,7 +154,7 @@
 					<iframe src="/files/{image}" class="h-64 w-full" frameborder="0" title="pdf-preview"
 					></iframe>
 				{:else}
-					<img src="/files/{image}" alt="Preview" class="h-full w-full object-cover" />
+					<img src="/files/{image}" alt={m.upload_preview_alt()} class="h-full w-full object-cover" />
 				{/if}
 			</div>
 		</div>
@@ -200,7 +201,7 @@
 				{:else if $file[0]?.type.startsWith('image/')}
 					<img
 						src={URL.createObjectURL($file[0])}
-						alt="Preview"
+						alt={m.upload_preview_alt()}
 						class="h-full w-full object-cover"
 					/>
 				{/if}

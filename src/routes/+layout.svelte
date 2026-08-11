@@ -12,6 +12,7 @@
 
 	import { ModeWatcher } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
+	import * as m from '$lib/paraglide/messages.js';
 
 	async function notifyBrowser(title: string, body: string) {
 		if (!('Notification' in window)) return; // Safari iOS etc.
@@ -46,18 +47,16 @@
 		if (Notification.permission === 'granted') {
 			notifyBrowser(
 				page.data.flash?.type === 'success'
-					? 'Success'
+					? m.notify_success()
 					: page.data.flash?.type === 'error'
-						? 'Error'
-						: 'Message',
+						? m.notify_error()
+						: m.notify_message(),
 				$flash.message
 			);
 		}
 
 		$flash = undefined;
 	});
-		import Stars from '$lib/components/Stars.svelte';
-	import Spins from '$lib/components/Spins.svelte';
 </script>
 
 <svelte:head><link rel="icon" href="/logo192.png" /></svelte:head>
@@ -74,8 +73,6 @@
 	<BottomMenu />
 	<Cursor />
 	<FloatingChat />
-		<Stars />
-	<Spins />
 {:else}
 	{@render children()}
 {/if}

@@ -17,6 +17,7 @@
 	} = $props();
 	const { form, errors, enhance, delayed, message } = superForm(data, {});
 	import { toast } from 'svelte-sonner';
+	import * as m from '$lib/paraglide/messages.js';
 	$effect(() => {
 		$form.existing = images.join(','); // server splits on ',' — join explicitly rather than relying on Array.toString
 		if ($message) {
@@ -43,16 +44,17 @@
 			{errors}
 			type="gallery"
 			name="gallery"
-			label="Product Gallery"
-			placeholder="Edit and Upload New Product Gallery"
+			label={m.edit_gallery_label()}
+			placeholder={m.edit_gallery_placeholder()}
 			required
 			bind:images
 		/>
 		<Button type="submit" variant="destructive" size="lg">
 			{#if $delayed}
-				<LoadingBtn name="Saving New Gallery" />
+				<LoadingBtn name={m.edit_gallery_saving()} />
 			{:else}
-				<Save /> Save Changes
+				<Save />
+				{m.edit_gallery_save()}
 			{/if}
 		</Button>
 	</form>

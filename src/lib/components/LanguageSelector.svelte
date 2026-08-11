@@ -2,20 +2,24 @@
 	import { Languages } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
-	import { getLocale, setLocale, locales } from '$lib/paraglide/runtime';
+	import { getLocale, setLocale, locales, type Locale } from '$lib/paraglide/runtime';
 	import { invalidateAll } from '$app/navigation';
 
+	// Language names stay in their own language — not translated.
 	const localeLabels: Record<string, string> = {
 		en: 'English',
-		am: 'አማርኛ (Amharic)'	};
+		am: 'አማርኛ (Amharic)'
+	};
 	const localeShort: Record<string, string> = {
 		en: 'EN',
 		am: 'አማ'
 	};
 
-	const currentLang = getLocale();
+	// $derived, not a one-time read: captured once, the checked entry went stale
+	// after a switch.
+	const currentLang = $derived(getLocale());
 
-	function changeLang(locale: string) {
+	function changeLang(locale: Locale) {
 		setLocale(locale);
 		invalidateAll();
 	}

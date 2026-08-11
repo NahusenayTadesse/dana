@@ -120,7 +120,7 @@
 								<div
 									class="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primary/5 text-primary transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/10 group-data-[state=open]:bg-primary group-data-[state=open]:text-primary-foreground"
 								>
-									<svelte:component this={feature.icon} class="size-5" />
+									<feature.icon class="size-5" />
 								</div>
 
 								<h3

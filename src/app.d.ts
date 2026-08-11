@@ -16,4 +16,8 @@ declare global {
 	}
 }
 
+// papaparse ships no types and has no @types package installed; the CSV export
+// in $lib/print.ts only uses unparse(), so an ambient any is enough.
+declare module 'papaparse';
+
 export {};
