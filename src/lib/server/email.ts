@@ -1,11 +1,19 @@
 import nodemailer from 'nodemailer';
 
 import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT, SMS_KEY } from '$env/static/private';
+import { VAT_RATE } from '$lib/vat';
+import { basisLabel, formatLengthTotals, type OrderSummary } from '$lib/server/orderSummary';
+import { priceLine, type PricingBasis } from '$lib/server/pricing';
 
+// `secure` follows the port, per nodemailer's own convention: 465 is implicit
+// TLS, anything else negotiates STARTTLS. Hardcoding `true` meant the only
+// working configuration was port 465 — a local mail catcher on 1025, or a relay
+// on 587, failed at the TLS handshake with no useful error. Production runs on
+// 465, so this is the same behaviour there.
 const transporter = nodemailer.createTransport({
 	host: SMTP_HOST,
 	port: SMTP_PORT,
-	secure: true,
+	secure: Number(SMTP_PORT) === 465,
 	auth: {
 		user: SMTP_USER,
 		pass: SMTP_PASSWORD
@@ -15,13 +23,37 @@ const transporter = nodemailer.createTransport({
 // --- SMS (GeezSMS) ---
 const SMS_API_URL = 'https://api.geezsms.com/api/v1/sms/send';
 
+/** GeezSMS rejects anything longer than this. */
+const SMS_LIMIT = 335;
+
+/**
+ * Trims a message to the SMS limit on a word boundary, with an ellipsis.
+ *
+ * Every SMS builder used to hard-slice at exactly 335, which cut mid-word and
+ * mid-number — an observed message ended "...our sales team will review your
+ * request and foll". A reader can tell a message ends in "…" was shortened; one
+ * that stops mid-word just looks broken.
+ */
+const capSms = (msg: string, limit = SMS_LIMIT) => {
+	if (msg.length <= limit) return msg;
+	const clipped = msg.slice(0, limit - 1);
+	// Only back up to a boundary if one is reasonably close — otherwise a long
+	// unbroken run (a URL) would lose most of the message.
+	const boundary = Math.max(clipped.lastIndexOf(' '), clipped.lastIndexOf('\n'));
+	return (boundary > limit - 40 ? clipped.slice(0, boundary) : clipped).trimEnd() + '…';
+};
+
 /**
  * Strips HTML down to plain text for SMS readers (which don't render markup):
  * - drops script/style blocks entirely (incl. their content)
  * - turns block-level tags into line breaks so text doesn't run together
  * - removes remaining tags
  * - decodes the handful of HTML entities used in these templates
- * - collapses whitespace and trims to GeezSMS's 335-char limit
+ * - collapses whitespace and trims to GeezSMS's limit
+ *
+ * This is the LAST RESORT. A template that carries a phone number should pass
+ * purpose-built SMS copy instead — a stripped email reads as a wall of run-on
+ * sentences and loses its most useful parts (links, totals) to the trim.
  */
 const stripHtml = (html: string) => {
 	const text = html
@@ -39,7 +71,7 @@ const stripHtml = (html: string) => {
 		.replace(/\n\s*\n+/g, '\n')
 		.trim();
 
-	return text.length > 335 ? text.slice(0, 335) : text;
+	return capSms(text);
 };
 
 /**
@@ -137,17 +169,40 @@ export const sendSms = async (phone: string, msg: string) => {
 // blindly stripped down to plain text. Falls back to auto-stripping the html
 // when no dedicated SMS copy is given (simple notifications only).
 export const sendEmail = async (to: string, subject: string, html: string, phone?: string, smsText?: string) => {
-	await transporter.sendMail({
-		from: `"Support Team" <${SMTP_USER}>`,
-		to,
-		subject,
-		html
-	});
+	// The two channels are independent. The SMS used to sit BEHIND the mail send,
+	// so a bouncing address, a rejected recipient or an unreachable SMTP host
+	// meant the customer got neither — even though the SMS leg was fine. It is
+	// started first and awaited separately here; sendSms never throws, so it can
+	// only report failure through its own logging.
+	const smsInFlight = phone ? sendSmsToEthPhone(phone, smsText ?? stripHtml(html)) : null;
 
-	if (phone) {
-		const newPhone = formatAndValidateEthPhone(phone);
-		if (newPhone.isValid) await sendSms(String(newPhone?.formattedPhone), smsText ?? stripHtml(html));
+	let mailError: unknown = null;
+	try {
+		await transporter.sendMail({
+			from: `"Support Team" <${SMTP_USER}>`,
+			to,
+			subject,
+			html
+		});
+	} catch (err) {
+		mailError = err;
 	}
+
+	if (smsInFlight) await smsInFlight;
+
+	// Callers still treat a rejection as "the email failed" — that contract is
+	// unchanged, only the SMS's dependence on it is gone.
+	if (mailError) throw mailError;
+};
+
+/** Normalises the number first, so an unusable one is logged rather than dialled. */
+export const sendSmsToEthPhone = async (phone: string, msg: string) => {
+	const { isValid, formattedPhone, error } = formatAndValidateEthPhone(phone);
+	if (!isValid || !formattedPhone) {
+		console.error(`SMS skipped for "${phone}": ${error}`);
+		return { success: false, message: error };
+	}
+	return sendSms(formattedPhone, msg);
 };
 
 // --- Brand constants ---
@@ -418,10 +473,10 @@ export const customerDeliveredTemplate = (orderId, items, total) => ({
 
                 <p>We hope your new products serve you well! 😊</p>
 
-                ${generateOrderTable(items)}
+                ${generateVariantOrderTable(items)}
 
                 <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
-                    Total: ${total} ETB
+                    Total: ${Number(total).toLocaleString()} ETB
                 </div>
 
                 <p style="margin-top: 20px;">
@@ -448,10 +503,10 @@ export const adminDeliveredTemplate = (orderId, items, total) => ({
                 <strong>Order ID: #${orderId}</strong>
             </p>
 
-            ${generateOrderTable(items)}
+            ${generateVariantOrderTable(items)}
 
             <p style="font-size: 18px;">
-                <strong>Total Value: ${total} ETB</strong>
+                <strong>Total Value: ${Number(total).toLocaleString()} ETB</strong>
             </p>
 
             <a href="${BRAND_URL}dashboard/orders"
@@ -560,7 +615,7 @@ export async function sendResetPasswordEmail(toEmail: string, newPassword: strin
 	const transporter = nodemailer.createTransport({
 		host: SMTP_HOST, // e.g smtp.gmail.com
 		port: SMTP_PORT, // e.g 465 or 587
-		secure: true, // true for 465, false for 587
+		secure: Number(SMTP_PORT) === 465, // implicit TLS on 465, STARTTLS otherwise
 		auth: {
 			user: SMTP_USER, // sender email
 			pass: SMTP_PASSWORD // sender email password / app password
@@ -666,13 +721,16 @@ export const customerResetPasswordTemplate = (url: string) => ({
 // confirmation) — NOT for quote requests still awaiting a price, which should
 // keep using generateQuoteTable.
 const generateVariantOrderTable = (items) => {
+	// Values come off decimal columns, so they arrive as "1000.00" / "1.000" —
+	// Number() drops the trailing zeros the customer has no use for, and matches
+	// how the checkout summary renders the same spec.
 	const specLabel = (item) => {
 		const parts = [];
 		if (item.colorName) parts.push(item.colorName);
-		if (item.width != null) parts.push(`${item.width}${item.widthUnit ?? ''}`);
+		if (item.width != null) parts.push(`${Number(item.width)}${item.widthUnit ?? ''}`);
 		if (item.thickness != null)
-			parts.push(`${item.thickness}${item.thicknessUnit === 'gauge' ? 'ga' : (item.thicknessUnit ?? '')}`);
-		if (item.length != null) parts.push(`${item.length}${item.lengthUnit ?? ''}`);
+			parts.push(`${Number(item.thickness)}${item.thicknessUnit === 'gauge' ? 'ga' : (item.thicknessUnit ?? '')}`);
+		if (item.length != null) parts.push(`${Number(item.length)}${item.lengthUnit ?? ''}`);
 		return parts.join(' · ');
 	};
 
@@ -680,20 +738,43 @@ const generateVariantOrderTable = (items) => {
 		.map((item) => {
 			const spec = specLabel(item);
 			const unitPrice = Number(item.price ?? 0);
-			const lineTotal = unitPrice * item.quantity;
+			const basis: PricingBasis = item.priceBasis ?? 'quantity';
+
+			// Costed through the SAME function the quote builder uses, so the
+			// column adds up to the Subtotal printed underneath. It used to be a
+			// flat `unitPrice × quantity`, which silently dropped the length (or
+			// area) multiplier — on a per-metre product the rows and the total
+			// simply disagreed, and the customer had no way to tell which was right.
+			const priced = priceLine({
+				quantity: item.quantity,
+				length: item.length != null ? Number(item.length) : null,
+				width: item.width != null ? Number(item.width) : null,
+				thickness: item.thickness != null ? Number(item.thickness) : null,
+				basis,
+				unitPrice,
+				priceIncludesVat: item.priceIncludesVat
+			});
+
+			// What the rate multiplies against, shown only when it isn't just the
+			// piece count — otherwise "6" and "6 pcs" would sit in the same cell.
+			const billedUnits =
+				basis === 'quantity' || basis === 'color'
+					? ''
+					: `<br/><span style="color:#888; font-size: 11px;">${Number(priced.units.toFixed(2)).toLocaleString()}${basis === 'area' ? ' m²' : ` ${item.lengthUnit ?? ''}`.trimEnd()}</span>`;
+
 			return `
                  <tr style="border-bottom: 1px solid #eee;">
                      <td style="padding: 10px; text-align: left;">
                          ${item.productName}${spec ? `<br/><span style="color:#888; font-size: 12px;">${spec}</span>` : ''}
                      </td>
                      <td style="padding: 10px; text-align: center;">
-                         ${item.quantity}
+                         ${item.quantity}${billedUnits}
                      </td>
                      <td style="padding: 10px; text-align: right;">
-                         ${unitPrice.toLocaleString()} ETB${item.priceIncludesVat ? '<br/><span style="color:#888; font-size: 11px;">(incl. VAT)</span>' : ''}
+                         ${unitPrice.toLocaleString()} ETB<br/><span style="color:#888; font-size: 11px;">${basisLabel(basis, item.lengthUnit)}${item.priceIncludesVat ? ' · incl. VAT' : ''}</span>
                      </td>
                      <td style="padding: 10px; text-align: right;">
-                         ${lineTotal.toLocaleString()} ETB
+                         ${Number(priced.net.toFixed(2)).toLocaleString()} ETB
                      </td>
                  </tr>
              `;
@@ -707,7 +788,7 @@ const generateVariantOrderTable = (items) => {
                     <th style="padding: 10px; text-align: left;">Item</th>
                     <th style="padding: 10px; text-align: center;">Qty</th>
                     <th style="padding: 10px; text-align: right;">Unit Price</th>
-                    <th style="padding: 10px; text-align: right;">Subtotal</th>
+                    <th style="padding: 10px; text-align: right;">Subtotal<br/><span style="font-size: 10px; font-weight: normal; opacity: 0.85;">excl. VAT</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -818,7 +899,7 @@ export const quotePaymentLinkTemplate = (orderId, items, offer: OfferTotals, pay
 // from the HTML. Keeps to unit total + VAT + the link, not the full item table.
 export const quotePaymentLinkSms = (orderId, offer: OfferTotals, payUrl) => {
 	const msg = `${BRAND_NAME}: Quote #${orderId} ready. Total ${Number(offer.total).toLocaleString()} ETB (incl. VAT ${Number(offer.vatAmount).toLocaleString()} ETB). Pay: ${payUrl}`;
-	return msg.length > 335 ? msg.slice(0, 335) : msg;
+	return capSms(msg);
 };
 
 // Sent to staff whenever a priced offer goes out — lets the team see what
@@ -890,7 +971,7 @@ export const balancePaymentLinkTemplate = (
 
 export const balancePaymentLinkSms = (orderId, remainingBalance: number, payUrl: string) => {
 	const msg = `${BRAND_NAME}: Balance due on order #${orderId} is ${remainingBalance.toLocaleString()} ETB. Pay: ${payUrl}`;
-	return msg.length > 335 ? msg.slice(0, 335) : msg;
+	return capSms(msg);
 };
 
 export const adminBalancePaymentLinkTemplate = (orderId, amountPaid: number, remainingBalance: number) => ({
@@ -1115,7 +1196,7 @@ export const paymentConfirmedSms = (orderId, offer: OfferTotals, payAmount: numb
 	const msg = isAdvance
 		? `${BRAND_NAME}: Advance of ${payAmount.toLocaleString()} ETB confirmed for order #${orderId} (total ${Number(offer.total).toLocaleString()} ETB, VAT ${Number(offer.vatAmount).toLocaleString()} ETB). Balance due before delivery: ${(Number(offer.total) - payAmount).toLocaleString()} ETB.`
 		: `${BRAND_NAME}: Payment of ${payAmount.toLocaleString()} ETB confirmed for order #${orderId} (incl. VAT ${Number(offer.vatAmount).toLocaleString()} ETB). Thank you!`;
-	return msg.length > 335 ? msg.slice(0, 335) : msg;
+	return capSms(msg);
 };
 
 export const quoteReplyTemplate = (name: string, message: string) => ({
@@ -1196,6 +1277,13 @@ export const quoteRequestReceivedTemplate = (quoteId: number, details: {
 	quantityEstimate?: string | null;
 	message?: string | null;
 	itemLabel: string;
+	/**
+	 * Cart-built requests (/checkout) pass the full order summary, and it takes
+	 * the place of the flat `itemLabel` line — the tables say everything that
+	 * one-liner did, itemised. The single-item /quotes form has no cart, so it
+	 * passes no summary and keeps the label.
+	 */
+	summary?: OrderSummary | null;
 }) => ({
 	subject: `Quote Request Received - ${BRAND_NAME} (#${quoteId})`,
 	html: `
@@ -1207,13 +1295,25 @@ export const quoteRequestReceivedTemplate = (quoteId: number, details: {
             <div style="padding: 20px; color: #333;">
                 <p>Hi ${escapeHtml(details.name)},</p>
                 <p>Thanks for reaching out to <strong>${BRAND_NAME}</strong>. We've received your quote request <strong>#${quoteId}</strong>:</p>
-                <div style="background: #f9f9f9; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                ${
+									details.summary
+										? renderOrderSummaryHtml(details.summary)
+										: `<div style="background: #f9f9f9; border-radius: 6px; padding: 15px; margin: 15px 0;">
                     <p style="margin: 0 0 8px 0;"><strong>Item:</strong> ${details.itemLabel}</p>
                     ${details.quantityEstimate ? `<p style="margin: 0 0 8px 0;"><strong>Estimated quantity:</strong> ${escapeHtml(details.quantityEstimate)}</p>` : ''}
                     ${details.companyName ? `<p style="margin: 0 0 8px 0;"><strong>Company:</strong> ${escapeHtml(details.companyName)}</p>` : ''}
                     ${details.message ? `<p style="margin: 0;"><strong>Your message:</strong> ${escapeHtml(details.message)}</p>` : ''}
-                </div>
-                <p>Our sales team will review your request and follow up shortly with confirmed pricing and availability.</p>
+                </div>`
+								}
+                ${
+									details.summary && (details.companyName || details.message)
+										? `<div style="background: #f9f9f9; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                    ${details.companyName ? `<p style="margin: 0 0 8px 0;"><strong>Company:</strong> ${escapeHtml(details.companyName)}</p>` : ''}
+                    ${details.message ? `<p style="margin: 0;"><strong>Your message:</strong> ${escapeHtml(details.message)}</p>` : ''}
+                </div>`
+										: ''
+								}
+                <p style="margin-top: 22px;">Our sales team will review your request and follow up shortly with confirmed pricing and availability.</p>
                 <p style="margin-top: 20px;">
                     Best regards,<br/>
                     <strong>${BRAND_NAME} Team</strong>
@@ -1235,6 +1335,8 @@ export const adminNewQuoteRequestTemplate = (quoteId: number, details: {
 	quantityEstimate?: string | null;
 	message?: string | null;
 	itemLabel: string;
+	/** Cart-built requests (/checkout) pass this; the single-item /quotes form doesn't. */
+	summary?: OrderSummary | null;
 }) => ({
 	subject: `New Quote Request: #${quoteId}`,
 	html: `
@@ -1242,7 +1344,7 @@ export const adminNewQuoteRequestTemplate = (quoteId: number, details: {
             <h2 style="color: ${BRAND_PRIMARY_DARK};">New Quote Request Received</h2>
             <p><strong>Request ID:</strong> #${quoteId}</p>
             <div style="background: #f9f9f9; border-radius: 6px; padding: 15px; margin: 15px 0;">
-                <p style="margin: 0 0 8px 0;"><strong>Item:</strong> ${details.itemLabel}</p>
+                ${details.summary ? '' : `<p style="margin: 0 0 8px 0;"><strong>Item:</strong> ${details.itemLabel}</p>`}
                 ${details.quantityEstimate ? `<p style="margin: 0 0 8px 0;"><strong>Estimated quantity:</strong> ${escapeHtml(details.quantityEstimate)}</p>` : ''}
                 <p style="margin: 0 0 8px 0;"><strong>Name:</strong> ${escapeHtml(details.name)}</p>
                 ${details.companyName ? `<p style="margin: 0 0 8px 0;"><strong>Company:</strong> ${escapeHtml(details.companyName)}</p>` : ''}
@@ -1251,10 +1353,309 @@ export const adminNewQuoteRequestTemplate = (quoteId: number, details: {
                 ${details.email ? `<p style="margin: 0 0 8px 0;"><strong>Email:</strong> ${escapeHtml(details.email)}</p>` : ''}
                 ${details.message ? `<p style="margin: 0;"><strong>Message:</strong> ${escapeHtml(details.message)}</p>` : ''}
             </div>
+            ${details.summary ? renderOrderSummaryHtml(details.summary) : ''}
             <a href="${BRAND_URL}dashboard/quotes"
-               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+               style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px;">
                View in Dashboard
             </a>
         </div>
     `
 });
+
+// --- Cart order summary: the /buy + /checkout tables, rendered for email ---
+//
+// Same two tables the customer just looked at on the page, in the same order:
+// the line-by-line manifest (one row per length — that's what gets cut), then
+// the per-product roll-up (lengths collapsed into one quantity and one total
+// length), then the estimated totals card.
+//
+// Written as real <table> markup with inline styles and bgcolor attributes
+// rather than a styled <div> grid: Outlook drops CSS layout and strips
+// <style> blocks, and a summary that reflows into a single column of numbers
+// is exactly the thing this is meant to replace.
+
+const TABLE_BORDER = '#e5e7eb';
+const TABLE_ZEBRA = '#fafafa';
+const TABLE_MUTED = '#6b7280';
+
+const fmtMoney = (n: number) => Number(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+const cell = (content: string, extra = '') =>
+	`<td style="padding: 9px 10px; border-bottom: 1px solid ${TABLE_BORDER}; font-size: 13px; ${extra}">${content}</td>`;
+
+const headCell = (label: string, align: 'left' | 'center' | 'right' = 'left') =>
+	`<th align="${align}" style="padding: 9px 10px; text-align: ${align}; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #ffffff; font-weight: 700;">${label}</th>`;
+
+/** Line-by-line manifest — one row per order line, priced where a rate exists. */
+const generateOrderLinesTable = (summary: OrderSummary) => {
+	const rows = summary.lines
+		.map((line, i) => {
+			const zebra = i % 2 === 1 ? ` background: ${TABLE_ZEBRA};` : '';
+			const unitPrice = line.isPriced
+				? `${fmtMoney(line.unitPrice ?? 0)} ETB<br/><span style="color: ${TABLE_MUTED}; font-size: 11px;">${basisLabel(line.priceBasis, line.lengthUnit)}${line.priceIncludesVat ? ' · incl. VAT' : ''}</span>`
+				: `<span style="color: ${TABLE_MUTED};">To be quoted</span>`;
+			const lineTotal = line.isPriced
+				? `${fmtMoney(line.gross)} ETB`
+				: `<span style="color: ${TABLE_MUTED};">—</span>`;
+
+			return `
+                <tr style="${zebra.trim()}">
+                    ${cell(
+											`<span style="color: ${TABLE_MUTED}; font-size: 11px;">${i + 1}.</span> <strong>${escapeHtml(line.productName)}</strong>${
+												line.spec
+													? `<br/><span style="color: ${TABLE_MUTED}; font-size: 12px;">${escapeHtml(line.spec)}</span>`
+													: ''
+											}`
+										)}
+                    ${cell(`${line.quantity} pcs`, 'text-align: center; white-space: nowrap;')}
+                    ${cell(unitPrice, 'text-align: right; white-space: nowrap;')}
+                    ${cell(lineTotal, 'text-align: right; white-space: nowrap; font-weight: 600;')}
+                </tr>
+            `;
+		})
+		.join('');
+
+	return `
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 100%; border-collapse: collapse; margin-top: 8px; font-family: sans-serif; border: 1px solid ${TABLE_BORDER}; border-radius: 6px;">
+            <thead>
+                <tr bgcolor="${BRAND_PRIMARY_DARK}" style="background: ${BRAND_PRIMARY_DARK}; background-image: ${BRAND_HEADER_BG};">
+                    ${headCell('Item')}
+                    ${headCell('Qty', 'center')}
+                    ${headCell('Unit Price', 'right')}
+                    ${headCell('Line Total', 'right')}
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>
+    `;
+};
+
+/** Per-product roll-up — OrderProductSummary.svelte, as email markup. */
+const generateProductSummaryTable = (summary: OrderSummary) => {
+	const rows = summary.productRows
+		.map(
+			(row, i) => `
+                <tr style="${i % 2 === 1 ? `background: ${TABLE_ZEBRA};` : ''}">
+                    ${cell(`<strong>${escapeHtml(row.productName)}</strong>`)}
+                    ${cell(String(row.lines), `text-align: right; color: ${TABLE_MUTED};`)}
+                    ${cell(`${row.quantity} pcs`, 'text-align: right; font-weight: 600; white-space: nowrap;')}
+                    ${cell(formatLengthTotals(row.byUnit), 'text-align: right; white-space: nowrap;')}
+                </tr>
+            `
+		)
+		.join('');
+
+	const footer =
+		summary.productRows.length > 1
+			? `
+            <tfoot>
+                <tr style="background: #f3f4f6; font-weight: 700;">
+                    ${cell('All products', 'border-top: 2px solid ' + TABLE_BORDER + ';')}
+                    ${cell(String(summary.lines.length), 'text-align: right; border-top: 2px solid ' + TABLE_BORDER + ';')}
+                    ${cell(`${summary.totalQuantity} pcs`, 'text-align: right; white-space: nowrap; border-top: 2px solid ' + TABLE_BORDER + ';')}
+                    ${cell(formatLengthTotals(summary.totalByUnit), 'text-align: right; white-space: nowrap; border-top: 2px solid ' + TABLE_BORDER + ';')}
+                </tr>
+            </tfoot>
+        `
+			: '';
+
+	return `
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 100%; border-collapse: collapse; margin-top: 8px; font-family: sans-serif; border: 1px solid ${TABLE_BORDER}; border-radius: 6px;">
+            <thead>
+                <tr bgcolor="${BRAND_PRIMARY_DARK}" style="background: ${BRAND_PRIMARY_DARK}; background-image: ${BRAND_HEADER_BG};">
+                    ${headCell('Product')}
+                    ${headCell('Lengths', 'right')}
+                    ${headCell('Qty', 'right')}
+                    ${headCell('Total Length', 'right')}
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+            ${footer}
+        </table>
+    `;
+};
+
+/** The "Estimated total" card from the checkout page — subtotal, VAT, total. */
+const generateEstimateTotalsTable = (summary: OrderSummary) => {
+	const totalRow = (label: string, value: string, bold = false) => `
+        <tr>
+            <td style="padding: 6px 12px; font-size: 13px; ${bold ? 'font-weight: 700;' : `color: ${TABLE_MUTED};`}">${label}</td>
+            <td align="right" style="padding: 6px 12px; text-align: right; font-size: ${bold ? '15px' : '13px'}; ${bold ? `font-weight: 700; color: ${BRAND_PRIMARY_DARK};` : ''} white-space: nowrap;">${value}</td>
+        </tr>
+    `;
+
+	return `
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 320px; margin-top: 14px; margin-left: auto; border-collapse: collapse; font-family: sans-serif; background: #f9fafb; border: 1px solid ${TABLE_BORDER}; border-radius: 8px;">
+            <tbody>
+                <tr>
+                    <td colspan="2" style="padding: 10px 12px 2px 12px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: ${TABLE_MUTED}; font-weight: 700;">
+                        Estimated Total
+                    </td>
+                </tr>
+                ${totalRow('Subtotal (excl. VAT)', `${fmtMoney(summary.subtotalExclVat)} ETB`)}
+                ${totalRow(`VAT (${VAT_RATE}%)`, `${fmtMoney(summary.vatTotal)} ETB`)}
+                ${totalRow('Estimated total', `${fmtMoney(summary.grandTotal)} ETB`, true)}
+                <tr>
+                    <td colspan="2" style="padding: 4px 12px 12px 12px; font-size: 11px; color: ${TABLE_MUTED}; line-height: 1.5;">
+                        ${
+													summary.hasUnpricedLines
+														? 'Some items have no listed rate yet, so this figure covers only the priced lines. Our team will confirm the full price.'
+														: 'Indicative only — our team confirms final pricing, delivery and availability before anything is payable.'
+												}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+};
+
+/** Both tables plus the totals card — what /checkout emails embed. */
+export const renderOrderSummaryHtml = (summary: OrderSummary) => {
+	if (!summary || summary.lines.length === 0) return '';
+
+	const section = (title: string, hint: string, table: string) => `
+        <div style="margin-top: 22px;">
+            <div style="font-size: 14px; font-weight: 700; color: #111827;">${title}</div>
+            <div style="font-size: 12px; color: ${TABLE_MUTED}; margin-top: 2px;">${hint}</div>
+            ${table}
+        </div>
+    `;
+
+	return `
+        ${section('Order Details', 'Every line as ordered — each length is cut separately.', generateOrderLinesTable(summary))}
+        ${
+					summary.productRows.length > 0
+						? section(
+								'Per-Product Summary',
+								'The same order rolled up per product, with total length to cut.',
+								generateProductSummaryTable(summary)
+							)
+						: ''
+				}
+        ${summary.hasPricedLines ? generateEstimateTotalsTable(summary) : ''}
+    `;
+};
+
+// --- SMS version of the same summary ---
+//
+// GeezSMS caps a message at 335 characters, so this cannot be the HTML run
+// through stripHtml() — that produces a wall of table cells that gets cut off
+// mid-number. Instead the order is laid out as a short numbered list, one item
+// per line, and items are dropped from the bottom (with a "+N more" marker)
+// until the whole message fits. The header and the totals footer are always
+// kept: they're what makes a truncated message still make sense.
+
+/** One item per line: "1. Corrugated Sheet - Red 1000mm 0.45mm x4". */
+const smsItemLine = (index: number, productName: string, spec: string, quantity: number) => {
+	const specText = spec ? ` - ${spec.replace(/ · /g, ' ')}` : '';
+	const line = `${index}. ${productName}${specText} x${quantity}`;
+	return line.length > 64 ? `${line.slice(0, 63)}…` : line;
+};
+
+export const orderSummarySms = (quoteId: number | string, summary: OrderSummary) => {
+	const head = `${BRAND_NAME}: Quote request #${quoteId} received.`;
+
+	const footLines = [
+		`Total: ${summary.totalQuantity} ${summary.totalQuantity === 1 ? 'pc' : 'pcs'}, ${summary.productRows.length} product${summary.productRows.length === 1 ? '' : 's'}`
+	];
+	if (summary.hasPricedLines) {
+		footLines.push(
+			`Est. ${fmtMoney(summary.grandTotal)} ETB incl. VAT${summary.hasUnpricedLines ? ' (partial)' : ''}`
+		);
+	}
+	footLines.push('We will confirm pricing shortly.');
+	const foot = footLines.join('\n');
+
+	const items = summary.lines.map((line, i) => smsItemLine(i + 1, line.productName, line.spec, line.quantity));
+
+	// Greedy fit, longest-suffix-first: keep as many items as the budget allows.
+	// A second pass reserves room for the "+N more" marker, but only once we know
+	// the marker is actually needed.
+	const fit = (budget: number) => {
+		const kept: string[] = [];
+		let left = budget;
+		for (const item of items) {
+			const cost = item.length + 1; // + the newline
+			if (cost > left) break;
+			kept.push(item);
+			left -= cost;
+		}
+		return kept;
+	};
+
+	const budget = SMS_LIMIT - (head.length + 1) - (foot.length + 1);
+	let kept = fit(budget);
+
+	if (kept.length < items.length) {
+		const marker = `+${items.length} more`; // sized for the worst case, so reserving it is safe
+		kept = fit(budget - (marker.length + 1));
+		kept.push(`+${items.length - kept.length} more`);
+	}
+
+	const msg = [head, ...kept, foot].join('\n');
+	return capSms(msg);
+};
+
+export const orderDeliveredSms = (orderId: number | string, total: number) => {
+	const msg = `${BRAND_NAME}: Order #${orderId} has been delivered. Total ${total.toLocaleString()} ETB. Thank you for your business!`;
+	return capSms(msg);
+};
+
+// --- Purpose-built copy for the templates that used to fall back to stripHtml ---
+//
+// Each of these previously sent the whole email flattened to text, which spent
+// the 335-character budget on greetings and sign-offs and then cut mid-word.
+// What a customer needs from a confirmation SMS is: who it's from, what it's
+// about, and what happens next.
+
+/**
+ * Single-item quote request (/quotes). `itemLabel` may carry HTML entities from
+ * buildQuoteItemLabel, so it is decoded back to plain text for the SMS — and it
+ * is the first thing dropped when the message runs long, since the reference
+ * number is what the customer actually needs to quote back at us.
+ */
+export const quoteRequestReceivedSms = (quoteId: number | string, itemLabel?: string | null) => {
+	const head = `${BRAND_NAME}: Quote request #${quoteId} received.`;
+	const tail = 'Our sales team will follow up shortly with pricing and availability.';
+	const item = decodeEntities(itemLabel ?? '').trim();
+
+	const withItem = item ? `${head}\nItem: ${item}\n${tail}` : `${head}\n${tail}`;
+	// Prefer dropping the item line wholesale over emitting a half-written spec.
+	return capSms(withItem.length <= SMS_LIMIT ? withItem : `${head}\n${tail}`);
+};
+
+/** Contact form acknowledgement. */
+export const contactReceivedSms = (name: string, subject: string) => {
+	const msg = `${BRAND_NAME}: Thanks ${name}, we've received your message about "${subject}". Our team will get back to you as soon as possible.`;
+	return capSms(msg);
+};
+
+/**
+ * Staff's free-text reply to a quote request. The body is whatever was typed
+ * into the rich-text editor, so it is stripped, then given whatever budget is
+ * left after the framing — rather than the framing being what gets cut.
+ */
+export const quoteReplySms = (name: string, messageHtml: string) => {
+	const head = `${BRAND_NAME}: Hi ${name}, a reply to your quote request:`;
+	const tail = 'Check your email for the full message.';
+	const body = stripHtml(messageHtml);
+
+	// Trim the BODY to its own budget — capping the assembled message instead
+	// would cut the tail off rather than the part that's actually overlong.
+	const budget = SMS_LIMIT - head.length - tail.length - 2; // the two newlines
+	return `${head}\n${capSms(body, budget)}\n${tail}`;
+};
+
+/** Reverses the entities escapeHtml/buildQuoteItemLabel introduce, for plain-text use. */
+const decodeEntities = (str: string) =>
+	str
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&amp;/g, '&');

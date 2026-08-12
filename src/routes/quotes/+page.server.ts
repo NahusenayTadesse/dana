@@ -19,7 +19,13 @@ import {
 	lengths,
 	customers
 } from '$lib/server/db/schema';
-import { sendEmail, quoteRequestReceivedTemplate, adminNewQuoteRequestTemplate } from '$lib/server/email';
+import {
+	sendEmail,
+	quoteRequestReceivedTemplate,
+	adminNewQuoteRequestTemplate,
+	quoteRequestReceivedSms,
+	sendSmsToEthPhone
+} from '$lib/server/email';
 import { SMTP_USER as USER } from '$env/static/private';
 import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile } from '$lib/server/upload';
@@ -326,8 +332,17 @@ export const actions: Actions = {
 			itemLabel
 		});
 		if (resolvedEmail) {
-			sendEmail(resolvedEmail, customerTemplate.subject, customerTemplate.html, resolvedPhone).catch((err) =>
-				console.error('Email/SMS Error (Customer):', err)
+			sendEmail(
+				resolvedEmail,
+				customerTemplate.subject,
+				customerTemplate.html,
+				resolvedPhone,
+				quoteRequestReceivedSms(newQuoteId!, itemLabel)
+			).catch((err) => console.error('Email/SMS Error (Customer):', err));
+		} else if (resolvedPhone) {
+			// No email on file — the SMS is the only acknowledgement they get.
+			sendSmsToEthPhone(resolvedPhone, quoteRequestReceivedSms(newQuoteId!, itemLabel)).catch((err) =>
+				console.error('SMS Error (Customer):', err)
 			);
 		}
 

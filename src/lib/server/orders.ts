@@ -26,6 +26,10 @@ export async function getOrderDetails(orderId: number) {
 		.select({
 			quantity: orderItems.quantity,
 			price: orderItems.price,
+			// The dimension the rate is charged against. Without it the email item
+			// table could only ever assume "per piece", so a per-metre line's
+			// figures did not reconcile with the offer totals printed beneath them.
+			priceBasis: orderItems.priceBasis,
 			priceIncludesVat: orderItems.priceIncludesVat,
 			variantId: orderItems.variantId,
 			productName: products.name,

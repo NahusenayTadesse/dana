@@ -17,9 +17,40 @@ import {
 	adjustmentRequestedTemplate,
 	adjustmentDecisionTemplate,
 	adminOfferRejectedTemplate,
-	adminOrderCancelledTemplate
+	adminOrderCancelledTemplate,
+	customerDeliveredTemplate,
+	adminDeliveredTemplate,
+	orderDeliveredSms
 } from '$lib/server/email';
 import { SMTP_USER as USER } from '$env/static/private';
+
+/**
+ * Sends the customer notification and the staff notification independently.
+ *
+ * These used to be two sequential awaits, which meant a customer-side failure —
+ * a bad address, a transient SMTP error — also silently skipped the staff copy.
+ * The team would then have no record that anything had been attempted, on
+ * exactly the occasions they most needed one.
+ *
+ * Rejects if the CUSTOMER leg failed, since that is what callers report on; a
+ * staff-side failure is logged instead, so it cannot make a notification the
+ * customer did receive look like a failure.
+ */
+async function notifyBoth(
+	label: string,
+	customer: () => Promise<unknown>,
+	staff: () => Promise<unknown>
+) {
+	const [customerResult, staffResult] = await Promise.allSettled([customer(), staff()]);
+
+	if (staffResult.status === 'rejected') {
+		console.error(`${label}: staff notification failed:`, staffResult.reason);
+	}
+	if (customerResult.status === 'rejected') {
+		console.error(`${label}: customer notification failed:`, customerResult.reason);
+		throw customerResult.reason;
+	}
+}
 
 export async function sendQuotePaymentLink(orderId: number, origin: string) {
 	const details = await getOrderDetails(orderId);
@@ -34,18 +65,22 @@ export async function sendQuotePaymentLink(orderId: number, origin: string) {
 	const { offer, items } = details;
 
 	// Customer — full detail in the email, a concise total/VAT/link in the SMS.
-	const { subject, html } = quotePaymentLinkTemplate(orderId, items, offer, payUrl);
-	await sendEmail(
-		details.customer.email,
-		subject,
-		html,
-		details.customer.phone ?? undefined,
-		quotePaymentLinkSms(orderId, offer, payUrl)
-	);
-
 	// Staff — always notified when a priced quote goes out, same full detail.
+	const { subject, html } = quotePaymentLinkTemplate(orderId, items, offer, payUrl);
 	const adminTemplate = adminQuotePaymentLinkTemplate(orderId, items, offer);
-	await sendEmail(USER, adminTemplate.subject, adminTemplate.html);
+
+	await notifyBoth(
+		`quote payment link (order #${orderId})`,
+		() =>
+			sendEmail(
+				details.customer!.email,
+				subject,
+				html,
+				details.customer!.phone ?? undefined,
+				quotePaymentLinkSms(orderId, offer, payUrl)
+			),
+		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+	);
 }
 
 export async function sendPaymentConfirmation(orderId: number, payAmount: number, isAdvance: boolean) {
@@ -60,16 +95,20 @@ export async function sendPaymentConfirmation(orderId: number, payAmount: number
 	const { offer, items } = details;
 
 	const customerTemplate = paymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance);
-	await sendEmail(
-		details.customer.email,
-		customerTemplate.subject,
-		customerTemplate.html,
-		details.customer.phone ?? undefined,
-		paymentConfirmedSms(orderId, offer, payAmount, isAdvance)
-	);
-
 	const adminTemplate = adminPaymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance);
-	await sendEmail(USER, adminTemplate.subject, adminTemplate.html);
+
+	await notifyBoth(
+		`payment confirmation (order #${orderId})`,
+		() =>
+			sendEmail(
+				details.customer!.email,
+				customerTemplate.subject,
+				customerTemplate.html,
+				details.customer!.phone ?? undefined,
+				paymentConfirmedSms(orderId, offer, payAmount, isAdvance)
+			),
+		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+	);
 }
 
 /**
@@ -109,16 +148,20 @@ export async function sendBalancePaymentLink(orderId: number, origin: string) {
 	const payUrl = buildPaymentLinkUrl(origin, rawToken);
 
 	const customerTemplate = balancePaymentLinkTemplate(orderId, adjusted, amountPaid, remainingBalance, payUrl);
-	await sendEmail(
-		customer.email,
-		customerTemplate.subject,
-		customerTemplate.html,
-		customer.phone ?? undefined,
-		balancePaymentLinkSms(orderId, remainingBalance, payUrl)
-	);
-
 	const adminTemplate = adminBalancePaymentLinkTemplate(orderId, amountPaid, remainingBalance);
-	await sendEmail(USER, adminTemplate.subject, adminTemplate.html);
+
+	await notifyBoth(
+		`balance payment link (order #${orderId})`,
+		() =>
+			sendEmail(
+				customer.email,
+				customerTemplate.subject,
+				customerTemplate.html,
+				customer.phone ?? undefined,
+				balancePaymentLinkSms(orderId, remainingBalance, payUrl)
+			),
+		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+	);
 }
 
 /**
@@ -138,16 +181,20 @@ export async function sendOrderAdjustmentNotice(
 	}
 
 	const customerTemplate = orderAdjustmentAppliedTemplate(orderId, adjustment, adjusted.total);
-	await sendEmail(
-		details.customer.email,
-		customerTemplate.subject,
-		customerTemplate.html,
-		details.customer.phone ?? undefined,
-		`Order #${orderId} adjusted: ${adjustment.type === 'addition' ? '+' : '-'}${adjustment.amount.toLocaleString()} ETB. New total: ${adjusted.total.toLocaleString()} ETB.`
-	);
-
 	const adminTemplate = adminOrderAdjustmentTemplate(orderId, adjustment, adjusted.total);
-	await sendEmail(USER, adminTemplate.subject, adminTemplate.html);
+
+	await notifyBoth(
+		`order adjustment (order #${orderId})`,
+		() =>
+			sendEmail(
+				details.customer!.email,
+				customerTemplate.subject,
+				customerTemplate.html,
+				details.customer!.phone ?? undefined,
+				`Order #${orderId} adjusted: ${adjustment.type === 'addition' ? '+' : '-'}${adjustment.amount.toLocaleString()} ETB. New total: ${adjusted.total.toLocaleString()} ETB.`
+			),
+		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+	);
 }
 
 /** Customer submitted an adjustment request — staff needs to review it. */
@@ -168,6 +215,43 @@ export async function sendAdjustmentDecisionNotice(orderId: number, approved: bo
 		template.html,
 		details.customer.phone ?? undefined,
 		`Order #${orderId}: your adjustment request was ${approved ? 'approved' : 'declined'}.`
+	);
+}
+
+/**
+ * The order reached the customer. Fires on the transition into `delivered` and
+ * nowhere else — re-saving an already-delivered order must not re-announce it.
+ *
+ * `fallbackTotal` covers orders staff created directly on the Orders page:
+ * those never went through the quote builder, so there is no price offer for
+ * getAdjustedOrderTotals() to read and the action's own line total is the only
+ * figure available.
+ */
+export async function sendOrderDeliveredNotice(orderId: number, fallbackTotal?: number) {
+	const details = await getOrderDetails(orderId);
+	if (!details?.customer) {
+		console.error(`Cannot send delivery notice — order #${orderId} has no customer on file.`);
+		return;
+	}
+
+	const adjusted = await getAdjustedOrderTotals(orderId);
+	const total = adjusted?.total ?? fallbackTotal ?? 0;
+	const { items } = details;
+
+	const customerTemplate = customerDeliveredTemplate(orderId, items, total);
+	const adminTemplate = adminDeliveredTemplate(orderId, items, total);
+
+	await notifyBoth(
+		`delivery notice (order #${orderId})`,
+		() =>
+			sendEmail(
+				details.customer!.email,
+				customerTemplate.subject,
+				customerTemplate.html,
+				details.customer!.phone ?? undefined,
+				orderDeliveredSms(orderId, total)
+			),
+		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
 	);
 }
 

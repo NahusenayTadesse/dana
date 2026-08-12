@@ -1,0 +1,58 @@
+[
+  {
+    "label": "/quotes acknowledgement",
+    "length": 223,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Quote request #19 received.\nItem: PPGI Colour-Coated Sheets (Signal Red &middot; 3 Feet (914mm) &middot; 0.425mm &middot; Standard 3.0m Sheet)\nOur sales team will follow up shortly with pricing and availability."
+  },
+  {
+    "label": "/quotes, entity-escaped item",
+    "length": 165,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Quote request #19 received.\nItem: Sheets & Gutters (Off White / Galvalume 'special')\nOur sales team will follow up shortly with pricing and availability."
+  },
+  {
+    "label": "/quotes, very long item",
+    "length": 108,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Quote request #19 received.\nOur sales team will follow up shortly with pricing and availability."
+  },
+  {
+    "label": "contact-us acknowledgement",
+    "length": 144,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Thanks Contact Person, we've received your message about \"Bulk pricing question\". Our team will get back to you as soon as possible."
+  },
+  {
+    "label": "contact-us, very long subject",
+    "length": 335,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Thanks Contact Person, we've received your message about \"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB…"
+  },
+  {
+    "label": "staff reply, short",
+    "length": 157,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Hi Quote Asker, a reply to your quote request:\nWe can do 500 sheets at 1,250 ETB each, delivered to Adama.\nCheck your email for the full message."
+  },
+  {
+    "label": "staff reply, very long",
+    "length": 333,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Hi Quote Asker, a reply to your quote request:\nWe can supply that quantity and deliver within two weeks. We can supply that quantity and deliver within two weeks. We can supply that quantity and deliver within two weeks. We can supply that quantity and deliver within two weeks. We…\nCheck your email for the full message."
+  },
+  {
+    "label": "staff reply, unbroken run",
+    "length": 335,
+    "overLimit": false,
+    "midWord": false,
+    "msg": "Dana Steel: Hi Quote Asker, a reply to your quote request:\nXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX…\nCheck your email for the full message."
+  }
+]

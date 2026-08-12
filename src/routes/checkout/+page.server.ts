@@ -1,15 +1,22 @@
 import { redirect } from '@sveltejs/kit';
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq, inArray } from 'drizzle-orm';
-import { sendEmail, quoteRequestReceivedTemplate, adminNewQuoteRequestTemplate } from '$lib/server/email';
+import { eq } from 'drizzle-orm';
+import {
+	sendEmail,
+	quoteRequestReceivedTemplate,
+	adminNewQuoteRequestTemplate,
+	orderSummarySms,
+	sendSmsToEthPhone
+} from '$lib/server/email';
+import { buildOrderSummary, type OrderSummary } from '$lib/server/orderSummary';
 
 import { SMTP_USER as USER } from '$env/static/private';
 
 import { addUser, loginSchema } from '$lib/ZodSchema';
 import { add } from './schema';
 import { db } from '$lib/server/db';
-import { quoteRequests, orders, orderItems, products, customers } from '$lib/server/db/schema';
+import { quoteRequests, orders, orderItems, customers } from '$lib/server/db/schema';
 import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile, deleteUploadedFile } from '$lib/server/upload';
 import { resolveOrderLines, OrderLineError } from '$lib/server/orderLines';
@@ -85,6 +92,10 @@ export const actions: Actions = {
 		let resolvedEmail: string | undefined;
 		let resolvedPhone: string | undefined;
 		let itemLabel = '';
+		// The same two tables the customer just confirmed on this page — the line
+		// manifest and the per-product roll-up — rebuilt server-side so the
+		// notifications restate the order instead of a comma-joined blob.
+		let summary: OrderSummary | null = null;
 
 		// Price/spec resolution happens BEFORE the transaction opens: it only
 		// reads, it's the most likely thing to reject the request, and doing it
@@ -101,6 +112,18 @@ export const actions: Actions = {
 				},
 				{ status: 400 }
 			);
+		}
+
+		// Product/colour names and per-line money for the notifications. Read out
+		// here rather than inside the transaction: it's read-only, and the write
+		// path is kept as short as possible. A failure must never cost the
+		// customer their order, so it degrades to a bare label instead of throwing.
+		try {
+			summary = await buildOrderSummary(lines);
+			itemLabel = summary.itemLabel;
+		} catch (err) {
+			console.error('Could not build the order summary for notifications:', err);
+			itemLabel = lines.map((l) => `Product #${l.productId} ×${l.quantity}`).join(', ');
 		}
 
 		// Uploads are written to disk OUTSIDE the transaction. Doing it inside
@@ -244,26 +267,10 @@ export const actions: Actions = {
 					);
 				}
 
-				// --- product names for the notification emails ---
-				// Scoped to the products actually in the cart. This used to
-				// `.from(products)` with no WHERE — a full table scan, inside the
-				// transaction, on every checkout. Existence was already validated
-				// by resolveOrderLines() above.
-				const productIds = [...new Set(lines.map((l) => l.productId))];
-				const productRows = await tx
-					.select({ id: products.id, name: products.name })
-					.from(products)
-					.where(inArray(products.id, productIds));
-
-				const productMap = new Map(productRows.map((p) => [p.id, p]));
-
-				itemLabel = lines
-					.map((l) => {
-						const name = productMap.get(l.productId)?.name ?? `Product #${l.productId}`;
-						const spec = l.amount ? ` (${l.amount})` : '';
-						return `${name}${spec} ×${l.quantity}`;
-					})
-					.join(', ');
+				// Product names for the notifications are resolved before the
+				// transaction opens now (see buildOrderSummary above) — this used to
+				// `.from(products)` with no WHERE, a full table scan inside the write
+				// transaction on every checkout.
 
 				// The whole cart is one order (and one quote request) — not a
 				// quote_requests row per product, which made a multi-item cart
@@ -333,14 +340,31 @@ export const actions: Actions = {
 
 		// --- notify customer + admin that a quote request came in (no payment step yet) ---
 		if (newQuoteId != null) {
+			// The item table stripped down to plain text is unreadable inside an
+			// SMS's 335 characters, so the SMS gets its own purpose-built list —
+			// see orderSummarySms(). Without a summary there's nothing to list and
+			// sendEmail falls back to stripping the (short) HTML.
+			const smsText = summary ? orderSummarySms(newQuoteId, summary) : undefined;
+
 			if (resolvedEmail) {
 				const customerTemplate = quoteRequestReceivedTemplate(newQuoteId, {
 					name: resolvedName!,
 					quantityEstimate: `${selectedProducts.length} item${selectedProducts.length === 1 ? '' : 's'}`,
-					itemLabel
+					itemLabel,
+					summary
 				});
-				sendEmail(resolvedEmail, customerTemplate.subject, customerTemplate.html, resolvedPhone).catch((err) =>
-					console.error('Email/SMS Error (Customer):', err)
+				sendEmail(
+					resolvedEmail,
+					customerTemplate.subject,
+					customerTemplate.html,
+					resolvedPhone,
+					smsText
+				).catch((err) => console.error('Email/SMS Error (Customer):', err));
+			} else if (resolvedPhone && smsText) {
+				// No email on file — the SMS is then the only confirmation the
+				// customer gets, so it must still go out.
+				sendSmsToEthPhone(resolvedPhone, smsText).catch((err) =>
+					console.error('SMS Error (Customer):', err)
 				);
 			}
 
@@ -349,7 +373,8 @@ export const actions: Actions = {
 				email: resolvedEmail,
 				phone: resolvedPhone!,
 				quantityEstimate: `${selectedProducts.length} item${selectedProducts.length === 1 ? '' : 's'}`,
-				itemLabel
+				itemLabel,
+				summary
 			});
 			sendEmail(USER, adminTemplate.subject, adminTemplate.html).catch((err) =>
 				console.error('Email Error (Admin):', err)

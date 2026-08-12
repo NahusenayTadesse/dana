@@ -41,7 +41,12 @@ const itemSpec = (item: {
 		.join(' · ');
 import { saveUploadedFile } from '$lib/server/upload';
 import { add, edit, requestBalance, addAdjustment, decideAdjustment } from './schema';
-import { sendBalancePaymentLink, sendOrderAdjustmentNotice, sendAdjustmentDecisionNotice } from '$lib/server/notifications';
+import {
+	sendBalancePaymentLink,
+	sendOrderAdjustmentNotice,
+	sendAdjustmentDecisionNotice,
+	sendOrderDeliveredNotice
+} from '$lib/server/notifications';
 import { getAdjustedOrderTotals } from '$lib/server/orderAdjustments';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -300,6 +305,8 @@ export const actions: Actions = {
 
 		const recieptLink = reciept && reciept.size > 0 ? await saveUploadedFile(reciept) : null;
 
+		let newOrderId: number | undefined;
+
 		try {
 			await db.transaction(async (tx) => {
 				let transactionId: number | null = null;
@@ -332,7 +339,18 @@ export const actions: Actions = {
 					.$returningId();
 
 				await tx.insert(orderItems).values(resolved.values(order.id, locals?.user?.id));
+				newOrderId = order.id;
 			});
+
+			// An order booked straight into `delivered` is a completed sale the
+			// customer was never told about — the delivered templates existed for
+			// this and had no caller. Fire-and-forget: the order is committed, and
+			// a mail failure must not report the sale as failed.
+			if (status === 'delivered' && newOrderId != null) {
+				sendOrderDeliveredNotice(newOrderId, resolved.total).catch((err) =>
+					console.error('Delivery notice failed:', err)
+				);
+			}
 
 			return message(form, { type: 'success', text: 'Order created successfully.' });
 		} catch (err) {
@@ -351,13 +369,19 @@ export const actions: Actions = {
 
 		const recieptLink = reciept && reciept.size > 0 ? await saveUploadedFile(reciept) : null;
 
+		// Only the TRANSITION into `delivered` is worth announcing — staff edit a
+		// delivered order for all sorts of reasons (fixing a quantity, attaching a
+		// receipt) and each of those must not re-announce the delivery.
+		let justDelivered = false;
+
 		try {
 			await db.transaction(async (tx) => {
 				const [ord] = await tx
-					.select({ transactionId: orders.transactionId })
+					.select({ transactionId: orders.transactionId, status: orders.status })
 					.from(orders)
 					.where(eq(orders.id, id));
 				let transactionId = ord?.transactionId ?? null;
+				justDelivered = status === 'delivered' && ord?.status !== 'delivered';
 
 				let existingTxn:
 					| { txnRef: string | null; paymentStatus: string | null; paymentMethodId: number | null }
@@ -418,6 +442,12 @@ export const actions: Actions = {
 				await tx.delete(orderItems).where(eq(orderItems.orderId, id));
 				await tx.insert(orderItems).values(resolved.values(id, locals?.user?.id));
 			});
+
+			if (justDelivered) {
+				sendOrderDeliveredNotice(id, resolved.total).catch((err) =>
+					console.error('Delivery notice failed:', err)
+				);
+			}
 
 			return message(form, { type: 'success', text: 'Order updated successfully.' });
 		} catch (err) {

@@ -371,6 +371,15 @@ export const actions: Actions = {
 
 		const { priceOfferId, subject, message: emailMessage } = form.data;
 
+		// The send is deliberately NOT inside the same try as the writes, and the
+		// "we replied" record is only written once the customer has actually been
+		// told. Previously the quote_replies row and the `quoted` status were
+		// committed first, so an SMTP failure left staff reading "Error sending
+		// offer" against an order the system already believed had been quoted —
+		// and every retry appended another reply row.
+		let orderId: number;
+		let quoteRequestId: number;
+
 		try {
 			const offer = await db.select().from(priceOffers).where(eq(priceOffers.id, priceOfferId)).then((r) => r[0]);
 			if (!offer) return message(form, { type: 'error', text: 'Offer not found.' }, { status: 404 });
@@ -384,44 +393,73 @@ export const actions: Actions = {
 				.where(eq(quoteRequests.orderId, offer.orderId))
 				.then((r) => r[0]);
 
-			let transactionId = order.transactionId;
-			if (transactionId) {
-				await db.update(transactions).set({ amount: String(offer.total) }).where(eq(transactions.id, transactionId));
-			} else {
-				const [txn] = await db
-					.insert(transactions)
-					.values({ amount: String(offer.total), paymentStatus: 'pending' })
-					.$returningId();
-				transactionId = txn.id;
-				await db.update(orders).set({ transactionId }).where(eq(orders.id, order.id));
-			}
-
-			let quoteRequestId = quote?.id;
-			if (!quoteRequestId) {
+			if (!quote?.id) {
 				return message(form, { type: 'error', text: 'No quote request linked to this order.' }, { status: 400 });
 			}
 
+			orderId = order.id;
+			quoteRequestId = quote.id;
+
+			// Money plumbing only. This half IS idempotent — a retry updates the
+			// same transaction rather than creating a second one — so it is safe
+			// to have run even if the send below never succeeds.
+			await db.transaction(async (tx) => {
+				if (order.transactionId) {
+					await tx
+						.update(transactions)
+						.set({ amount: String(offer.total) })
+						.where(eq(transactions.id, order.transactionId));
+				} else {
+					const [txn] = await tx
+						.insert(transactions)
+						.values({ amount: String(offer.total), paymentStatus: 'pending' })
+						.$returningId();
+					await tx.update(orders).set({ transactionId: txn.id }).where(eq(orders.id, order.id));
+				}
+			});
+		} catch (err) {
+			console.error('Send offer — preparing the order failed:', err);
+			return message(
+				form,
+				{ type: 'error', text: 'Could not prepare the offer: ' + (err instanceof Error ? err.message : String(err)) },
+				{ status: 500 }
+			);
+		}
+
+		try {
+			await sendQuotePaymentLink(orderId, url.origin);
+		} catch (err) {
+			console.error('Send offer — notification failed:', err);
+			return message(
+				form,
+				{
+					type: 'error',
+					text:
+						'The offer is saved, but it could not be sent to the customer: ' +
+						(err instanceof Error ? err.message : String(err)) +
+						' — nothing was recorded as sent. Press Send again to retry.'
+				},
+				{ status: 500 }
+			);
+		}
+
+		// Only now is it true that the customer was replied to.
+		try {
 			await db.insert(quoteReplies).values({
 				quoteRequestId,
 				subject,
 				message: emailMessage,
 				priceOfferId,
-				orderId: order.id
+				orderId
 			});
-
 			await db.update(quoteRequests).set({ status: 'quoted' }).where(eq(quoteRequests.id, quoteRequestId));
-
-			await sendQuotePaymentLink(order.id, url.origin);
-
-			return message(form, { type: 'success', text: 'Priced offer sent to customer.' });
 		} catch (err) {
-			console.error('Send offer failed:', err);
-			return message(
-				form,
-				{ type: 'error', text: 'Error sending offer: ' + (err instanceof Error ? err.message : String(err)) },
-				{ status: 500 }
-			);
+			// The customer HAS the offer — failing the action here would invite a
+			// resend they don't need. Log it; the reply log is the lesser record.
+			console.error('Send offer — offer sent but recording it failed:', err);
 		}
+
+		return message(form, { type: 'success', text: 'Priced offer sent to customer.' });
 	},
 
 	approveOrder: async ({ request }) => {

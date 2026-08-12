@@ -32,6 +32,26 @@ export type SettlementOutcome =
 const AMOUNT_TOLERANCE = 0.01;
 
 /**
+ * Row count from a drizzle/mysql2 write.
+ *
+ * mysql2 resolves a write to `[ResultSetHeader, FieldPacket[]]` — the count is
+ * on element 0, NOT on the promise's value itself. Reading `.affectedRows`
+ * straight off the result silently yielded `undefined` on every call, which is
+ * how the settlement claim below came to always look lost: no order was ever
+ * marked paid, no payment link was ever burned, and no confirmation email was
+ * ever sent. Both shapes are accepted here so a driver change can't
+ * reintroduce a failure whose only symptom is silence.
+ *
+ * Note this relies on MySQL's default `affectedRows` semantics (rows actually
+ * changed, not merely matched), which is sound for the claim below because its
+ * WHERE guarantees `settledTxnRef` is about to take a new value.
+ */
+function affectedRowsOf(result: unknown): number {
+	const header = Array.isArray(result) ? result[0] : result;
+	return (header as { affectedRows?: number } | undefined)?.affectedRows ?? 0;
+}
+
+/**
  * Verify a payment attempt with Chapa and, if genuinely paid, settle it.
  *
  * Safe to call repeatedly and concurrently for the same txRef — only the first
@@ -150,7 +170,7 @@ export async function settlePaymentAttempt(txRef: string): Promise<SettlementOut
 			)
 		);
 
-	const wonClaim = ((claim as unknown as { affectedRows?: number })?.affectedRows ?? 0) > 0;
+	const wonClaim = affectedRowsOf(claim) > 0;
 
 	const adjusted = await getAdjustedOrderTotals(orderId);
 

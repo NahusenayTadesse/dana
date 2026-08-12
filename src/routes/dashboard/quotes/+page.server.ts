@@ -6,7 +6,7 @@ import { markRead, deleteQuote, replySchema } from './schema.js';
 import { db } from '$lib/server/db';
 import { quoteRequests, quoteReplies, customers, orders, orderItems } from '$lib/server/db/schema';
 import type { Actions, PageServerLoad } from './$types.js';
-import { sendEmail, quoteReplyTemplate } from '$lib/server/email';
+import { sendEmail, quoteReplyTemplate, quoteReplySms, sendSmsToEthPhone } from '$lib/server/email';
 
 // This is a lightweight index — customer, contact, a rough sense of what's
 // being asked for, and the order's confirmation state. The actual multi-line
@@ -110,28 +110,47 @@ export const actions: Actions = {
 			return message(form, { type: 'error', text: 'Quote request not found.' }, { status: 404 });
 		}
 
+		// Send first, record second. The reply row and the `contacted` status used
+		// to be committed before the email was attempted, so a failed send left a
+		// logged "reply" the customer never received — and the error staff saw
+		// gave no hint that the record had already been written.
+		try {
+			if (quoteReq.email) {
+				await sendEmail(
+					quoteReq.email,
+					subject,
+					quoteReplyTemplate(quoteReq.name, emailMessage).html,
+					quoteReq.phone ?? undefined,
+					quoteReplySms(quoteReq.name, emailMessage)
+				);
+			} else if (quoteReq.phone) {
+				// No email on file — the SMS is the whole reply.
+				await sendSmsToEthPhone(quoteReq.phone, quoteReplySms(quoteReq.name, emailMessage));
+			}
+		} catch (err) {
+			console.error('Reply error:', err);
+			return message(
+				form,
+				{
+					type: 'error',
+					text:
+						'Error sending reply: ' +
+						(err instanceof Error ? err.message : String(err)) +
+						' — nothing was recorded. Press Send again to retry.'
+				},
+				{ status: 500 }
+			);
+		}
+
 		try {
 			await db.insert(quoteReplies).values({ quoteRequestId, subject, message: emailMessage });
 
 			if (quoteReq.status === 'new') {
 				await db.update(quoteRequests).set({ status: 'contacted' }).where(eq(quoteRequests.id, quoteRequestId));
 			}
-
-			if (quoteReq.email) {
-				await sendEmail(
-					quoteReq.email,
-					subject,
-					quoteReplyTemplate(quoteReq.name, emailMessage).html,
-					quoteReq.phone ?? undefined
-				);
-			}
 		} catch (err) {
-			console.error('Reply error:', err);
-			return message(
-				form,
-				{ type: 'error', text: 'Error sending reply: ' + (err instanceof Error ? err.message : String(err)) },
-				{ status: 500 }
-			);
+			// The reply is already with the customer — don't invite a resend.
+			console.error('Reply sent but recording it failed:', err);
 		}
 
 		return message(form, { type: 'success', text: 'Reply sent.' });
