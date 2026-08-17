@@ -7,21 +7,21 @@
 		HandshakeIcon,
 		SparklesIcon,
 		HeartHandshakeIcon,
-		AwardIcon
+		AwardIcon,
+		LeafIcon,
+		GraduationCapIcon,
+		UsersIcon
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 	import * as m from '$lib/paraglide/messages.js';
 
+	// The eight core values DANA STEEL FACTORY publishes, in the order they are
+	// listed in the company profile.
 	const coreValues = [
 		{
 			icon: ShieldCheckIcon,
 			title: m.mission_value_quality_title,
 			text: m.mission_value_quality_text
-		},
-		{
-			icon: HandshakeIcon,
-			title: m.mission_value_integrity_title,
-			text: m.mission_value_integrity_text
 		},
 		{
 			icon: SparklesIcon,
@@ -32,6 +32,26 @@
 			icon: HeartHandshakeIcon,
 			title: m.mission_value_customer_title,
 			text: m.mission_value_customer_text
+		},
+		{
+			icon: HandshakeIcon,
+			title: m.mission_value_integrity_title,
+			text: m.mission_value_integrity_text
+		},
+		{
+			icon: LeafIcon,
+			title: m.mission_value_sustainability_title,
+			text: m.mission_value_sustainability_text
+		},
+		{
+			icon: GraduationCapIcon,
+			title: m.mission_value_human_title,
+			text: m.mission_value_human_text
+		},
+		{
+			icon: UsersIcon,
+			title: m.mission_value_social_title,
+			text: m.mission_value_social_text
 		},
 		{
 			icon: AwardIcon,
@@ -134,8 +154,8 @@
 				<h3 class="mt-3 text-3xl font-black tracking-tight">{m.mission_core_values_title()}</h3>
 			</div>
 
-			<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-				{#each coreValues as value, i}
+			<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+				{#each coreValues as value, i (value.title)}
 					<div
 						transition:fly={{ y: 20, duration: 600, delay: 300 + i * 70 }}
 						class="group rounded-2xl border border-primary/10 bg-background/50 p-5 text-center transition duration-500 hover:-translate-y-2 hover:border-primary/30 hover:bg-primary/5"

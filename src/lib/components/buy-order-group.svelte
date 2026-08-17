@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
-	import { useCart } from '$lib/hooks/cart.svelte.js';
-	import { CheckIcon } from '@lucide/svelte';
+	import { cartLineKey, useCart } from '$lib/hooks/cart.svelte.js';
+	import { CheckIcon, LightbulbIcon, TriangleAlertIcon } from '@lucide/svelte';
 	import BuyOrderRow from './buy-order-row.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
@@ -175,6 +175,24 @@
 		}
 	}
 
+	// Two rows of the same order item — same variant, colour and length — are
+	// left standing (the cart never merges behind the customer's back), but the
+	// later one is told which earlier row it doubles up with so it can say so and
+	// offer the way out. Detection belongs here rather than in the row: only the
+	// group knows the refs, and "A2 is the same as A1" is the useful sentence.
+	// Identical rows always land in the same group, so this sees all of them.
+	const duplicateOf = $derived(
+		items.map((item, i) => {
+			const key = cartLineKey(item);
+			const first = items.findIndex((other) => cartLineKey(other) === key);
+			return first >= 0 && first < i
+				? { ref: `${letter}${first + 1}`, lineId: items[first].lineId }
+				: null;
+		})
+	);
+
+	const duplicateCount = $derived(duplicateOf.filter(Boolean).length);
+
 	const removeGroup = () => {
 		for (const lineId of items.map((i) => i.lineId)) cart.removeItem(lineId);
 	};
@@ -261,6 +279,18 @@
 		{:else if head.colorName}
 			<div class="mt-2 text-xs text-slate-500 dark:text-slate-400">{head.colorName}</div>
 		{/if}
+
+		<!-- Said once at the top of the block too: a repeat further down the list
+		     is easy to scroll past on a phone, and the sum at the bottom counts it
+		     twice either way. -->
+		{#if duplicateCount > 0}
+			<div
+				class="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200"
+			>
+				<TriangleAlertIcon class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+				<span>{m.buy_group_duplicate_note({ count: duplicateCount })}</span>
+			</div>
+		{/if}
 	</header>
 
 	<!-- Column headings only exist from `sm` up, where the rows line up as a
@@ -273,7 +303,7 @@
 		<span>{m.checkout_col_length()}</span>
 		<span class="text-center">{m.cart_col_qty()}</span>
 		<span class="text-right">{m.buy_col_amount()}</span>
-		<span class="w-20"></span>
+		<span></span>
 	</div>
 
 	<div class="divide-y divide-slate-200/70 dark:divide-white/10">
@@ -286,9 +316,24 @@
 				{minLength}
 				{maxLength}
 				{lengthStep}
+				duplicateOfRef={duplicateOf[i]?.ref ?? null}
+				duplicateOfLineId={duplicateOf[i]?.lineId ?? null}
 			/>
 		{/each}
 	</div>
+
+	<!-- Said in the block, next to the button it is about, and only while the
+	     block is a single line: once a second length is on the order the customer
+	     has plainly found the button, and a tip that never goes away is one more
+	     thing to read past on every future order. -->
+	{#if items.length === 1}
+		<div
+			class="flex items-start gap-2 border-t border-slate-200 bg-blue-50/60 px-4 py-2.5 text-xs text-slate-600 dark:border-white/10 dark:bg-blue-500/5 dark:text-slate-300"
+		>
+			<LightbulbIcon class="mt-px size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+			<span>{m.buy_group_add_length_tip()}</span>
+		</div>
+	{/if}
 
 	<div
 		class="flex items-center justify-between border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 dark:border-white/10 dark:bg-white/[0.03]"

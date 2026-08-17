@@ -1,10 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 
-	let {
-		phone = '0919 05 0607',
-		email = 'info@danasteel.com'
-	} = $props();
+	let { phone = '0919 05 0607', email = 'info@danasteel.com' } = $props();
 
 	// /buy leads the column: it is the only link here that takes an order rather
 	// than describing the company, so it should be the first thing found.
@@ -35,7 +32,9 @@
 	this, FloatingChat and the floating cart button all move with it.
 -->
 <footer class="relative z-[2] bg-[#0C1B34] pb-40 text-[#B9CCEC] md:pb-28">
-	<div class="mx-auto grid max-w-[1280px] gap-10 px-6 py-14 sm:grid-cols-2 md:px-8 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+	<div
+		class="mx-auto grid max-w-[1280px] gap-10 px-6 py-14 sm:grid-cols-2 md:px-8 lg:grid-cols-[1.4fr_1fr_1fr_1fr]"
+	>
 		<div>
 			<a href="/" class="inline-flex rounded-xl bg-white px-3 py-2">
 				<img src="/logo.png" alt={m.header_logo_alt()} class="h-7 w-auto object-contain" />
@@ -72,12 +71,24 @@
 				{m.footer_col_contact()}
 			</div>
 			<div class="mt-4 flex flex-col gap-2.5 text-[14.5px]">
-				<a href={`tel:${phone.replace(/\s+/g, '')}`} class="w-fit transition-colors hover:text-white">
+				<a
+					href={`tel:${phone.replace(/\s+/g, '')}`}
+					class="w-fit transition-colors hover:text-white"
+				>
 					{phone}
 				</a>
 				<a href={`mailto:${email}`} class="w-fit transition-colors hover:text-white">{email}</a>
 				<span>{m.footer_contact_address()}</span>
 			</div>
+		</div>
+	</div>
+
+	<!-- Company closing statement, sitting above the legal bar -->
+	<div class="border-t border-white/10">
+		<div class="mx-auto max-w-[1280px] px-6 py-6 md:px-8">
+			<p class="max-w-[86ch] text-[14.5px] leading-relaxed font-semibold text-white/90">
+				{m.closing_line()}
+			</p>
 		</div>
 	</div>
 
@@ -95,7 +106,11 @@
 			>
 				{m.footer_developed_by()}
 				<span class="inline-flex rounded-md bg-white px-1.5 py-1">
-					<img src="/digitalLogo.png" alt={m.alt_digital_construct()} class="h-3.5 w-auto object-contain" />
+					<img
+						src="/digitalLogo.png"
+						alt={m.alt_digital_construct()}
+						class="h-3.5 w-auto object-contain"
+					/>
 				</span>
 			</a>
 		</div>

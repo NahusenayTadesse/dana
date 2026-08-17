@@ -56,10 +56,14 @@ export type CartLineSpec = Pick<
 >;
 
 /**
- * Merge key for a cart line. Two lines collapse into one only when they are
- * the same variant AND the same colour AND the same requested length — so
- * "2m in Signal Red" and "3.5m in Signal Red" stay two separate order items,
- * as do two colours of the same size.
+ * Identity of a cart line: same variant AND same colour AND same requested
+ * length. "2m in Signal Red" and "3.5m in Signal Red" are two different order
+ * items, as are two colours of the same size.
+ *
+ * Two lines sharing a key are the same thing ordered twice. Adding from a
+ * product card folds them together (addItem) — pressing the same button twice
+ * plainly means "one more". Editing an existing line does not: there the pair
+ * is flagged in the order and the customer chooses (see mergeLines).
  *
  * Length is normalised through Number() so a stored "2" and a typed 2 don't
  * read as different lines.
@@ -85,10 +89,13 @@ function newLineId(): string {
 }
 
 /**
- * Collapse lines that share a cartLineKey into one, summing their quantities —
- * the same merge addItem() performs, applied to whatever was in storage. Also
- * hands every surviving line a unique lineId, since a cart written by an older
- * build has none at all.
+ * Hand every stored line a unique lineId, since a cart written by an older
+ * build has none at all and a hand-edited one can repeat them.
+ *
+ * Two lines with the same spec are deliberately left as two lines: the customer
+ * is the one who decides whether that was a mistake (the order row offers them
+ * "merge" and "delete"), so a reload must not quietly make that decision for
+ * them by collapsing the pair.
  */
 function normalizeStoredItems(items: CartItem[]): CartItem[] {
 	// Plain array scans rather than a Map/Set: a cart holds a handful of lines,
@@ -96,13 +103,6 @@ function normalizeStoredItems(items: CartItem[]): CartItem[] {
 	const out: CartItem[] = [];
 
 	for (const item of items) {
-		const key = cartLineKey(item);
-		const existing = out.find((i) => cartLineKey(i) === key);
-		if (existing) {
-			existing.quantity += item.quantity ?? 1;
-			continue;
-		}
-
 		const lineId =
 			typeof item.lineId === 'string' && item.lineId && !out.some((i) => i.lineId === item.lineId)
 				? item.lineId
@@ -217,9 +217,14 @@ class UseCart {
 	/**
 	 * How many units of an exact spec are in the cart — what an "in cart" badge
 	 * on a product card should show for the combination it currently has
-	 * selected.
+	 * selected. Summed across lines: the same spec can sit on more than one line
+	 * (the customer is free to keep two and merge them later), and a badge that
+	 * read only the first one would under-report what is on the order.
 	 */
-	quantityOf = (spec: CartLineSpec): number => this.findLine(spec)?.quantity ?? 0;
+	quantityOf = (spec: CartLineSpec): number => {
+		const key = cartLineKey(spec);
+		return this.items.reduce((sum, i) => (cartLineKey(i) === key ? sum + i.quantity : sum), 0);
+	};
 
 	/** Total units of a variant across every length/colour line it appears in. */
 	quantityOfVariant = (variantId: number): number =>
@@ -246,6 +251,51 @@ class UseCart {
 		}
 	};
 
+	/**
+	 * Put a whole cart back exactly as it was — for "undo" after Start over.
+	 * Restores line for line, duplicates included, rather than replaying adds
+	 * through addItem(), which would merge same-spec lines back together and
+	 * hand the customer back a different order than the one they cleared.
+	 */
+	restoreItems = (items: CartItem[]) => {
+		this.items = normalizeStoredItems(items);
+	};
+
+	/**
+	 * Start a second line from an existing one — the customer asking for "another
+	 * one of these" before they have said what is different about it. It lands
+	 * directly under its source at quantity 1 and is a full line of its own, so
+	 * length, colour and quantity can all be dialled from there.
+	 *
+	 * Deliberately NOT routed through addItem: an identical copy is the whole
+	 * point (the customer decides what to change, or whether to merge it back),
+	 * and addItem would fold it straight into the line it came from.
+	 */
+	duplicateLine = (lineId: string): string | null => {
+		const index = this.items.findIndex((i) => i.lineId === lineId);
+		if (index < 0) return null;
+
+		const newId = newLineId();
+		this.items.splice(index + 1, 0, { ...this.items[index], lineId: newId, quantity: 1 });
+		return newId;
+	};
+
+	/**
+	 * Fold one line into another, summing quantities — the "these two are the
+	 * same thing" resolution, taken only when the customer presses for it. Two
+	 * identical lines are never merged automatically: 3 at 1m and 2 at 1m may
+	 * well be two deliveries, two sites or two customers, and only the person
+	 * placing the order knows which.
+	 */
+	mergeLines = (fromLineId: string, intoLineId: string) => {
+		const from = this.items.findIndex((i) => i.lineId === fromLineId);
+		const into = this.items.findIndex((i) => i.lineId === intoLineId);
+		if (from < 0 || into < 0 || from === into) return;
+
+		this.items[into].quantity += this.items[from].quantity;
+		this.items.splice(from, 1);
+	};
+
 	/** Remove one line from the cart. */
 	removeItem = (lineId: string) => {
 		this.items = this.items.filter((item) => item.lineId !== lineId);
@@ -266,26 +316,11 @@ class UseCart {
 	};
 
 	/**
-	 * Fold a line into another line that now carries the same
-	 * variant+colour+length, if there is one — an edit is allowed to collapse
-	 * two lines back together, it just must never leave two rows the customer
-	 * can't tell apart. Returns true when the line was absorbed and removed.
-	 */
-	private mergeDuplicateOf = (index: number): boolean => {
-		const key = cartLineKey(this.items[index]);
-		const twinIndex = this.items.findIndex((i, n) => n !== index && cartLineKey(i) === key);
-		if (twinIndex < 0) return false;
-
-		this.items[twinIndex].quantity += this.items[index].quantity;
-		this.items.splice(index, 1);
-		return true;
-	};
-
-	/**
 	 * Swap a line to a different variant of the same product (e.g. a color or
 	 * length change) while keeping its quantity, its lineId and its position in
-	 * the list. If that lands on a spec another line already holds, the two
-	 * merge rather than leaving indistinguishable rows.
+	 * the list. Landing on a spec another line already holds leaves both lines
+	 * standing — the order row flags the pair and offers to merge them, which is
+	 * the customer's call to make, not an edit's side effect.
 	 */
 	updateVariant = (lineId: string, newVariant: Omit<CartItem, 'quantity' | 'lineId'>) => {
 		const index = this.items.findIndex((i) => i.lineId === lineId);
@@ -293,14 +328,14 @@ class UseCart {
 
 		const { quantity } = this.items[index];
 		this.items[index] = { ...newVariant, lineId, quantity };
-		this.mergeDuplicateOf(index);
 	};
 
 	/**
 	 * Dial a line's length in place, for products where length isn't limited
 	 * to fixed catalog stops (products.isLengthCustomizable) — same variant,
-	 * same price, just a different requested length. Since length is part of a
-	 * line's merge key, dialling one line onto another's length merges them.
+	 * same price, just a different requested length. Dialling one line onto
+	 * another's length is left as two lines, flagged for the customer to merge
+	 * or delete; see mergeLines.
 	 */
 	updateLength = (lineId: string, length: number, isCustomLength: boolean, specLabel?: string) => {
 		const index = this.items.findIndex((i) => i.lineId === lineId);
@@ -311,7 +346,6 @@ class UseCart {
 		// The label is what reaches staff as orderItems.amount — leaving the old
 		// one behind would have them cut the length the line started at.
 		if (specLabel) this.items[index].specLabel = specLabel;
-		this.mergeDuplicateOf(index);
 	};
 
 	clearCart = () => {

@@ -5,7 +5,7 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/manrope';
 @import '@fontsource-variable/space-grotesk';
-@import "@fontsource-variable/noto-sans";
+@import '@fontsource-variable/noto-sans';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -16,51 +16,51 @@
    #F5A623 gold · page #EAF1FA · card #fff
    ============================================================ */
 :root {
-	--background: oklch(0.955 0.014 254.6);          /* #EAF1FA cool page base */
-	--foreground: oklch(0.224 0.053 260.0);          /* #0C1B34 ink */
-	--card: oklch(1 0 0);                            /* white cards pop on the page */
-	--card-foreground: oklch(0.224 0.053 260.0);
+	--background: oklch(0.955 0.014 254.6); /* #EAF1FA cool page base */
+	--foreground: oklch(0.224 0.053 260); /* #0C1B34 ink */
+	--card: oklch(1 0 0); /* white cards pop on the page */
+	--card-foreground: oklch(0.224 0.053 260);
 	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.224 0.053 260.0);
-	--primary: oklch(0.368 0.130 261.1);             /* #123A82 */
+	--popover-foreground: oklch(0.224 0.053 260);
+	--primary: oklch(0.368 0.13 261.1); /* #123A82 */
 	--primary-foreground: oklch(0.985 0.005 255);
-	--secondary: oklch(0.963 0.012 259.8);           /* #EEF3FB chip */
-	--secondary-foreground: oklch(0.368 0.130 261.1);
-	--muted: oklch(0.950 0.011 256.7);               /* #EAEFF6 */
-	--muted-foreground: oklch(0.523 0.042 256.0);    /* #5A6B82 */
+	--secondary: oklch(0.963 0.012 259.8); /* #EEF3FB chip */
+	--secondary-foreground: oklch(0.368 0.13 261.1);
+	--muted: oklch(0.95 0.011 256.7); /* #EAEFF6 */
+	--muted-foreground: oklch(0.523 0.042 256); /* #5A6B82 */
 	--accent: oklch(0.963 0.012 259.8);
-	--accent-foreground: oklch(0.368 0.130 261.1);
-	--destructive: oklch(0.603 0.214 28.7);          /* #E5342A */
-	--border: oklch(0.930 0.012 256.7);              /* subtle blue hairline */
-	--input: oklch(0.930 0.012 256.7);
-	--ring: oklch(0.556 0.172 259.1);                /* #2C6FD6 focus */
-	--chart-1: oklch(0.556 0.172 259.1);             /* bright blue */
-	--chart-2: oklch(0.368 0.130 261.1);             /* brand blue */
-	--chart-3: oklch(0.456 0.149 260.1);             /* mid blue */
-	--chart-4: oklch(0.631 0.128 147.1);             /* green */
-	--chart-5: oklch(0.784 0.159 73.0);              /* gold */
+	--accent-foreground: oklch(0.368 0.13 261.1);
+	--destructive: oklch(0.603 0.214 28.7); /* #E5342A */
+	--border: oklch(0.93 0.012 256.7); /* subtle blue hairline */
+	--input: oklch(0.93 0.012 256.7);
+	--ring: oklch(0.556 0.172 259.1); /* #2C6FD6 focus */
+	--chart-1: oklch(0.556 0.172 259.1); /* bright blue */
+	--chart-2: oklch(0.368 0.13 261.1); /* brand blue */
+	--chart-3: oklch(0.456 0.149 260.1); /* mid blue */
+	--chart-4: oklch(0.631 0.128 147.1); /* green */
+	--chart-5: oklch(0.784 0.159 73); /* gold */
 	--radius: 0.45rem;
 	--sidebar: oklch(0.987 0.006 256);
-	--sidebar-foreground: oklch(0.224 0.053 260.0);
-	--sidebar-primary: oklch(0.368 0.130 261.1);
+	--sidebar-foreground: oklch(0.224 0.053 260);
+	--sidebar-primary: oklch(0.368 0.13 261.1);
 	--sidebar-primary-foreground: oklch(0.985 0.005 255);
 	--sidebar-accent: oklch(0.963 0.012 259.8);
-	--sidebar-accent-foreground: oklch(0.368 0.130 261.1);
-	--sidebar-border: oklch(0.930 0.012 256.7);
+	--sidebar-accent-foreground: oklch(0.368 0.13 261.1);
+	--sidebar-border: oklch(0.93 0.012 256.7);
 	--sidebar-ring: oklch(0.556 0.172 259.1);
 
 	/* --- Dana brand tokens (colors shadcn doesn't cover) --- */
-	--brand: oklch(0.368 0.130 261.1);               /* #123A82 primary blue */
-	--brand-bright: oklch(0.556 0.172 259.1);        /* #2C6FD6 */
-	--brand-mid: oklch(0.456 0.149 260.1);           /* #1E52A8 */
-	--brand-red: oklch(0.603 0.214 28.7);            /* #E5342A accent (not "destructive") */
-	--brand-green: oklch(0.631 0.128 147.1);         /* #4E9E5A */
-	--brand-gold: oklch(0.784 0.159 73.0);           /* #F5A623 stars */
-	--brand-grad-from: oklch(0.913 0.037 254.6);     /* #D2E4FB */
-	--brand-grad-via: oklch(0.949 0.018 253.3);      /* #E6EFFA */
-	--brand-grad-to: oklch(0.955 0.014 254.6);       /* #EAF1FA */
+	--brand: oklch(0.368 0.13 261.1); /* #123A82 primary blue */
+	--brand-bright: oklch(0.556 0.172 259.1); /* #2C6FD6 */
+	--brand-mid: oklch(0.456 0.149 260.1); /* #1E52A8 */
+	--brand-red: oklch(0.603 0.214 28.7); /* #E5342A accent (not "destructive") */
+	--brand-green: oklch(0.631 0.128 147.1); /* #4E9E5A */
+	--brand-gold: oklch(0.784 0.159 73); /* #F5A623 stars */
+	--brand-grad-from: oklch(0.913 0.037 254.6); /* #D2E4FB */
+	--brand-grad-via: oklch(0.949 0.018 253.3); /* #E6EFFA */
+	--brand-grad-to: oklch(0.955 0.014 254.6); /* #EAF1FA */
 	/* Bands that stay dark navy in BOTH themes (RAL showcase, factory band, footer) */
-	--brand-deep: oklch(0.224 0.053 260.0);          /* #0C1B34 */
+	--brand-deep: oklch(0.224 0.053 260); /* #0C1B34 */
 	--brand-deep-foreground: oklch(0.949 0.018 253.3);
 }
 
@@ -68,56 +68,56 @@
    DANA STEEL — DARK
    ============================================================ */
 .dark {
-	--background: oklch(0.195 0.038 258.8);          /* deep navy */
-	--foreground: oklch(0.949 0.018 253.3);          /* #E6EFFA */
-	--card: oklch(0.260 0.056 258.3);                /* elevated navy */
+	--background: oklch(0.195 0.038 258.8); /* deep navy */
+	--foreground: oklch(0.949 0.018 253.3); /* #E6EFFA */
+	--card: oklch(0.26 0.056 258.3); /* elevated navy */
 	--card-foreground: oklch(0.949 0.018 253.3);
-	--popover: oklch(0.260 0.056 258.3);
+	--popover: oklch(0.26 0.056 258.3);
 	--popover-foreground: oklch(0.949 0.018 253.3);
-	--primary: oklch(0.613 0.167 257.6);             /* brighter blue reads on dark */
+	--primary: oklch(0.613 0.167 257.6); /* brighter blue reads on dark */
 	--primary-foreground: oklch(0.985 0.005 255);
-	--secondary: oklch(0.300 0.045 258.5);
+	--secondary: oklch(0.3 0.045 258.5);
 	--secondary-foreground: oklch(0.949 0.018 253.3);
-	--muted: oklch(0.290 0.040 258.5);
+	--muted: oklch(0.29 0.04 258.5);
 	--muted-foreground: oklch(0.707 0.048 258.7);
-	--accent: oklch(0.300 0.045 258.5);
+	--accent: oklch(0.3 0.045 258.5);
 	--accent-foreground: oklch(0.949 0.018 253.3);
-	--destructive: oklch(0.637 0.210 28.5);
+	--destructive: oklch(0.637 0.21 28.5);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.613 0.167 257.6);
-	--chart-1: oklch(0.664 0.150 254);
+	--chart-1: oklch(0.664 0.15 254);
 	--chart-2: oklch(0.556 0.172 259.1);
 	--chart-3: oklch(0.456 0.149 260.1);
 	--chart-4: oklch(0.701 0.135 147.3);
-	--chart-5: oklch(0.800 0.150 75);
-	--sidebar: oklch(0.260 0.056 258.3);
+	--chart-5: oklch(0.8 0.15 75);
+	--sidebar: oklch(0.26 0.056 258.3);
 	--sidebar-foreground: oklch(0.949 0.018 253.3);
 	--sidebar-primary: oklch(0.613 0.167 257.6);
 	--sidebar-primary-foreground: oklch(0.985 0.005 255);
-	--sidebar-accent: oklch(0.300 0.045 258.5);
+	--sidebar-accent: oklch(0.3 0.045 258.5);
 	--sidebar-accent-foreground: oklch(0.949 0.018 253.3);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.613 0.167 257.6);
 
 	/* --- Dana brand tokens (dark) --- */
-	--brand: oklch(0.613 0.167 257.6);               /* lifted so it pops on navy */
-	--brand-bright: oklch(0.664 0.150 254);
+	--brand: oklch(0.613 0.167 257.6); /* lifted so it pops on navy */
+	--brand-bright: oklch(0.664 0.15 254);
 	--brand-mid: oklch(0.556 0.172 259.1);
-	--brand-red: oklch(0.637 0.210 28.5);
+	--brand-red: oklch(0.637 0.21 28.5);
 	--brand-green: oklch(0.701 0.135 147.3);
-	--brand-gold: oklch(0.800 0.150 75);
-	--brand-grad-from: oklch(0.300 0.070 260);       /* subtle top-right glow */
+	--brand-gold: oklch(0.8 0.15 75);
+	--brand-grad-from: oklch(0.3 0.07 260); /* subtle top-right glow */
 	--brand-grad-via: oklch(0.225 0.045 259);
 	--brand-grad-to: oklch(0.195 0.038 258.8);
-	--brand-deep: oklch(0.170 0.033 258.8);          /* bands go a touch darker than page */
+	--brand-deep: oklch(0.17 0.033 258.8); /* bands go a touch darker than page */
 	--brand-deep-foreground: oklch(0.949 0.018 253.3);
 }
 
 @theme inline {
 	--font-sans: 'Manrope Variable', sans-serif;
 	--font-heading: 'Inter Variable', sans-serif;
-	--font-grotesk: 'Space Grotesk Variable', sans-serif;   /* Dana stat numbers */
+	--font-grotesk: 'Space Grotesk Variable', sans-serif; /* Dana stat numbers */
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -186,35 +186,75 @@
 }
 
 @keyframes dsUp {
-	from { opacity: 0; transform: translateY(28px); }
-	to { opacity: 1; transform: none; }
+	from {
+		opacity: 0;
+		transform: translateY(28px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
 }
 @keyframes dsIn {
-	from { opacity: 0; transform: scale(0.94); }
-	to { opacity: 1; transform: none; }
+	from {
+		opacity: 0;
+		transform: scale(0.94);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
 }
 @keyframes dsFloat {
-	0%, 100% { transform: translateY(0); }
-	50% { transform: translateY(-12px); }
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-12px);
+	}
 }
 @keyframes dsFloatB {
-	0%, 100% { transform: translateY(0); }
-	50% { transform: translateY(9px); }
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(9px);
+	}
 }
 @keyframes dsMarquee {
-	from { transform: translateX(0); }
-	to { transform: translateX(-50%); }
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
 }
 @keyframes dsBlob {
-	0%, 100% { transform: translate(0, 0) scale(1); }
-	50% { transform: translate(30px, -20px) scale(1.08); }
+	0%,
+	100% {
+		transform: translate(0, 0) scale(1);
+	}
+	50% {
+		transform: translate(30px, -20px) scale(1.08);
+	}
 }
 @keyframes dsPulse {
-	0%, 100% { opacity: 0.5; transform: scale(1); }
-	50% { opacity: 1; transform: scale(1.4); }
+	0%,
+	100% {
+		opacity: 0.5;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1.4);
+	}
 }
 @keyframes dsSpin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 @layer base {
@@ -349,6 +389,21 @@
 	html.printing .print-sheet tr {
 		break-inside: avoid;
 		page-break-inside: avoid;
+	}
+
+	/* The order sheet (components/order-sheet.svelte) is a reproduction of the
+	   form the factory already fills in — its rules, teal headings and yellow
+	   totals are the document itself, so the generic table reset above must not
+	   flatten them back to grey. */
+	html.printing .print-sheet .order-sheet th,
+	html.printing .print-sheet .order-sheet td {
+		border-color: #9aa0a6 !important;
+		padding: 3px 6px !important;
+		vertical-align: middle !important;
+	}
+
+	html.printing .print-sheet .order-sheet .blank {
+		border: 0 !important;
 	}
 
 	html.printing .print-sheet img {

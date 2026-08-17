@@ -7,7 +7,15 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
-	import { MailIcon, SendIcon, PhoneIcon, ClockIcon, Send, Phone } from '@lucide/svelte';
+	import {
+		MailIcon,
+		SendIcon,
+		PhoneIcon,
+		ClockIcon,
+		MapPinIcon,
+		Send,
+		Phone
+	} from '@lucide/svelte';
 	import { superForm } from 'sveltekit-superforms/client';
 	import { toast } from 'svelte-sonner';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
@@ -68,6 +76,13 @@
 			label: m.contact_direct_call_whatsapp_label,
 			value: '+251 9 01 02 03 04',
 			href: 'https://wa.me/+251901020304'
+		},
+		{
+			key: 'address',
+			icon: MapPinIcon,
+			label: m.about_us_location_label,
+			value: 'Adama, Oromia, Ethiopia',
+			href: 'https://www.google.com/maps/search/?api=1&query=Adama%2C+Oromia%2C+Ethiopia'
 		}
 	];
 
@@ -289,11 +304,10 @@
 			</div>
 		</div>
 
-
 		<section transition:fly={{ y: 30, duration: 800, delay: 500 }} class="relative mt-16 w-full">
 			<div class="absolute inset-0 -z-10 rounded-3xl bg-primary/5 blur-xl"></div>
 			<iframe
-				src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3940.3309312526444!2d38.73715996008017!3d9.033545988881428!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x164b85fef49d234f%3A0x37ebbe938f6e42e3!2s&#39;Yirga%20Haile&#39;%20Market%20Center%2C%20Fitawrari%20Gebeyebu%20St%2C%20Addis%20Ababa!5e0!3m2!1sen!2set!4v1781167286180!5m2!1sen!2set"
+				src="https://www.google.com/maps?q=Adama,%20Oromia,%20Ethiopia&amp;z=13&amp;output=embed"
 				style="border:0;"
 				class="h-[40vh] w-full rounded-3xl border border-primary/10 shadow-lg lg:h-[50vh]"
 				loading="lazy"

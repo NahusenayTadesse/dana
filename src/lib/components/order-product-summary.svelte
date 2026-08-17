@@ -4,16 +4,20 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Download, Printer, Grid3x3 } from '@lucide/svelte';
 	import { downloadCSV, printElement } from '$lib/print';
+	import OrderSheet from './order-sheet.svelte';
+	import { buildOrderSheet, orderSheetCsvRows } from '$lib/order-sheet';
 	import * as m from '$lib/paraglide/messages.js';
 
 	/**
-	 * One row per product, with its length variants collapsed into a single
-	 * quantity and a single total length.
+	 * The order laid out the way the factory writes it up: a numbered block per
+	 * product, one row per cut, quantity × length totalled per block, then Sub
+	 * Total and Grand Total / VAT / Total Amount. See $lib/order-sheet.
 	 *
-	 * The order itself is kept as one line per length — 3 sheets at 2m and 2 at
-	 * 3.5m are two different things to cut. But nobody loading a truck or pulling
-	 * stock wants to add those up by hand, so this states the per-product figures
-	 * directly.
+	 * It replaced a four-column per-product roll-up. The roll-up was correct and
+	 * useless: staff pulling stock still had to rewrite it into this shape by
+	 * hand, and the printout matched nothing the office files. Same numbers, in
+	 * the layout the work is actually done in — and the CSV opens in Excel
+	 * column-for-column against the sheet they already use.
 	 */
 	let {
 		items,
@@ -33,95 +37,21 @@
 
 	// Bound to the block that gets printed: title plus table, without the
 	// export buttons themselves (they carry data-print-hide).
-	let sheet: HTMLDivElement | null = $state(null);
+	let sheetNode: HTMLDivElement | null = $state(null);
 
-	type UnitTotal = { unit: string; total: number };
-
-	/**
-	 * Lengths are totalled per unit and only then stringified. A cart can hold
-	 * metres and millimetres at once, and adding those two numbers together would
-	 * produce a figure that means nothing.
-	 */
-	function addLength(into: UnitTotal[], length: number, unit: string) {
-		const entry = into.find((u) => u.unit === unit);
-		if (entry) entry.total += length;
-		else into.push({ unit, total: length });
-	}
-
-	function lengthText(byUnit: UnitTotal[]): string {
-		if (byUnit.length === 0) return '—';
-		return byUnit
-			.map((u) => `${Number(u.total.toFixed(2))}${u.unit ? ` ${u.unit}` : ''}`)
-			.join(' + ');
-	}
-
-	const rows = $derived.by(() => {
-		const out: {
-			productId: number;
-			productName: string;
-			variants: number;
-			quantity: number;
-			byUnit: UnitTotal[];
-		}[] = [];
-
-		for (const item of items) {
-			let row = out.find((r) => r.productId === item.productId);
-			if (!row) {
-				row = {
-					productId: item.productId,
-					productName: item.productName,
-					variants: 0,
-					quantity: 0,
-					byUnit: []
-				};
-				out.push(row);
-			}
-
-			row.variants += 1;
-			row.quantity += item.quantity;
-			// Material, not row count: 4 sheets at 3m is 12m to cut.
-			if (item.length != null) {
-				addLength(row.byUnit, item.length * item.quantity, item.lengthUnit ?? '');
-			}
-		}
-
-		return out;
-	});
-
-	const totalQuantity = $derived(rows.reduce((sum, r) => sum + r.quantity, 0));
-
-	const totalByUnit = $derived.by(() => {
-		const out: UnitTotal[] = [];
-		for (const r of rows) for (const u of r.byUnit) addLength(out, u.total, u.unit);
-		return out;
-	});
+	const orderSheet = $derived(buildOrderSheet(items));
 
 	function savePdf() {
-		if (sheet) printElement(sheet, { fileName, orientation: 'portrait' });
+		if (sheetNode) printElement(sheetNode, { fileName, orientation: 'portrait' });
 	}
 
 	function saveCsv() {
-		downloadCSV(
-			[
-				[m.product_summary_title()],
-				[],
-				[
-					m.cart_col_product(),
-					m.product_summary_variants(),
-					m.cart_col_qty(),
-					m.product_summary_total_length()
-				],
-				...rows.map((r) => [r.productName, r.variants, r.quantity, lengthText(r.byUnit)]),
-				[],
-				[m.product_summary_all_products(), items.length, totalQuantity, lengthText(totalByUnit)]
-			],
-			fileName
-		);
+		downloadCSV([[m.product_summary_title()], [], ...orderSheetCsvRows(orderSheet)], fileName);
 	}
 </script>
 
-{#if rows.length > 0}
-	<div bind:this={sheet} class={className}>
+{#if orderSheet.sections.length > 0}
+	<div bind:this={sheetNode} class={className}>
 		{#if heading || exportable}
 			<div class="mb-3 flex items-start justify-between gap-3">
 				{#if heading}
@@ -165,43 +95,8 @@
 			</div>
 		{/if}
 
-		<div class="overflow-x-auto rounded-xl border border-border">
-			<table class="w-full text-sm">
-				<caption class="sr-only">{m.product_summary_caption()}</caption>
-				<thead>
-					<tr class="border-b border-border bg-muted/40 text-left text-xs uppercase">
-						<th class="px-3 py-2 font-medium">{m.cart_col_product()}</th>
-						<th class="px-3 py-2 text-right font-medium">{m.product_summary_variants()}</th>
-						<th class="px-3 py-2 text-right font-medium">{m.cart_col_qty()}</th>
-						<th class="px-3 py-2 text-right font-medium">{m.product_summary_total_length()}</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-border/60">
-					{#each rows as row (row.productId)}
-						<tr>
-							<td class="px-3 py-2 font-medium">{row.productName}</td>
-							<td class="px-3 py-2 text-right text-muted-foreground tabular-nums">{row.variants}</td
-							>
-							<td class="px-3 py-2 text-right font-semibold tabular-nums">
-								{m.buy_pieces({ count: row.quantity })}
-							</td>
-							<td class="px-3 py-2 text-right font-mono tabular-nums">{lengthText(row.byUnit)}</td>
-						</tr>
-					{/each}
-				</tbody>
-				{#if rows.length > 1}
-					<tfoot>
-						<tr class="border-t-2 border-border bg-muted/30 font-bold">
-							<td class="px-3 py-2">{m.product_summary_all_products()}</td>
-							<td class="px-3 py-2 text-right tabular-nums">{items.length}</td>
-							<td class="px-3 py-2 text-right tabular-nums">
-								{m.buy_pieces({ count: totalQuantity })}
-							</td>
-							<td class="px-3 py-2 text-right font-mono tabular-nums">{lengthText(totalByUnit)}</td>
-						</tr>
-					</tfoot>
-				{/if}
-			</table>
+		<div class="overflow-hidden rounded-xl border border-border">
+			<OrderSheet {items} class="p-2" />
 		</div>
 	</div>
 {/if}

@@ -7,7 +7,6 @@
 		Truck,
 		Layers,
 		Factory,
-		Star,
 		Check
 	} from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -22,29 +21,13 @@
 	];
 </script>
 
-<style>
-	/* Corrugated accent behind the image card — tied to --brand so it re-tints in dark */
-	.ds-corrugate {
-		background: repeating-linear-gradient(
-			90deg,
-			color-mix(in srgb, var(--brand) 14%, var(--background)) 0 10px,
-			color-mix(in srgb, var(--brand) 6%, var(--background)) 10px 20px
-		);
-	}
-	/* Dot texture on the blue image card (card is always deep blue, so white reads in both themes) */
-	.ds-dots {
-		background-image: radial-gradient(rgba(255, 255, 255, 0.9) 1.4px, transparent 1.4px);
-		background-size: 22px 22px;
-	}
-</style>
-
 <section class="relative z-[2] mx-auto w-full max-w-[1280px] px-6 pt-10 md:px-8">
 	<div class="grid items-center gap-10 md:grid-cols-[1.05fr_1fr] md:gap-12">
 		<!-- ============ LEFT ============ -->
 		<div class="pb-4 md:pb-11">
 			<!-- Badge -->
 			<div
-				class="inline-flex animate-ds-up items-center gap-2.5 rounded-full bg-card py-2 pr-4.5 pl-2 shadow-lg shadow-brand/10 ring-1 ring-brand/5 [animation-delay:50ms]"
+				class="inline-flex animate-ds-up items-center gap-2.5 rounded-full bg-card py-2 pr-4.5 pl-2 shadow-lg ring-1 shadow-brand/10 ring-brand/5 [animation-delay:50ms]"
 			>
 				<span class="flex size-8 items-center justify-center rounded-full bg-brand">
 					<Link2 class="size-4 text-white" />
@@ -99,10 +82,18 @@
 			<!-- Trust row -->
 			<div class="mt-9 flex animate-ds-up items-center gap-4 [animation-delay:360ms]">
 				<div class="flex">
-					<div class="size-10 rounded-full bg-gradient-to-br from-brand-bright to-brand ring-[3px] ring-background"></div>
-					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand-red to-[#a51f18] ring-[3px] ring-background"></div>
-					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand to-brand-ink ring-[3px] ring-background"></div>
-					<div class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand-green to-[#2f6e39] ring-[3px] ring-background"></div>
+					<div
+						class="size-10 rounded-full bg-gradient-to-br from-brand-bright to-brand ring-[3px] ring-background"
+					></div>
+					<div
+						class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand-red to-[#a51f18] ring-[3px] ring-background"
+					></div>
+					<div
+						class="to-brand-ink -ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand ring-[3px] ring-background"
+					></div>
+					<div
+						class="-ml-3.5 size-10 rounded-full bg-gradient-to-br from-brand-green to-[#2f6e39] ring-[3px] ring-background"
+					></div>
 				</div>
 				<div class="leading-tight">
 					<div class="text-[15px] font-extrabold text-foreground">{m.hero_trust_count()}</div>
@@ -112,7 +103,7 @@
 
 			<!-- Stats card -->
 			<div
-				class="mt-9 grid animate-ds-up grid-cols-2 gap-y-6 rounded-3xl bg-card px-5 py-7 shadow-2xl shadow-brand/15 sm:grid-cols-4 [animation-delay:400ms]"
+				class="mt-9 grid animate-ds-up grid-cols-2 gap-y-6 rounded-3xl bg-card px-5 py-7 shadow-2xl shadow-brand/15 [animation-delay:400ms] sm:grid-cols-4"
 			>
 				{#each stats as stat (stat.label)}
 					<div
@@ -157,20 +148,18 @@
 					class="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,58,130,.34)_0%,rgba(18,58,130,0)_28%,rgba(12,27,52,.34)_100%)]"
 				></div>
 
-				<!-- Rating chip -->
+				<!-- Quality chip -->
 				<div
 					class="absolute top-5.5 right-5.5 animate-ds-float rounded-2xl bg-card/95 px-4 py-3 shadow-xl backdrop-blur"
 				>
 					<div class="flex items-center gap-2">
-						<div class="flex gap-0.5">
-							{#each Array(5) as _}
-								<Star class="size-3.5 fill-brand-gold text-brand-gold" />
-							{/each}
-						</div>
-						<span class="text-[15px] font-extrabold text-foreground">{m.hero_rating_value()}</span>
+						<ShieldCheck class="size-4 text-brand-gold" />
+						<span class="text-[15px] font-extrabold text-foreground">
+							{m.hero_quality_chip_title()}
+						</span>
 					</div>
 					<div class="mt-0.5 text-[11.5px] font-semibold text-muted-foreground">
-						{m.hero_rating_label()}
+						{m.hero_quality_chip_sub()}
 					</div>
 				</div>
 
@@ -200,3 +189,19 @@
 		</div>
 	</div>
 </section>
+
+<style>
+	/* Corrugated accent behind the image card — tied to --brand so it re-tints in dark */
+	.ds-corrugate {
+		background: repeating-linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--brand) 14%, var(--background)) 0 10px,
+			color-mix(in srgb, var(--brand) 6%, var(--background)) 10px 20px
+		);
+	}
+	/* Dot texture on the blue image card (card is always deep blue, so white reads in both themes) */
+	.ds-dots {
+		background-image: radial-gradient(rgba(255, 255, 255, 0.9) 1.4px, transparent 1.4px);
+		background-size: 22px 22px;
+	}
+</style>

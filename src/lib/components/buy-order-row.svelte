@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { MinusIcon, PlusIcon, Trash2Icon } from '@lucide/svelte';
+	import { TriangleAlertIcon, CombineIcon, MinusIcon, PlusIcon, Trash2Icon } from '@lucide/svelte';
+	import { toast } from 'svelte-sonner';
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
 	import * as m from '$lib/paraglide/messages.js';
@@ -40,6 +41,11 @@
 	// length control from "step between the catalog's fixed length variants"
 	// to "dial freely between minLength and maxLength in lengthStep increments" —
 	// set by the admin per product, e.g. for cut-to-order sheet.
+	//
+	// `duplicateOfRef`/`duplicateOfLineId` are set by the group when an earlier
+	// row in it is the identical order item — same colour, same size, same
+	// length. Nothing is folded together on that account; the row simply says so
+	// and offers the customer the two ways out.
 	const {
 		item,
 		ref,
@@ -47,7 +53,9 @@
 		isLengthCustomizable = false,
 		minLength = null,
 		maxLength = null,
-		lengthStep = null
+		lengthStep = null,
+		duplicateOfRef = null,
+		duplicateOfLineId = null
 	}: {
 		item: CartItem;
 		ref: string;
@@ -56,6 +64,8 @@
 		minLength?: number | null;
 		maxLength?: number | null;
 		lengthStep?: number | null;
+		duplicateOfRef?: string | null;
+		duplicateOfLineId?: string | null;
 	} = $props();
 	const cart = useCart();
 
@@ -247,11 +257,12 @@
 	const increaseQuantity = () => cart.updateQuantity(item.lineId, item.quantity + 1);
 	const removeItem = () => cart.removeItem(item.lineId);
 
+	const usesCustomLengths = $derived(isLengthCustomizable || lengthValues.length === 0);
+
 	// "Same thing, another length" — the length control edits this row in place,
 	// so without this there is no way to ask for 3 sheets at 2m AND 2 at 3.5m.
-	// The new row lands in this same group, one length up. Lengths another row
-	// already holds are skipped: a duplicate spec would merge straight back into
-	// that row (see cartLineKey), so the button would look like it did nothing.
+	//
+	// Lengths already on the order, so a new line can open on one that isn't.
 	const takenLengths = $derived(
 		cart.items
 			.filter(
@@ -265,12 +276,10 @@
 			.map((i) => i.length)
 	);
 
-	const usesCustomLengths = $derived(isLengthCustomizable || lengthValues.length === 0);
-
-	// The length a new row would start at: one step up in custom mode (walking
-	// past lengths already in the group, stopping at the ceiling), or the first
-	// unused catalog stop otherwise. Null means every length this product comes
-	// in is already a row in this group.
+	// Where a new line opens: one step up in custom mode (walking past lengths
+	// already ordered, stopping at the ceiling), or the first unused catalog stop
+	// otherwise. Null when there is nowhere free to open — then the new line is a
+	// plain copy and the duplicate warning does its job.
 	const nextFreeLength = $derived.by(() => {
 		if (usesCustomLengths) {
 			if (item.length == null) return null;
@@ -286,31 +295,65 @@
 		return lengthValues.find((v) => v !== item.length && !takenLengths.includes(v)) ?? null;
 	});
 
-	const nextFreeLengthText = $derived(
-		nextFreeLength != null ? `${nextFreeLength}${item.lengthUnit ?? ''}` : ''
-	);
-
-	function addAnotherLength() {
+	// Add copies this line, then opens the copy at the next length nothing else
+	// is using — a starting point, not a decision: it is a line of its own and
+	// the customer sets it from there (1m here, 0.5m on the new one, whatever
+	// they need). Starting it one step along keeps the duplicate warning for
+	// what it is worth saying about — an order that really does ask for the same
+	// thing twice — instead of firing on every single press.
+	//
+	// When nothing is free (one length in the catalog, or the dial is at its
+	// ceiling) the copy stands as a copy: adding is never refused, and the row
+	// then says the two are the same and offers the way out.
+	function addAnotherLine() {
+		const newLineId = cart.duplicateLine(item.lineId);
 		const next = nextFreeLength;
-		if (next == null) return;
 
-		if (usesCustomLengths) {
-			const isCustom = !lengthValues.includes(next);
-			const spec = { ...item, length: next, isCustomLength: isCustom };
-			cart.addItem({ ...spec, specLabel: specLabelFor(spec) });
+		if (newLineId == null || next == null) {
+			toast.info(m.buy_row_added_toast({ ref }), {
+				description: m.buy_row_added_toast_hint({ ref })
+			});
 			return;
 		}
 
-		// Catalog mode: each length is its own variant, so the new row has to be
-		// anchored to that variant — same price book, same stock, as if it had
-		// been added from the product card.
-		const match = variants.find(
-			(v) => sameSpec(v) && v.price !== null && Number(v.lengthValue) === next
-		);
-		if (!match) return;
+		if (usesCustomLengths) {
+			const isCustom = !lengthValues.includes(next);
+			cart.updateLength(
+				newLineId,
+				next,
+				isCustom,
+				specLabelFor({ ...item, length: next, isCustomLength: isCustom })
+			);
+		} else {
+			// Catalog mode: each length is its own variant, so the new line has to
+			// be anchored to that variant — same price book, same stock, as if it
+			// had been added from the product card. No variant for it (a gap in the
+			// price list) leaves the copy as a copy.
+			const match = variants.find(
+				(v) => sameSpec(v) && v.price !== null && Number(v.lengthValue) === next
+			);
+			if (match) cart.updateVariant(newLineId, cartItemFor(match));
+		}
 
-		cart.addItem(cartItemFor(match));
+		const lengthText = `${next}${item.lengthUnit ?? ''}`;
+		toast.info(m.buy_row_added_toast_length({ length: lengthText }), {
+			description: m.buy_row_added_toast_length_hint({ ref })
+		});
 	}
+
+	// The line this one duplicates, if any: same product, colour, size, length —
+	// what the group hands down after comparing the rows it holds. Only the later
+	// of the pair gets the warning, so one accidental double shows one message
+	// and names the line it collides with.
+	const twin = $derived(
+		duplicateOfLineId ? cart.items.find((i) => i.lineId === duplicateOfLineId) : undefined
+	);
+	const mergedQuantity = $derived((twin?.quantity ?? 0) + item.quantity);
+
+	const mergeIntoTwin = () => {
+		if (!duplicateOfLineId) return;
+		cart.mergeLines(item.lineId, duplicateOfLineId);
+	};
 
 	const lineTotal = $derived(item.price * item.quantity);
 </script>
@@ -322,188 +365,238 @@
 	never find. Each cell below carries its own label until there is room for
 	column headings to do that job instead.
 -->
-<div
-	class="grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,11rem)_auto] sm:items-center"
->
-	<!-- Ref, and on mobile the row's own actions sit beside it. -->
-	<div class="flex items-center justify-between gap-2">
-		<span
-			class="inline-flex min-w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-xs font-bold text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400"
+<div class={duplicateOfRef ? 'bg-amber-50/50 dark:bg-amber-500/6' : ''}>
+	<div
+		class="grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,11rem)_auto] sm:items-center"
+	>
+		<!-- Ref, and on mobile the row's own actions sit beside it. -->
+		<div class="flex items-center justify-between gap-2">
+			<span
+				class="inline-flex min-w-8 items-center justify-center rounded-md px-1.5 py-0.5 font-mono text-xs font-bold {duplicateOfRef
+					? 'border border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-400/40 dark:bg-amber-500/15 dark:text-amber-300'
+					: 'border border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400'}"
+			>
+				{ref}
+			</span>
+			<div class="flex items-center gap-1.5 sm:hidden">
+				{@render actions()}
+			</div>
+		</div>
+
+		<!-- Length: the one spec a row owns. Customizable products (and any row with
+	     no sibling variant to step between) dial freely in lengthStep increments
+	     between min/max; everything else steps between the catalog's fixed
+	     length variants. -->
+		<div class="flex items-center justify-between gap-3 sm:block">
+			<span class="text-xs font-bold text-slate-500 sm:hidden dark:text-slate-400"
+				>{m.checkout_col_length()}</span
+			>
+
+			<div class="min-w-0">
+				{#if usesCustomLengths && item.length != null}
+					<div class="flex items-center gap-1">
+						<button
+							type="button"
+							onclick={() => stepCustomLength(-1)}
+							disabled={atCustomFloor}
+							aria-label={m.buy_row_shorter_length()}
+							class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
+						>
+							<MinusIcon class="size-3.5" />
+						</button>
+						<div class="relative">
+							<input
+								type="number"
+								inputmode="decimal"
+								value={item.length}
+								min={customFloor}
+								max={customCeiling ?? undefined}
+								step={customStep}
+								onchange={handleCustomLengthInput}
+								aria-label={m.checkout_col_length()}
+								class="w-20 [appearance:textfield] rounded-lg border border-slate-200 bg-white py-1.5 pr-7 pl-2 text-right text-sm font-bold text-slate-900 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+							/>
+							<span
+								class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-slate-400 dark:text-slate-500"
+							>
+								{item.lengthUnit}
+							</span>
+						</div>
+						<button
+							type="button"
+							onclick={() => stepCustomLength(1)}
+							disabled={atCustomCeiling}
+							aria-label={m.buy_row_longer_length()}
+							class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
+						>
+							<PlusIcon class="size-3.5" />
+						</button>
+					</div>
+					{#if isLengthCustomizable}
+						<div class="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+							{m.buy_row_any_length({
+								min: String(customFloor),
+								max: `${customCeiling ?? '∞'}${item.lengthUnit ?? ''}`
+							})}
+						</div>
+					{/if}
+				{:else if lengthValues.length >= 1}
+					<div class="flex items-center gap-1">
+						<button
+							type="button"
+							onclick={() => stepLength(-1)}
+							disabled={lengthIndex <= 0}
+							aria-label={m.buy_row_shorter_length()}
+							class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
+						>
+							<MinusIcon class="size-3.5" />
+						</button>
+						<div class="relative">
+							<input
+								type="number"
+								inputmode="decimal"
+								value={item.length}
+								min={lengthValues[0]}
+								max={catalogMaxLength}
+								onchange={handleLengthInput}
+								aria-label={m.checkout_col_length()}
+								class="w-20 [appearance:textfield] rounded-lg border border-slate-200 bg-white py-1.5 pr-7 pl-2 text-right text-sm font-bold text-slate-900 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+							/>
+							<span
+								class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-slate-400 dark:text-slate-500"
+							>
+								{item.lengthUnit}
+							</span>
+						</div>
+						<button
+							type="button"
+							onclick={() => stepLength(1)}
+							disabled={lengthIndex >= lengthValues.length - 1}
+							aria-label={m.buy_row_longer_length()}
+							class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
+						>
+							<PlusIcon class="size-3.5" />
+						</button>
+					</div>
+					<div class="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+						{#if lengthValues.length > 1}
+							{m.buy_row_longest_we_make({ length: `${catalogMaxLength}${item.lengthUnit ?? ''}` })}
+						{:else}
+							{m.buy_row_only_length()}
+						{/if}
+					</div>
+				{:else}
+					<!-- This product has no length axis at all (e.g. sold purely by
+				     quantity) — nothing to make editable. -->
+					<span class="text-sm text-slate-400 dark:text-slate-500">—</span>
+				{/if}
+			</div>
+		</div>
+
+		<div class="flex items-center justify-between gap-3 sm:justify-center">
+			<span class="text-xs font-bold text-slate-500 sm:hidden dark:text-slate-400"
+				>{m.buy_row_how_many()}</span
+			>
+			<div class="flex items-center gap-2">
+				<button
+					type="button"
+					onclick={decreaseQuantity}
+					aria-label={m.buy_row_fewer()}
+					class="flex size-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+				>
+					<MinusIcon class="size-3.5" />
+				</button>
+				<span class="w-7 text-center text-sm font-bold">{item.quantity}</span>
+				<button
+					type="button"
+					onclick={increaseQuantity}
+					aria-label={m.buy_row_more()}
+					class="flex size-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+				>
+					<PlusIcon class="size-3.5" />
+				</button>
+			</div>
+		</div>
+
+		<!-- The sum written out rather than split across a "unit price" and a
+	     "total" column, so the arithmetic is visible instead of something the
+	     reader has to redo to check it. -->
+		<div
+			class="flex items-baseline justify-between gap-1.5 border-t border-slate-100 pt-2 sm:block sm:border-0 sm:pt-0 sm:text-right dark:border-white/5"
 		>
-			{ref}
-		</span>
-		<div class="flex items-center gap-1 sm:hidden">
+			<span class="text-xs text-slate-500 sm:hidden dark:text-slate-400">{m.buy_col_amount()}</span>
+			<span class="text-xs whitespace-nowrap text-slate-400 sm:block dark:text-slate-500">
+				{formatPrice(item.price)} × {item.quantity}
+			</span>
+			<span class="font-bold whitespace-nowrap text-slate-900 sm:block dark:text-white">
+				{formatPrice(lineTotal)}
+			</span>
+		</div>
+
+		<div class="hidden items-center justify-end gap-1.5 sm:flex">
 			{@render actions()}
 		</div>
 	</div>
 
-	<!-- Length: the one spec a row owns. Customizable products (and any row with
-	     no sibling variant to step between) dial freely in lengthStep increments
-	     between min/max; everything else steps between the catalog's fixed
-	     length variants. -->
-	<div class="flex items-center justify-between gap-3 sm:block">
-		<span class="text-xs font-bold text-slate-500 sm:hidden dark:text-slate-400"
-			>{m.checkout_col_length()}</span
-		>
-
-		<div class="min-w-0">
-			{#if usesCustomLengths && item.length != null}
-				<div class="flex items-center gap-1">
-					<button
-						type="button"
-						onclick={() => stepCustomLength(-1)}
-						disabled={atCustomFloor}
-						aria-label={m.buy_row_shorter_length()}
-						class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
-					>
-						<MinusIcon class="size-3.5" />
-					</button>
-					<div class="relative">
-						<input
-							type="number"
-							inputmode="decimal"
-							value={item.length}
-							min={customFloor}
-							max={customCeiling ?? undefined}
-							step={customStep}
-							onchange={handleCustomLengthInput}
-							aria-label={m.checkout_col_length()}
-							class="w-20 [appearance:textfield] rounded-lg border border-slate-200 bg-white py-1.5 pr-7 pl-2 text-right text-sm font-bold text-slate-900 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-						/>
-						<span
-							class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-slate-400 dark:text-slate-500"
-						>
-							{item.lengthUnit}
-						</span>
-					</div>
-					<button
-						type="button"
-						onclick={() => stepCustomLength(1)}
-						disabled={atCustomCeiling}
-						aria-label={m.buy_row_longer_length()}
-						class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
-					>
-						<PlusIcon class="size-3.5" />
-					</button>
-				</div>
-				{#if isLengthCustomizable}
-					<div class="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-						{m.buy_row_any_length({
-							min: String(customFloor),
-							max: `${customCeiling ?? '∞'}${item.lengthUnit ?? ''}`
-						})}
-					</div>
-				{/if}
-			{:else if lengthValues.length >= 1}
-				<div class="flex items-center gap-1">
-					<button
-						type="button"
-						onclick={() => stepLength(-1)}
-						disabled={lengthIndex <= 0}
-						aria-label={m.buy_row_shorter_length()}
-						class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
-					>
-						<MinusIcon class="size-3.5" />
-					</button>
-					<div class="relative">
-						<input
-							type="number"
-							inputmode="decimal"
-							value={item.length}
-							min={lengthValues[0]}
-							max={catalogMaxLength}
-							onchange={handleLengthInput}
-							aria-label={m.checkout_col_length()}
-							class="w-20 [appearance:textfield] rounded-lg border border-slate-200 bg-white py-1.5 pr-7 pl-2 text-right text-sm font-bold text-slate-900 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-						/>
-						<span
-							class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-slate-400 dark:text-slate-500"
-						>
-							{item.lengthUnit}
-						</span>
-					</div>
-					<button
-						type="button"
-						onclick={() => stepLength(1)}
-						disabled={lengthIndex >= lengthValues.length - 1}
-						aria-label={m.buy_row_longer_length()}
-						class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5"
-					>
-						<PlusIcon class="size-3.5" />
-					</button>
-				</div>
-				<div class="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-					{#if lengthValues.length > 1}
-						{m.buy_row_longest_we_make({ length: `${catalogMaxLength}${item.lengthUnit ?? ''}` })}
-					{:else}
-						{m.buy_row_only_length()}
-					{/if}
-				</div>
-			{:else}
-				<!-- This product has no length axis at all (e.g. sold purely by
-				     quantity) — nothing to make editable. -->
-				<span class="text-sm text-slate-400 dark:text-slate-500">—</span>
-			{/if}
-		</div>
-	</div>
-
-	<div class="flex items-center justify-between gap-3 sm:justify-center">
-		<span class="text-xs font-bold text-slate-500 sm:hidden dark:text-slate-400"
-			>{m.buy_row_how_many()}</span
-		>
-		<div class="flex items-center gap-2">
-			<button
-				type="button"
-				onclick={decreaseQuantity}
-				aria-label={m.buy_row_fewer()}
-				class="flex size-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+	<!-- The duplicate warning: stated on the row it is about, in words, with both
+     ways out as buttons and the option of doing neither spelled out. It never
+     acts on its own — two lines of the same thing can be exactly what the
+     customer means (two sites, two deliveries), and only they know. -->
+	{#if duplicateOfRef}
+		<div class="px-4 pb-3">
+			<div
+				class="rounded-xl border border-amber-300 bg-amber-100/70 p-3 dark:border-amber-400/30 dark:bg-amber-500/10"
 			>
-				<MinusIcon class="size-3.5" />
-			</button>
-			<span class="w-7 text-center text-sm font-bold">{item.quantity}</span>
-			<button
-				type="button"
-				onclick={increaseQuantity}
-				aria-label={m.buy_row_more()}
-				class="flex size-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
-			>
-				<PlusIcon class="size-3.5" />
-			</button>
+				<div class="flex items-start gap-2">
+					<TriangleAlertIcon
+						class="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
+						aria-hidden="true"
+					/>
+					<div class="min-w-0 flex-1">
+						<p class="text-xs font-extrabold text-amber-900 dark:text-amber-200">
+							{m.buy_row_duplicate_title({ ref: duplicateOfRef })}
+						</p>
+						<p class="mt-0.5 text-xs text-amber-800/90 dark:text-amber-200/80">
+							{m.buy_row_duplicate_hint()}
+						</p>
+						<div class="mt-2 flex flex-wrap gap-2">
+							<button
+								type="button"
+								onclick={mergeIntoTwin}
+								class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400"
+							>
+								<CombineIcon class="size-3.5" />
+								{m.buy_row_duplicate_merge({ count: mergedQuantity })}
+							</button>
+							<button
+								type="button"
+								onclick={removeItem}
+								class="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50 dark:border-amber-400/30 dark:bg-transparent dark:text-amber-200 dark:hover:bg-amber-500/10"
+							>
+								<Trash2Icon class="size-3.5" />
+								{m.buy_row_duplicate_delete({ ref: duplicateOfRef })}
+							</button>
+						</div>
+						<p class="mt-1.5 text-[11px] text-amber-700/80 dark:text-amber-200/60">
+							{m.buy_row_duplicate_keep()}
+						</p>
+					</div>
+				</div>
+			</div>
 		</div>
-	</div>
-
-	<!-- The sum written out rather than split across a "unit price" and a
-	     "total" column, so the arithmetic is visible instead of something the
-	     reader has to redo to check it. -->
-	<div
-		class="flex items-baseline justify-between gap-1.5 border-t border-slate-100 pt-2 sm:block sm:border-0 sm:pt-0 sm:text-right dark:border-white/5"
-	>
-		<span class="text-xs text-slate-500 sm:hidden dark:text-slate-400">{m.buy_col_amount()}</span>
-		<span class="text-xs whitespace-nowrap text-slate-400 sm:block dark:text-slate-500">
-			{formatPrice(item.price)} × {item.quantity}
-		</span>
-		<span class="font-bold whitespace-nowrap text-slate-900 sm:block dark:text-white">
-			{formatPrice(lineTotal)}
-		</span>
-	</div>
-
-	<div class="hidden w-20 items-center justify-end gap-1 sm:flex">
-		{@render actions()}
-	</div>
+	{/if}
 </div>
 
 {#snippet actions()}
 	<button
 		type="button"
-		onclick={addAnotherLength}
-		disabled={nextFreeLength == null}
+		onclick={addAnotherLine}
 		aria-label={m.buy_row_add_length_aria()}
-		title={nextFreeLength != null
-			? m.buy_row_add_length_title({ length: nextFreeLengthText })
-			: m.buy_row_all_lengths_added()}
-		class="flex size-9 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-500 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
+		title={m.buy_row_add_length_title({ ref })}
+		class="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-xs font-bold whitespace-nowrap text-blue-700 hover:bg-blue-100 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
 	>
-		<PlusIcon class="size-4" />
+		<PlusIcon class="size-3.5" />
+		{m.buy_row_add_word()}
 	</button>
 	<button
 		type="button"

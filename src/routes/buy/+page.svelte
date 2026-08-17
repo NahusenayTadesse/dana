@@ -7,7 +7,7 @@
 	import OrderProductSummary from '$lib/components/order-product-summary.svelte';
 	import * as Carousel from '$lib/components/ui/carousel/index.js';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowRight, Trash2, ReceiptText, PackageSearch } from '@lucide/svelte';
+	import { ArrowRight, Trash2, ReceiptText, PackageSearch, Plus } from '@lucide/svelte';
 	import { netOf, vatOf, grossOf } from '$lib/vat';
 	import { toast } from 'svelte-sonner';
 	import { groupCartItems } from '$lib/cart-groups';
@@ -36,12 +36,7 @@
 			duration: 10000,
 			action: {
 				label: m.cart_undo(),
-				onClick: () => {
-					for (const item of snapshot) {
-						const { lineId: _lineId, quantity, ...rest } = item;
-						cart.addItem(rest, quantity);
-					}
-				}
+				onClick: () => cart.restoreItems(snapshot)
 			}
 		});
 	}
@@ -241,7 +236,14 @@
 			{:else}
 				<p class="mb-3 text-xs text-slate-400 dark:text-slate-500">
 					{m.buy_blocks_hint_before()}
-					<span class="font-semibold text-slate-500 dark:text-slate-400">+</span>
+					<!-- The hint points at a button, so it shows that button: same
+					     wording, same blue, so there is nothing to match up by memory. -->
+					<span
+						class="inline-flex items-center gap-0.5 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 align-middle text-[11px] font-bold text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-300"
+					>
+						<Plus class="size-3" />
+						{m.buy_row_add_word()}
+					</span>
 					{m.buy_blocks_hint_middle()}
 					<span class="font-mono font-semibold text-slate-500 dark:text-slate-400">A1</span>
 					{m.buy_blocks_hint_after()}

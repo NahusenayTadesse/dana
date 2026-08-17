@@ -6,6 +6,8 @@
 	import VideoShowcase from './VideoShowcase.svelte';
 	import Testimonials from './Testimonials.svelte';
 	import Cta from './Cta.svelte';
+	import AboutUs from './AboutUs.svelte';
+	import WhyChooseUs from './WhyChooseUs.svelte';
 
 	type Testimonial = {
 		id: number;
@@ -20,14 +22,17 @@
 		testimonials = [] as Testimonial[]
 	}: { children?: Snippet; testimonials?: Testimonial[] } = $props();
 </script>
+
 <VideoShowcase />
 <Marquee />
+<AboutUs />
 
 <!-- Our Products section is injected here as children -->
 {#if children}
 	{@render children()}
 {/if}
 
+<WhyChooseUs />
 <RalShowcase />
 <FactoryBand />
 

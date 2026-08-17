@@ -4,9 +4,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Download, Printer, Grid3x3 } from '@lucide/svelte';
 	import { downloadCSV, printElement } from '$lib/print';
-	import OrderLinesTable, { type OrderLine } from './order-lines-table.svelte';
-	import OrderProductSummary from './order-product-summary.svelte';
-	import { netOf, vatOf, grossOf } from '$lib/vat';
+	import OrderSheet from './order-sheet.svelte';
+	import { buildOrderSheet, orderSheetCsvRows } from '$lib/order-sheet';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let {
@@ -28,103 +27,22 @@
 	// decoded by the time the print sheet clones it.
 	let receiptNode: HTMLDivElement | null = $state(null);
 
-	const formatPrice = (price: number) =>
-		new Intl.NumberFormat('en-US', { style: 'currency', currency: 'ETB' }).format(price);
-
-	const lines = $derived(
-		items.map((item) => {
-			const unitNet = netOf(Number(item.price), item.priceIncludesVat);
-			const unitGross = grossOf(Number(item.price), item.priceIncludesVat);
-			return {
-				item,
-				unitNet,
-				unitGross,
-				lineNet: unitNet * item.quantity,
-				lineVat: vatOf(Number(item.price), item.priceIncludesVat) * item.quantity,
-				lineGross: unitGross * item.quantity
-			};
-		})
-	);
-
-	// Shape the cart lines for the shared table component.
-	const tableLines = $derived<OrderLine[]>(
-		lines.map((l) => ({
-			productName: l.item.productName,
-			colorName: l.item.colorName,
-			width: l.item.width,
-			widthUnit: l.item.widthUnit,
-			thickness: l.item.thickness,
-			thicknessUnit: l.item.thicknessUnit,
-			length: l.item.length,
-			lengthUnit: l.item.lengthUnit,
-			quantity: l.item.quantity,
-			unitPrice: l.unitNet,
-			lineTotal: l.lineGross
-		}))
-	);
-
-	// Same roll-up the on-sheet summary renders, flattened for the CSV.
-	const productRollup = $derived.by(() => {
-		const out: {
-			productId: number;
-			productName: string;
-			variants: number;
-			quantity: number;
-			byUnit: { unit: string; total: number }[];
-		}[] = [];
-
-		for (const item of items) {
-			let row = out.find((r) => r.productId === item.productId);
-			if (!row) {
-				row = {
-					productId: item.productId,
-					productName: item.productName,
-					variants: 0,
-					quantity: 0,
-					byUnit: []
-				};
-				out.push(row);
-			}
-			row.variants += 1;
-			row.quantity += item.quantity;
-			if (item.length != null) {
-				const unit = item.lengthUnit ?? '';
-				const total = item.length * item.quantity;
-				const entry = row.byUnit.find((u) => u.unit === unit);
-				if (entry) entry.total += total;
-				else row.byUnit.push({ unit, total });
-			}
-		}
-
-		return out.map((r) => ({
-			...r,
-			lengthText:
-				r.byUnit.length === 0
-					? '—'
-					: r.byUnit
-							.map((u) => `${Number(u.total.toFixed(2))}${u.unit ? ` ${u.unit}` : ''}`)
-							.join(' + ')
-		}));
-	});
-
-	const subtotalExclVat = $derived(lines.reduce((s, l) => s + l.lineNet, 0));
-	const vatTotal = $derived(lines.reduce((s, l) => s + l.lineVat, 0));
-	const grandTotal = $derived(lines.reduce((s, l) => s + l.lineGross, 0));
-	const totalQuantity = $derived(items.reduce((s, i) => s + i.quantity, 0));
+	const sheet = $derived(buildOrderSheet(items));
 
 	const issuedAt = $derived(new Date().toLocaleString());
 	const title = $derived(heading || m.receipt_title());
-
-	const dimension = (value: number | null, unit: string | null) =>
-		value == null ? '—' : `${Number(value)}${unit ?? ''}`;
 
 	function savePdf() {
 		if (!receiptNode) return;
 		printElement(receiptNode, { fileName, orientation: 'portrait' });
 	}
 
+	// The exported spreadsheet is the printed sheet: the same blocks, the same
+	// per-block totals, the same Grand Total / VAT / Total Amount corner, under a
+	// short header naming the order. Anything else and the file the office keeps
+	// stops matching the paper it was filed against.
 	function saveCsv() {
-		const rows: (string | number)[][] = [
+		const rows: (string | number | null | undefined)[][] = [
 			[title],
 			[m.receipt_reference(), reference || m.receipt_not_submitted()],
 			[m.receipt_issued(), issuedAt]
@@ -135,51 +53,7 @@
 		if (customer?.phone) rows.push([m.checkout_phone_label(), customer.phone]);
 
 		rows.push([]);
-		rows.push([
-			'#',
-			m.cart_col_product(),
-			m.checkout_col_color(),
-			m.checkout_col_width(),
-			m.checkout_col_thickness(),
-			m.checkout_col_length(),
-			m.cart_col_qty(),
-			m.receipt_col_unit_excl_vat(),
-			m.receipt_col_line_excl_vat(),
-			m.receipt_col_line_vat(),
-			m.receipt_col_line_total()
-		]);
-
-		lines.forEach((l, i) => {
-			rows.push([
-				i + 1,
-				l.item.productName,
-				l.item.colorName ?? '—',
-				dimension(l.item.width, l.item.widthUnit),
-				dimension(l.item.thickness, l.item.thicknessUnit),
-				dimension(l.item.length, l.item.lengthUnit),
-				l.item.quantity,
-				l.unitNet.toFixed(2),
-				l.lineNet.toFixed(2),
-				l.lineVat.toFixed(2),
-				l.lineGross.toFixed(2)
-			]);
-		});
-
-		rows.push([]);
-		rows.push([m.product_summary_title()]);
-		rows.push([
-			m.cart_col_product(),
-			m.product_summary_variants(),
-			m.cart_col_qty(),
-			m.product_summary_total_length()
-		]);
-		productRollup.forEach((r) => rows.push([r.productName, r.variants, r.quantity, r.lengthText]));
-
-		rows.push([]);
-		rows.push([m.receipt_total_quantity(), totalQuantity]);
-		rows.push([m.checkout_subtotal_excl_vat(), subtotalExclVat.toFixed(2)]);
-		rows.push([m.checkout_vat_total(), vatTotal.toFixed(2)]);
-		rows.push([m.checkout_grand_total(), grandTotal.toFixed(2)]);
+		rows.push(...orderSheetCsvRows(sheet));
 
 		downloadCSV(rows, fileName);
 	}
@@ -237,23 +111,11 @@
 				</section>
 			{/if}
 
-			<OrderLinesTable lines={tableLines} />
-
-			<section class="receipt-summary">
-				<h2>{m.product_summary_title()}</h2>
-				<OrderProductSummary {items} />
-			</section>
-
-			<section class="receipt-totals">
-				<div><span>{m.receipt_total_quantity()}</span><span>{totalQuantity}</span></div>
-				<div>
-					<span>{m.checkout_subtotal_excl_vat()}</span><span>{formatPrice(subtotalExclVat)}</span>
-				</div>
-				<div><span>{m.checkout_vat_total()}</span><span>{formatPrice(vatTotal)}</span></div>
-				<div class="grand">
-					<span>{m.checkout_grand_total()}</span><span>{formatPrice(grandTotal)}</span>
-				</div>
-			</section>
+			<!-- The sheet carries the lines, the per-block totals and the Grand
+			     Total / VAT / Total Amount corner, so the receipt adds no totals
+			     block of its own — two sets of totals on one page is how a document
+			     starts disagreeing with itself. -->
+			<OrderSheet {items} />
 
 			<footer class="receipt-foot">
 				<p>{m.receipt_estimate_note()}</p>
@@ -324,40 +186,6 @@
 		letter-spacing: 0.08em;
 		color: #666;
 		margin-bottom: 3px;
-	}
-
-	.receipt-summary {
-		margin-top: 14px;
-	}
-
-	.receipt-summary h2 {
-		font-size: 10px;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: #666;
-		margin-bottom: 4px;
-	}
-
-	.receipt-totals {
-		margin-left: auto;
-		margin-top: 14px;
-		width: 300px;
-		font-size: 12px;
-	}
-
-	.receipt-totals div {
-		display: flex;
-		justify-content: space-between;
-		padding: 3px 0;
-	}
-
-	.receipt-totals .grand {
-		border-top: 2px solid #111;
-		margin-top: 4px;
-		padding-top: 6px;
-		font-size: 14px;
-		font-weight: 800;
 	}
 
 	.receipt-foot {

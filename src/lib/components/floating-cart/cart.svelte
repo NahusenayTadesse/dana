@@ -36,12 +36,7 @@
 			duration: 10000,
 			action: {
 				label: m.cart_undo(),
-				onClick: () => {
-					for (const item of snapshot) {
-						const { lineId: _lineId, quantity, ...rest } = item;
-						cart.addItem(rest, quantity);
-					}
-				}
+				onClick: () => cart.restoreItems(snapshot)
 			}
 		});
 	}
