@@ -1,7 +1,10 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 
-	let { phone = '0919 05 0607', email = 'info@danasteel.com' } = $props();
+	// Phone, email and address come from the same messages the contact page uses,
+	// rather than the literals that used to sit in prop defaults here — those had
+	// drifted to a different email (info@danasteel.com) and a third formatting of
+	// the same phone number. Nothing ever passed these as props.
 
 	// /buy leads the column: it is the only link here that takes an order rather
 	// than describing the company, so it should be the first thing found.
@@ -71,14 +74,16 @@
 				{m.footer_col_contact()}
 			</div>
 			<div class="mt-4 flex flex-col gap-2.5 text-[14.5px]">
-				<a
-					href={`tel:${phone.replace(/\s+/g, '')}`}
-					class="w-fit transition-colors hover:text-white"
-				>
-					{phone}
+				<a href="tel:+251919050607" class="w-fit transition-colors hover:text-white">
+					{m.contact_phone_value()}
 				</a>
-				<a href={`mailto:${email}`} class="w-fit transition-colors hover:text-white">{email}</a>
-				<span>{m.footer_contact_address()}</span>
+				<a
+					href="mailto:support@dsfet.com"
+					class="w-fit break-all transition-colors hover:text-white"
+				>
+					{m.contact_email_value()}
+				</a>
+				<span>{m.contact_factory_address_value()}</span>
 			</div>
 		</div>
 	</div>

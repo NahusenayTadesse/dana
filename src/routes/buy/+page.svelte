@@ -3,6 +3,7 @@
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
 	import BuyProductCard from '$lib/components/buy-product-card.svelte';
 	import BuyOrderGroup from '$lib/components/buy-order-group.svelte';
+	import BuyGuide from '$lib/components/buy-guide.svelte';
 	import OrderReceipt from '$lib/components/order-receipt.svelte';
 	import OrderProductSummary from '$lib/components/order-product-summary.svelte';
 	import * as Carousel from '$lib/components/ui/carousel/index.js';
@@ -152,6 +153,8 @@
 					>
 				</div>
 			</div>
+
+			<BuyGuide products={data.productList} />
 		</div>
 	</header>
 

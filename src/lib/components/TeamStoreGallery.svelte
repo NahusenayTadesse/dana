@@ -11,7 +11,6 @@
 		'4.webp',
 		'5.webp',
 		'8.webp',
-		'10.webp',
 		'11.webp',
 		'12.webp',
 		'14.webp',

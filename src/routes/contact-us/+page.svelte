@@ -13,6 +13,9 @@
 		PhoneIcon,
 		ClockIcon,
 		MapPinIcon,
+		FactoryIcon,
+		Building2Icon,
+		ArrowUpRightIcon,
 		Send,
 		Phone
 	} from '@lucide/svelte';
@@ -32,7 +35,7 @@
 	const socialLinks = [
 		{
 			name: m.contact_social_phone,
-			url: 'tel:0901020304',
+			url: 'tel:0919050607',
 			icon: Phone,
 			color: 'hover:text-pink-500 hover:border-pink-500/30'
 		},
@@ -62,28 +65,63 @@
 		}
 	];
 
+	// The two places DANA occupies. One entry each drives the contact list above
+	// and the map card below, so the label, the address and the pin a customer
+	// taps can never drift apart — they used to be written out three times, with
+	// both addresses sharing the generic "Location" label.
+	const locations = [
+		{
+			key: 'factory',
+			icon: FactoryIcon,
+			label: m.contact_factory_label,
+			address: m.contact_factory_address_value,
+			mapTitle: m.contact_map_factory_title,
+			href: 'https://www.google.com/maps/search/?api=1&query=Adama%2C+Oromia%2C+Ethiopia',
+			embed: 'https://www.google.com/maps?q=Adama,%20Oromia,%20Ethiopia&z=13&output=embed'
+		},
+		{
+			key: 'office',
+			icon: Building2Icon,
+			label: m.contact_office_label,
+			address: m.contact_office_address_value,
+			mapTitle: m.contact_map_office_title,
+			href: 'https://maps.app.goo.gl/nZwCjC4uNMCbV5eV7',
+			// `!1d` is the embed's viewport span. It shipped at 63048, which framed
+			// the whole of Addis with the office pin off-screen; 3940 is street
+			// level, where the "DANA INDUSTRIAL EQUIPMENT SUPPLIER" marker shows.
+			// The place id later in the string is what pins it, so it survives.
+			embed:
+				'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3940.0!2d38.67042494863281!3d9.014861600000009!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x164b8500410b9c13%3A0xabf29f54f3bb486b!2sDANA%20INDUSTRIAL%20EQUIPMENT%20SUPPLIER!5e0!3m2!1sen!2set!4v1787214479552!5m2!1sen!2set'
+		}
+	];
+
 	const contactInfo = [
 		{
 			key: 'email',
 			icon: MailIcon,
 			label: m.contact_email_support_label,
-			value: 'support@dsfet.com',
+			value: m.contact_email_value,
 			href: 'mailto:support@dsfet.com'
 		},
 		{
 			key: 'phone',
 			icon: PhoneIcon,
 			label: m.contact_direct_call_whatsapp_label,
-			value: '+251 9 01 02 03 04',
-			href: 'https://wa.me/+251901020304'
+			value: m.contact_phone_value,
+			href: 'https://wa.me/+2519050607'
 		},
-		{
-			key: 'address',
+		...locations.map((loc) => ({
+			key: `${loc.key}-address`,
 			icon: MapPinIcon,
-			label: m.about_us_location_label,
-			value: 'Adama, Oromia, Ethiopia',
-			href: 'https://www.google.com/maps/search/?api=1&query=Adama%2C+Oromia%2C+Ethiopia'
-		}
+			label: loc.label,
+			value: loc.address,
+			href: loc.href
+		}))
+	];
+
+	const openingHours = [
+		{ key: 'weekdays', day: m.contact_day_mon_fri, hours: m.contact_hours_weekday_value },
+		{ key: 'saturday', day: m.contact_day_saturday, hours: m.contact_hours_saturday_value }
 	];
 
 	$effect(() => {
@@ -237,7 +275,7 @@
 									<div class="min-w-0 flex-1">
 										<p class="text-xs font-medium text-muted-foreground">{info.label()}</p>
 										<p class="truncate text-sm font-bold tracking-wide text-foreground">
-											{info.value}
+											{info.value()}
 										</p>
 									</div>
 								</a>
@@ -290,30 +328,94 @@
 							</CardTitle>
 						</CardHeader>
 						<CardContent class="space-y-3 text-sm font-light">
-							<div class="flex items-center justify-between border-b border-primary/5 pb-1.5">
-								<span class="text-muted-foreground">{m.contact_day_mon_fri()}</span>
-								<span class="font-mono font-semibold text-foreground">8:30 AM — 5:30 PM</span>
-							</div>
-							<div class="flex items-center justify-between">
-								<span class="text-muted-foreground">{m.contact_day_saturday()}</span>
-								<span class="font-mono font-semibold text-foreground">8:30 AM — 12:00 PM</span>
-							</div>
+							{#each openingHours as slot (slot.key)}
+								<div
+									class="flex items-center justify-between gap-3 border-primary/5 pb-1.5 not-last:border-b"
+								>
+									<span class="text-muted-foreground">{slot.day()}</span>
+									<span class="font-mono font-semibold text-foreground">{slot.hours()}</span>
+								</div>
+							{/each}
 						</CardContent>
 					</Card>
 				</div>
 			</div>
 		</div>
 
-		<section transition:fly={{ y: 30, duration: 800, delay: 500 }} class="relative mt-16 w-full">
-			<div class="absolute inset-0 -z-10 rounded-3xl bg-primary/5 blur-xl"></div>
-			<iframe
-				src="https://www.google.com/maps?q=Adama,%20Oromia,%20Ethiopia&amp;z=13&amp;output=embed"
-				style="border:0;"
-				class="h-[40vh] w-full rounded-3xl border border-primary/10 shadow-lg lg:h-[50vh]"
-				loading="lazy"
-				referrerpolicy="no-referrer-when-downgrade"
-				title={m.contact_map_title()}
-			></iframe>
+		<!-- Two locations, two maps. They used to be a pair of unlabelled iframes
+		     carrying the same title, so nothing on the page said which was the
+		     factory and which was the office. Each now sits in a card that names
+		     it and links straight out to directions. -->
+		<section transition:fly={{ y: 30, duration: 800, delay: 500 }} class="relative mt-20">
+			<div
+				class="absolute inset-x-8 top-10 -z-10 h-64 rounded-full bg-primary/5 blur-3xl"
+				aria-hidden="true"
+			></div>
+
+			<div class="mb-8 flex flex-col items-center gap-2 text-center">
+				<h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">
+					{m.contact_maps_heading()}
+				</h2>
+				<p class="max-w-xl text-sm text-muted-foreground">
+					{m.contact_maps_description()}
+				</p>
+			</div>
+
+			<div class="grid gap-5 lg:grid-cols-2">
+				{#each locations as loc (loc.key)}
+					<article
+						class="group flex flex-col overflow-hidden rounded-3xl border border-primary/10 bg-card/40 shadow-lg backdrop-blur-md transition-all duration-300 hover:border-primary/25 hover:shadow-xl"
+					>
+						<header class="flex items-center gap-3 border-b border-primary/10 p-4">
+							<span
+								class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-105"
+							>
+								<loc.icon class="size-5" />
+							</span>
+
+							<div class="min-w-0 flex-1">
+								<p class="text-[11px] font-bold tracking-widest text-primary uppercase">
+									{loc.label()}
+								</p>
+								<p class="truncate text-sm font-bold tracking-wide text-foreground">
+									{loc.address()}
+								</p>
+							</div>
+
+							<a
+								href={loc.href}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-bold text-primary transition-colors duration-300 hover:bg-primary hover:text-primary-foreground"
+							>
+								<span class="hidden sm:inline">{m.contact_map_directions()}</span>
+								<ArrowUpRightIcon class="size-3.5" />
+							</a>
+						</header>
+
+						<!-- Aspect ratio rather than a viewport height: the two cards stay
+						     the same size as each other on every screen, and neither eats
+						     half the page on a phone. -->
+						<div class="relative aspect-4/3 w-full sm:aspect-16/10">
+							<iframe
+								src={loc.embed}
+								title={loc.mapTitle()}
+								class="absolute inset-0 h-full w-full"
+								style="border:0;"
+								loading="lazy"
+								allowfullscreen
+								referrerpolicy="no-referrer-when-downgrade"
+							></iframe>
+							<!-- Sits over the map edge only, so the frame reads as part of the
+							     card without touching Google's own tiles or branding. -->
+							<div
+								class="pointer-events-none absolute inset-0 ring-1 ring-primary/10 ring-inset"
+								aria-hidden="true"
+							></div>
+						</div>
+					</article>
+				{/each}
+			</div>
 		</section>
 	</main>
 </div>

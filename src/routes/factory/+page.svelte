@@ -1,5 +1,6 @@
 <script>
 	import { m } from '$lib/paraglide/messages.js';
+	import { PaintRoller, Layers, House, Wrench, ArrowRight } from '@lucide/svelte';
 
 	// Reveal-on-scroll: strips the hidden classes when the element enters view.
 	function reveal(node, delay = 0) {
@@ -68,8 +69,8 @@
 		{ n: '05', title: m.step_5_title, desc: m.step_5_desc }
 	];
 
-	// Paths must exist in /static/assets — image3.jpg and image4.jpg never shipped,
-	// so the slitting and storage tiles point at the real photos of those areas.
+	// One tile per distinct photo in /static/assets — forklift.jpg/image2.jpg and
+	// image5.jpg/rollforming.jpg are byte-identical, so only one of each is used.
 	const machines = [
 		{
 			img: '/assets/rollforming.jpg',
@@ -77,10 +78,42 @@
 			sub: m.machine_1_sub,
 			cls: 'md:row-span-2'
 		},
-		{ img: '/assets/image2.jpg', title: m.machine_2_title, sub: m.machine_2_sub, cls: '' },
-		{ img: '/assets/slitting-line.jpg', title: m.machine_3_title, sub: m.machine_3_sub, cls: '' },
-		{ img: '/assets/warehouse.jpg', title: m.machine_4_title, sub: m.machine_4_sub, cls: '' },
-		{ img: '/assets/forklift.jpg', title: m.machine_5_title, sub: m.machine_5_sub, cls: '' }
+		{ img: '/assets/slitting-line.jpg', title: m.machine_2_title, sub: m.machine_2_sub, cls: '' },
+		{ img: '/assets/image2.jpg', title: m.machine_3_title, sub: m.machine_3_sub, cls: '' },
+		{ img: '/assets/showroom.jpg', title: m.machine_4_title, sub: m.machine_4_sub, cls: '' },
+		{ img: '/assets/factory-gate.jpg', title: m.machine_5_title, sub: m.machine_5_sub, cls: '' }
+	];
+
+	// The four product lines the company manufactures.
+	const productLines = [
+		{
+			key: 'ppgi',
+			icon: PaintRoller,
+			title: m.factory_product_ppgi_title,
+			desc: m.factory_product_ppgi_desc,
+			apps: m.factory_product_ppgi_apps
+		},
+		{
+			key: 'gi',
+			icon: Layers,
+			title: m.factory_product_gi_title,
+			desc: m.factory_product_gi_desc,
+			apps: m.factory_product_gi_apps
+		},
+		{
+			key: 'tiles',
+			icon: House,
+			title: m.factory_product_tiles_title,
+			desc: m.factory_product_tiles_desc,
+			apps: m.factory_product_tiles_apps
+		},
+		{
+			key: 'accessories',
+			icon: Wrench,
+			title: m.factory_product_accessories_title,
+			desc: m.factory_product_accessories_desc,
+			apps: m.factory_product_accessories_apps
+		}
 	];
 
 	const stats = [
@@ -112,12 +145,36 @@
 				{m.hero_title()}
 			</h1>
 			<p class="mt-[18px] text-[17px] leading-[1.65] text-muted-foreground">{m.hero_desc()}</p>
+
+			<div class="mt-8 flex flex-wrap items-center gap-3">
+				<a
+					href="/quotes"
+					class="group inline-flex items-center gap-2.5 rounded-full bg-primary px-6 py-3.5 text-[14.5px] font-bold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5"
+				>
+					{m.btn_quote()}
+					<ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
+				</a>
+				<a
+					href="/shop"
+					class="inline-flex items-center rounded-full border border-border bg-card px-6 py-3.5 text-[14.5px] font-bold transition duration-300 hover:-translate-y-0.5 hover:border-primary/40"
+				>
+					{m.btn_explore()}
+				</a>
+				<a
+					href="/contact-us"
+					class="inline-flex items-center rounded-full px-4 py-3.5 text-[14.5px] font-bold text-primary underline-offset-4 hover:underline"
+				>
+					{m.cta_button()}
+				</a>
+			</div>
 		</div>
 	</section>
 
 	<!-- 360 VIEWER -->
 	<section class="mx-auto max-w-[1320px] px-7">
 		<div
+			role="img"
+			aria-label={m.pano_alt()}
 			class="relative h-[600px] overflow-hidden rounded-3xl border border-border shadow-[0_30px_90px_rgba(0,0,0,0.35)]"
 		>
 			<div
@@ -214,6 +271,10 @@
 				</span>
 			</div>
 		</div>
+
+		<p class="mt-4 max-w-[680px] text-[13.5px] leading-[1.6] text-muted-foreground">
+			{m.pano_caption()}
+		</p>
 	</section>
 
 	<!-- PROCESS TIMELINE -->
@@ -255,7 +316,12 @@
 						use:reveal={i * 70}
 						class="{hidden} {mac.cls} relative overflow-hidden rounded-2xl border border-border"
 					>
-						<img src={mac.img} alt={mac.title()} class="h-full w-full object-cover" />
+						<img
+							src={mac.img}
+							alt={m.factory_gallery_alt({ title: mac.title() })}
+							loading="lazy"
+							class="h-full w-full object-cover"
+						/>
 						<div
 							class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent"
 						></div>
@@ -265,6 +331,62 @@
 						</div>
 					</div>
 				{/each}
+			</div>
+		</div>
+	</section>
+
+	<!-- PRODUCT LINES -->
+	<section class="mx-auto max-w-[1320px] px-7 py-[90px]">
+		<div use:reveal class="{hidden} mb-10 max-w-[760px]">
+			<div class="mono mb-3.5 text-[12px] tracking-[0.26em] text-primary uppercase">
+				{m.factory_products_eyebrow()}
+			</div>
+			<h2 class="display text-[clamp(26px,3.2vw,40px)] font-extrabold tracking-[-0.02em]">
+				{m.factory_products_heading()}
+			</h2>
+			<p class="mt-[18px] text-[16px] leading-[1.7] text-muted-foreground">
+				{m.factory_products_desc()}
+			</p>
+		</div>
+
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{#each productLines as prod, i (prod.key)}
+				<div
+					use:reveal={i * 70}
+					class="{hidden} flex flex-col rounded-2xl border border-border bg-card p-6"
+				>
+					<span
+						class="mb-5 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"
+					>
+						<prod.icon class="size-6" />
+					</span>
+					<h3 class="display text-[17px] leading-snug font-bold">{prod.title()}</h3>
+					<p class="mt-2.5 grow text-[13.5px] leading-[1.6] text-muted-foreground">{prod.desc()}</p>
+					<div
+						class="mono mt-5 border-t border-border pt-4 text-[11.5px] leading-[1.5] tracking-[0.08em] text-primary uppercase"
+					>
+						{prod.apps()}
+					</div>
+				</div>
+			{/each}
+		</div>
+
+		<div use:reveal={280} class="{hidden} mt-4 grid gap-4 md:grid-cols-[1.2fr_1fr]">
+			<div class="h-[260px] overflow-hidden rounded-2xl border border-border">
+				<img
+					src="/assets/image9.jpg"
+					alt={m.factory_products_photo_alt()}
+					loading="lazy"
+					class="h-full w-full object-cover"
+				/>
+			</div>
+			<div class="flex flex-col justify-center rounded-2xl border border-border bg-card p-7">
+				<div class="mono text-[11px] tracking-[0.2em] text-primary uppercase">
+					{m.factory_spec_label()}
+				</div>
+				<p class="mt-3 text-[14.5px] leading-[1.7] text-muted-foreground">
+					{m.factory_products_spec_note()}
+				</p>
 			</div>
 		</div>
 	</section>
@@ -289,6 +411,45 @@
 					<div class="mt-1 text-[13px] text-muted-foreground">{st.l()}</div>
 				</div>
 			{/each}
+		</div>
+	</section>
+
+	<!-- CLOSING -->
+	<section class="border-t border-border bg-card">
+		<div class="mx-auto max-w-[1320px] px-7 py-[90px]">
+			<div use:reveal class="{hidden} grid items-center gap-10 md:grid-cols-[1.1fr_1fr]">
+				<div>
+					<h2
+						class="display text-[clamp(26px,3.2vw,40px)] leading-[1.08] font-extrabold tracking-[-0.02em]"
+					>
+						{m.factory_closing_heading()}
+					</h2>
+					<p class="mt-[18px] text-[16px] leading-[1.7] text-muted-foreground">
+						{m.factory_closing_desc()}
+					</p>
+					<div class="mt-8 flex flex-wrap items-center gap-3">
+						<a
+							href="/quotes"
+							class="group inline-flex items-center gap-2.5 rounded-full bg-primary px-6 py-3.5 text-[14.5px] font-bold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5"
+						>
+							{m.btn_quote()}
+							<ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
+						</a>
+						<a
+							href="/contact-us"
+							class="inline-flex items-center rounded-full border border-border bg-background px-6 py-3.5 text-[14.5px] font-bold transition duration-300 hover:-translate-y-0.5 hover:border-primary/40"
+						>
+							{m.cta_button()}
+						</a>
+					</div>
+				</div>
+
+				<blockquote
+					class="rounded-2xl border border-primary/20 bg-background p-7 text-[17px] leading-[1.55] font-semibold text-balance"
+				>
+					{m.factory_closing_line()}
+				</blockquote>
+			</div>
 		</div>
 	</section>
 </main>

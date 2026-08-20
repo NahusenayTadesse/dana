@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 
-	let { image = '/images/manufacture top view.webp' } = $props();
+	let { image = '/assets/factory-gate.jpg' } = $props();
 
 	const stats = [
 		{ value: m.factory_stat1_value, label: m.factory_stat1_label },
@@ -10,7 +10,7 @@
 	];
 </script>
 
-<section class="relative z-[2] mx-auto max-w-[1280px] px-6 py-16 md:px-8">
+<section class="relative z-1 mx-auto max-w-[1280px] px-6 py-16 md:px-8">
 	<div
 		class="relative flex min-h-[420px] items-end overflow-hidden rounded-[2rem] bg-cover bg-center md:min-h-[440px]"
 		style="background-image:url('{image}')"

@@ -10,6 +10,7 @@
 		Check
 	} from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { MediaQuery } from 'svelte/reactivity';
 
 	let { quoteUrl = '/checkout', watchUrl = '/factory' } = $props();
 
@@ -19,6 +20,31 @@
 		{ icon: Layers, label: m.hero_stat_profiles },
 		{ icon: Factory, label: m.hero_stat_manufacturing }
 	];
+
+	// Hero gallery — crossfades through the factory shots on a timer
+	const slides = [
+		{ src: '/images/front desk.webp', position: 'object-[70%_center]' },
+		{ src: '/images/manufacture.webp', position: 'object-center' },
+		{ src: '/images/products show.webp', position: 'object-center' },
+		{ src: '/images/working.webp', position: 'object-center' },
+		{ src: '/images/manufacture top view.webp', position: 'object-center' }
+	];
+
+	const SLIDE_DURATION = 4500;
+
+	let activeSlide = $state(0);
+	let paused = $state(false);
+	const reducedMotion = new MediaQuery('(prefers-reduced-motion: reduce)');
+
+	$effect(() => {
+		if (paused || reducedMotion.current) return;
+
+		const id = setInterval(() => {
+			activeSlide = (activeSlide + 1) % slides.length;
+		}, SLIDE_DURATION);
+
+		return () => clearInterval(id);
+	});
 </script>
 
 <section class="relative z-[2] mx-auto w-full max-w-[1280px] px-6 pt-10 md:px-8">
@@ -130,18 +156,30 @@
 			<!-- Image card -->
 			<div
 				class="relative z-[1] aspect-square overflow-hidden rounded-[2rem] bg-gradient-to-br from-brand-bright via-brand-mid to-brand shadow-2xl shadow-brand/40"
+				role="group"
+				aria-roledescription="carousel"
+				aria-label={m.hero_gallery_aria_label()}
+				onmouseenter={() => (paused = true)}
+				onmouseleave={() => (paused = false)}
+				onfocusin={() => (paused = true)}
+				onfocusout={() => (paused = false)}
 			>
 				<div class="ds-dots absolute inset-0 opacity-[0.16]"></div>
 
 				<div
 					class="absolute inset-x-0 top-[6%] bottom-0 overflow-hidden [mask-image:linear-gradient(180deg,transparent_0%,#000_12%,#000_100%)]"
 				>
-					<img
-						src="/images/front desk.webp"
-						alt={m.hero_product_showcase_alt()}
-						class="absolute inset-0 h-full w-full object-cover object-[70%_center]"
-						loading="eager"
-					/>
+					{#each slides as slide, i (slide.src)}
+						<img
+							src={slide.src}
+							alt={m.hero_product_showcase_alt()}
+							class="absolute inset-0 h-full w-full object-cover {slide.position} transition-opacity duration-1000 ease-out motion-reduce:transition-none"
+							style:opacity={activeSlide === i ? 1 : 0}
+							aria-hidden={activeSlide !== i}
+							loading={i === 0 ? 'eager' : 'lazy'}
+							fetchpriority={i === 0 ? 'high' : 'auto'}
+						/>
+					{/each}
 				</div>
 
 				<div
@@ -184,6 +222,22 @@
 						<div class="text-sm font-extrabold">{m.hero_delivered_title()}</div>
 						<div class="text-[11px] font-semibold opacity-85">{m.hero_delivered_sub()}</div>
 					</div>
+				</div>
+
+				<!-- Gallery dots -->
+				<div class="absolute inset-x-0 bottom-7 z-[2] flex items-center justify-center gap-2.5">
+					{#each slides as slide, i (slide.src)}
+						<button
+							type="button"
+							aria-label={m.hero_show_image({ number: i + 1 })}
+							aria-current={activeSlide === i}
+							onclick={() => (activeSlide = i)}
+							class="h-2.5 rounded-full bg-white/50 shadow-sm transition-all duration-300 hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none {activeSlide ===
+							i
+								? 'w-7 bg-white'
+								: 'w-2.5'}"
+						></button>
+					{/each}
 				</div>
 			</div>
 		</div>

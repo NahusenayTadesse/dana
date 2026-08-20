@@ -17,6 +17,7 @@
         BookOpenIcon,
         UsersIcon,
         LifeBuoyIcon,
+        HandshakeIcon,
         LayersIcon,
         ChevronLeftIcon,
         ChevronRightIcon
@@ -93,14 +94,24 @@
             text: m.about_page_benefit_quality_text
         },
         {
-            icon: ZapIcon,
-            title: m.about_page_benefit_pricing_title,
-            text: m.about_page_benefit_pricing_text
+            icon: ClipboardCheckIcon,
+            title: m.about_page_benefit_supply_title,
+            text: m.about_page_benefit_supply_text
+        },
+        {
+            icon: LifeBuoyIcon,
+            title: m.about_page_benefit_customer_title,
+            text: m.about_page_benefit_customer_text
         },
         {
             icon: TruckIcon,
             title: m.about_page_benefit_availability_title,
             text: m.about_page_benefit_availability_text
+        },
+        {
+            icon: HandshakeIcon,
+            title: m.about_page_benefit_integrity_title,
+            text: m.about_page_benefit_integrity_text
         },
         {
             icon: UsersIcon,
@@ -111,7 +122,7 @@
 
     const stats = [
         {
-            value: '5+',
+            value: '4',
             label: m.about_page_stat_categories_label,
             detail: m.about_page_stat_categories_detail
         },
@@ -121,7 +132,7 @@
             detail: m.about_page_stat_quality_detail
         },
         {
-            value: '24/7',
+            value: '2023',
             label: m.about_page_stat_commitment_label,
             detail: m.about_page_stat_commitment_detail
         },
@@ -217,9 +228,18 @@
             </p>
 
             <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg" href="/shop" class="group gap-2">
+                <Button size="lg" href="/quotes" class="group gap-2">
                     {m.about_page_shop_now()}
                     <ArrowRightIcon class="size-4 transition-transform group-hover:translate-x-1" />
+                </Button>
+
+                <Button
+                    size="lg"
+                    href="/shop"
+                    variant="outline"
+                    class="border-primary/20 bg-background/40 backdrop-blur-xl"
+                >
+                    {m.btn_explore()}
                 </Button>
 
                 <Button
@@ -631,7 +651,7 @@
 
                 <Separator class="bg-primary/10" />
 
-                <Button href="/shop" size="lg" class="group gap-2">
+                <Button href="/quotes" size="lg" class="group gap-2">
                     {m.about_page_shop_now()}
                     <ZapIcon class="size-4 transition-transform group-hover:scale-110" />
                 </Button>
