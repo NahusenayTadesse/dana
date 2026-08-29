@@ -13,6 +13,7 @@
 		ArrowRight,
 		SlidersHorizontal
 	} from '@lucide/svelte';
+	import { IconBrandWhatsapp, IconBrandTelegram } from '@tabler/icons-svelte';
 	import DarkMode from './DarkMode.svelte';
 	import AvatarSettings from './AvatarSettings.svelte';
 	import { Sheet, SheetContent, SheetTrigger } from '$lib/components/ui/sheet';
@@ -47,6 +48,25 @@
 		{ label: m.header_nav_contact_us, href: '/contact-us', icon: ContactIcon }
 	];
 
+	// Direct chat channels. Same numbers/handles the footer and /contact-us use —
+	// kept here so a customer can reach sales without first hunting for a page.
+	const chatLinks = [
+		{
+			label: m.header_chat_whatsapp,
+			href: 'https://wa.me/251911245892',
+			icon: IconBrandWhatsapp,
+			desktopClass: 'hover:bg-[#25D366]/10 hover:text-[#25D366]',
+			mobileClass: 'border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366]/10'
+		},
+		{
+			label: m.header_chat_telegram,
+			href: 'https://t.me/+251911245892',
+			icon: IconBrandTelegram,
+			desktopClass: 'hover:bg-[#229ED9]/10 hover:text-[#229ED9]',
+			mobileClass: 'border-[#229ED9]/30 text-[#229ED9] hover:bg-[#229ED9]/10'
+		}
+	];
+
 	import { afterNavigate } from '$app/navigation';
 	let open = $state(false);
 	afterNavigate(() => {
@@ -73,7 +93,7 @@
 <header
 	class="sticky top-0 z-50 w-full border-b border-brand/10 bg-background/70 px-2 py-1.5 backdrop-blur-xl transition-all duration-300 lg:px-12"
 >
-	<div class="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4">
+	<div class="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:gap-6">
 		<!-- Logo — Dana white/card chip -->
 		<a
 			href="/"
@@ -107,7 +127,7 @@
 			{/each}
 		</nav>
 
-		<div class="flex flex-row items-center gap-2">
+		<div class="flex flex-row items-center gap-1.5 sm:gap-2">
 			<!-- Search -->
 			<Dialog.Root bind:open>
 				<Dialog.Trigger>
@@ -136,6 +156,28 @@
 					</div>
 				</Dialog.Content>
 			</Dialog.Root>
+
+			<!-- Direct chat -->
+			{#each chatLinks as link (link.href)}
+				<Button
+					variant="ghost"
+					size="icon"
+					href={link.href}
+					target="_blank"
+					rel="noopener noreferrer"
+					aria-label={link.label()}
+					title={link.label()}
+					class={cn(
+						// Shown where the bar has room: phones (>=360px) and wide desktops.
+						// Between md and xl the centre nav already fills the row, so the
+						// pair stays out of the bar there.
+						'hidden size-8 rounded-full text-muted-foreground min-[360px]:inline-flex sm:size-9 md:hidden xl:inline-flex',
+						link.desktopClass
+					)}
+				>
+					<link.icon class="size-4 sm:size-4.5" stroke={1.75} />
+				</Button>
+			{/each}
 
 			<!-- Desktop cluster -->
 			<div class="hidden flex-row items-center justify-end gap-2 lg:flex">
@@ -279,6 +321,24 @@
 						</nav>
 
 						<div class="space-y-4 border-t border-brand/10 bg-muted/10 p-5">
+							<div class="grid grid-cols-2 gap-2.5">
+								{#each chatLinks as link (link.href)}
+									<Button
+										variant="outline"
+										href={link.href}
+										target="_blank"
+										rel="noopener noreferrer"
+										onclick={handleMenuClick}
+										class={cn(
+											'h-10 gap-2 rounded-full bg-card/60 text-xs font-semibold',
+											link.mobileClass
+										)}
+									>
+										<link.icon class="size-4" stroke={1.75} />
+										{link.label()}
+									</Button>
+								{/each}
+							</div>
 							<div class="flex flex-row items-center justify-between gap-2 rounded-2xl bg-card/60 px-3 py-2 ring-1 ring-brand/5">
 								<span class="text-xs font-semibold text-muted-foreground">
 									{m.header_appearance()}

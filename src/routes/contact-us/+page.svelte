@@ -59,7 +59,7 @@
 		},
 		{
 			name: m.contact_social_telegram,
-			url: 'https://t.me/danasteel',
+			url: 'https://t.me/+251911245892',
 			icon: Send,
 			color: 'hover:text-red-600 hover:border-red-600/30'
 		}
@@ -108,7 +108,7 @@
 			icon: PhoneIcon,
 			label: m.contact_direct_call_whatsapp_label,
 			value: m.contact_phone_value,
-			href: 'https://wa.me/+2519050607'
+			href: 'https://wa.me/251911245892'
 		},
 		...locations.map((loc) => ({
 			key: `${loc.key}-address`,

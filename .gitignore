@@ -26,3 +26,7 @@ vite.config.ts.timestamp-*
 # Paraglide
 src/lib/paraglide
 project.inlang/cache/
+build/
+build.zip
+build*.tar.gz
+build*.zip
