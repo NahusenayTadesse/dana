@@ -24,6 +24,7 @@
 	import Cart from '$lib/components/floating-cart/cart.svelte';
 	import LanguageSelector from './LanguageSelector.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { cn } from '$lib/utils.js';
@@ -100,7 +101,7 @@
 			class="flex shrink-0 items-center rounded-2xl bg-card px-3.5 py-2 shadow-lg shadow-brand/10 ring-1 ring-brand/5 transition-transform duration-200 active:scale-95"
 		>
 			<img
-				src="/logo.png"
+				src={siteImage('global.logo')}
 				class="h-7 w-auto object-contain dark:brightness-110"
 				alt={m.header_logo_alt()}
 				fetchpriority="high"

@@ -10,6 +10,7 @@
 		Star,
 		Building2,
 		Book,
+		Images,
 
 		Quote
 
@@ -19,6 +20,7 @@
 	import { bgGradient } from '$lib/global.svelte';
 	import { useSidebar } from '$lib/components/ui/sidebar/index.js';
 	import NavMain from './NavMain.svelte';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	let { messageNumber, ordersNumber, ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
 
@@ -64,6 +66,7 @@
 		{
 			section: 'Content',
 			items: [
+				{ title: 'Site Images', url: '/dashboard/site-images', icon: Images },
 				{ title: 'Testimonials', url: '/dashboard/testimonials', icon: Star },
 				{ title: 'Partner Logos', url: '/dashboard/logos', icon: Building2 },
 				{
@@ -120,7 +123,7 @@
 				class="flex flex-row flex-wrap gap-2"
 				target="_blank"
 			>
-				<img src="/logo.webp" alt="Logo" class="h-4 rounded-[1px]" />
+				<img src={siteImage('global.logo')} alt="Logo" class="h-4 rounded-[1px]" />
 
 				<div>
 					<div class="text-[13px] font-medium tracking-tight text-foreground">Admin Panel</div>

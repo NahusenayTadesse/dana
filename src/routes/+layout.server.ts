@@ -8,11 +8,13 @@ import {
 	blog,
 	blogCategories,
 	orderItems,
-	testimonials
+	testimonials,
+	siteImages as siteImagesTable
 } from '$lib/server/db/schema';
 import { eq, sql, desc, inArray, getTableColumns } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
+import { resolveSiteImages } from '$lib/siteImages';
 
 const HOME_FEATURED_LIMIT = 9;
 
@@ -34,6 +36,19 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	const images = await db.select().from(gallery);
 
 	const imagesList = images.map((img) => img.imageUrl);
+
+	// Admin-managed imagery for the public pages. Slots with no rows resolve to
+	// their bundled defaults, so this is safe on an empty table.
+	const siteImageRows = await db
+		.select({
+			slot: siteImagesTable.slot,
+			imageUrl: siteImagesTable.imageUrl,
+			sortOrder: siteImagesTable.sortOrder
+		})
+		.from(siteImagesTable)
+		.orderBy(siteImagesTable.slot, siteImagesTable.sortOrder);
+
+	const siteImages = resolveSiteImages(siteImageRows);
 
 	// Rank active products by total ordered quantity (LEFT JOIN so products with zero
 	// orders still show up, just ranked last) — a single join, no fan-out.
@@ -98,6 +113,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		blogItems,
 		testimonialList,
 		imagesList,
+		siteImages,
 		bestSelling: productList
 	};
 };

@@ -2,45 +2,18 @@
 	import { fade, fly, scale } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImages } from '$lib/siteImages.svelte';
 
-	// Every image file actually present in /static/assets — keep this list in sync
-	// with the folder contents (SvelteKit can't glob the static dir at build time).
-	const imageFiles = [
-		'1.webp',
-		'2.webp',
-		'4.webp',
-		'5.webp',
-		'8.webp',
-		'11.webp',
-		'12.webp',
-		'14.webp',
-		'15.webp',
-		'18.webp',
-		'19.webp',
-		'77.webp',
-		'products show4.webp',
-		'factory-gate.jpg',
-		'forklift.jpg',
-		'reception.jpg',
-		'rollforming.jpg',
-		'showroom.jpg',
-		'slitting-line.jpg',
-		'warehouse.jpg',
-		'image1.jpg',
-		'image2.jpg',
-		'image5.jpg',
-		'image7.jpg',
-		'image8.jpg',
-		'image9.jpg',
-		'image10.jpg'
-	];
-
-	const images = imageFiles.map((file, i) => ({
-		id: i + 1,
-		src: encodeURI(`/assets/${file}`),
-		title: m.team_gallery_image_title({ index: i + 1 }),
-		subtitle: m.team_gallery_image_subtitle()
-	}));
+	// Photos come from the `about.team_gallery` slot, so the grid is whatever the
+	// admin has uploaded — falling back to the bundled /static/assets set.
+	const images = $derived(
+		siteImages('about.team_gallery').map((src, i) => ({
+			id: i + 1,
+			src,
+			title: m.team_gallery_image_title({ index: i + 1 }),
+			subtitle: m.team_gallery_image_subtitle()
+		}))
+	);
 
 	// Svelte 5 Rune State for active lightbox
 	let selectedIndex = $state<number | null>(null);

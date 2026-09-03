@@ -15,6 +15,7 @@
 	import { filesProxy } from 'sveltekit-superforms';
 	import imageCompression from 'browser-image-compression';
 	import { toast } from 'svelte-sonner';
+	import { assetUrl } from '$lib/utils';
 
 	let {
 		form,
@@ -163,7 +164,11 @@
 						class="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
 						transition:fade
 					>
-						<img src="/files/{img}" class="h-full w-full object-cover" alt={m.upload_server_asset_alt()} />
+						<img
+							src={assetUrl(img)}
+							class="h-full w-full object-cover"
+							alt={m.upload_server_asset_alt()}
+						/>
 						<div
 							class="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
 						>

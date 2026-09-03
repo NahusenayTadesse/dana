@@ -30,20 +30,20 @@
     import Slider from '$lib/components/slider.svelte';
     import Mission from '$lib/components/mission.svelte';
     import * as m from '$lib/paraglide/messages.js';
+    import { siteImage, siteImages } from '$lib/siteImages.svelte';
 
     type TabKey = 'quality' | 'products' | 'support';
     let activeTab = $state<TabKey>('quality');
 
     // Interactive slider state for Product Section
-    const productShowcaseImages = [
-        '/images/products show.webp',
-        '/images/products show1.webp',
-        '/images/products show2.webp',
-        '/images/products show3.webp',
-        '/images/products list.webp',
-        '/images/products list1.webp'
-    ];
+    const productShowcaseImages = $derived(siteImages('about.product_slider'));
     let currentProductImageIndex = $state(0);
+
+    // The slot is admin-editable, so the list can shrink under a stale index —
+    // wrap rather than render an undefined src.
+    const currentProductImage = $derived(
+        productShowcaseImages[currentProductImageIndex % (productShowcaseImages.length || 1)] ?? ''
+    );
 
     function nextProductImage() {
         currentProductImageIndex = (currentProductImageIndex + 1) % productShowcaseImages.length;
@@ -278,21 +278,21 @@
                     <div class="mb-6 grid grid-cols-3 gap-3">
                         <div class="overflow-hidden rounded-xl border border-primary/10">
                             <img
-                                src="/images/front desk.webp"
+                                src={siteImage('about.highlights', 0)}
                                 alt={m.alt_front_desk()}
                                 class="h-28 w-full object-cover transition-transform duration-500 hover:scale-105"
                             />
                         </div>
                         <div class="overflow-hidden rounded-xl border border-primary/10">
                             <img
-                                src="/images/working.webp"
+                                src={siteImage('about.highlights', 1)}
                                 alt={m.alt_workplace_operations()}
                                 class="h-28 w-full object-cover transition-transform duration-500 hover:scale-105"
                             />
                         </div>
                         <div class="overflow-hidden rounded-xl border border-primary/10">
                             <img
-                                src="/images/portolio 1.webp"
+                                src={siteImage('about.highlights', 2)}
                                 alt={m.alt_portfolio_ecosystem()}
                                 class="h-28 w-full object-cover transition-transform duration-500 hover:scale-105"
                             />
@@ -389,7 +389,7 @@
 
                     <div class="relative overflow-hidden rounded-2xl border border-primary/10 md:col-span-5">
                         <img
-                            src="/images/products show.webp"
+                            src={siteImage('about.product_feature')}
                             alt={m.alt_product_showcase()}
                             class="h-full w-full object-cover"
                         />
@@ -449,7 +449,7 @@
                 class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-8"
             >
                 <img
-                    src="/images/manufacture top view.webp"
+                    src={siteImage('about.manufacturing.grid', 0)}
                     alt={m.alt_facility_top_view()}
                     class="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
@@ -468,7 +468,7 @@
                 class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-4"
             >
                 <img
-                    src="/images/manufacture.webp"
+                    src={siteImage('about.manufacturing.grid', 1)}
                     alt={m.alt_manufacturing_process()}
                     class="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
@@ -482,7 +482,7 @@
                 class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-6"
             >
                 <img
-                    src="/images/welcome.webp"
+                    src={siteImage('about.manufacturing.grid', 2)}
                     alt={m.alt_welcome_reception()}
                     class="h-56 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
@@ -492,7 +492,7 @@
                 class="group relative overflow-hidden rounded-3xl border border-primary/10 shadow-xl transition duration-500 hover:border-primary/30 md:col-span-6"
             >
                 <img
-                    src="/images/client.webp"
+                    src={siteImage('about.manufacturing.grid', 3)}
                     alt={m.alt_client_collaboration()}
                     class="h-56 w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
@@ -528,7 +528,7 @@
                 <!-- Interactive Mini Image Slider -->
                 <div class="relative mt-8 overflow-hidden rounded-2xl border border-primary/20 shadow-xl">
                     <img
-                        src={productShowcaseImages[currentProductImageIndex]}
+                        src={currentProductImage}
                         alt={m.alt_product_showcase()}
                         class="h-64 w-full object-cover transition-all duration-500"
                     />

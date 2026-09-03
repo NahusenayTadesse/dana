@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	// Phone, email and address come from the same messages the contact page uses,
 	// rather than the literals that used to sit in prop defaults here — those had
@@ -40,7 +41,11 @@
 	>
 		<div>
 			<a href="/" class="inline-flex rounded-xl bg-white px-3 py-2">
-				<img src="/logo.png" alt={m.header_logo_alt()} class="h-7 w-auto object-contain" />
+				<img
+					src={siteImage('global.logo')}
+					alt={m.header_logo_alt()}
+					class="h-7 w-auto object-contain"
+				/>
 			</a>
 			<p class="mt-4.5 max-w-[34ch] text-[14.5px] leading-relaxed">
 				{m.footer_tagline()}
@@ -112,7 +117,7 @@
 				{m.footer_developed_by()}
 				<span class="inline-flex rounded-md bg-white px-1.5 py-1">
 					<img
-						src="/digitalLogo.png"
+						src={siteImage('global.developer_logo')}
 						alt={m.alt_digital_construct()}
 						class="h-3.5 w-auto object-contain"
 					/>

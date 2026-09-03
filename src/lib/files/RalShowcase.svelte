@@ -1,7 +1,10 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 
-	let { image = '/images/manufacture.webp' } = $props();
+	let { image = '' } = $props();
+
+	const photo = $derived(image || siteImage('home.ral.image'));
 
 	// RAL codes carry fixed brand-neutral colors (kept as literals on purpose)
 	const swatches = [
@@ -54,7 +57,7 @@
 
 			<div
 				class="h-72 rounded-3xl bg-cover bg-center shadow-2xl shadow-black/30 md:h-80"
-				style="background-image:url('{image}')"
+				style="background-image:url('{photo}')"
 				role="img"
 				aria-label={m.ral_title()}
 			></div>

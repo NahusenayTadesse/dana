@@ -1,6 +1,7 @@
 <script>
 	import { m } from '$lib/paraglide/messages.js';
 	import { PaintRoller, Layers, House, Wrench, ArrowRight } from '@lucide/svelte';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	// Reveal-on-scroll: strips the hidden classes when the element enters view.
 	function reveal(node, delay = 0) {
@@ -69,20 +70,22 @@
 		{ n: '05', title: m.step_5_title, desc: m.step_5_desc }
 	];
 
-	// One tile per distinct photo in /static/assets — forklift.jpg/image2.jpg and
-	// image5.jpg/rollforming.jpg are byte-identical, so only one of each is used.
-	const machines = [
-		{
-			img: '/assets/rollforming.jpg',
-			title: m.machine_1_title,
-			sub: m.machine_1_sub,
-			cls: 'md:row-span-2'
-		},
-		{ img: '/assets/slitting-line.jpg', title: m.machine_2_title, sub: m.machine_2_sub, cls: '' },
-		{ img: '/assets/image2.jpg', title: m.machine_3_title, sub: m.machine_3_sub, cls: '' },
-		{ img: '/assets/showroom.jpg', title: m.machine_4_title, sub: m.machine_4_sub, cls: '' },
-		{ img: '/assets/factory-gate.jpg', title: m.machine_5_title, sub: m.machine_5_sub, cls: '' }
+	// Captions and layout are fixed; only the photos are admin-editable, so the
+	// nth image in the `factory.machines` slot keeps the nth caption. The first
+	// tile is the tall one.
+	const machineTiles = [
+		{ title: m.machine_1_title, sub: m.machine_1_sub, cls: 'md:row-span-2' },
+		{ title: m.machine_2_title, sub: m.machine_2_sub, cls: '' },
+		{ title: m.machine_3_title, sub: m.machine_3_sub, cls: '' },
+		{ title: m.machine_4_title, sub: m.machine_4_sub, cls: '' },
+		{ title: m.machine_5_title, sub: m.machine_5_sub, cls: '' }
 	];
+
+	const machines = $derived(
+		machineTiles.map((tile, i) => ({ ...tile, img: siteImage('factory.machines', i) }))
+	);
+
+	const panoramaImage = $derived(siteImage('factory.panorama'));
 
 	// The four product lines the company manufactures.
 	const productLines = [
@@ -180,7 +183,7 @@
 			<div
 				use:pano={20}
 				class="absolute inset-0 cursor-grab [touch-action:pan-y]"
-				style="background-image:url('/assets/warehouse.jpg');background-size:auto 130%;background-position:20% center;background-repeat:no-repeat"
+				style="background-image:url('{panoramaImage}');background-size:auto 130%;background-position:20% center;background-repeat:no-repeat"
 			></div>
 
 			<!-- legibility vignette (fixed dark, sits over the photo) -->
@@ -374,7 +377,7 @@
 		<div use:reveal={280} class="{hidden} mt-4 grid gap-4 md:grid-cols-[1.2fr_1fr]">
 			<div class="h-[260px] overflow-hidden rounded-2xl border border-border">
 				<img
-					src="/assets/image9.jpg"
+					src={siteImage('factory.products.photo')}
 					alt={m.factory_products_photo_alt()}
 					loading="lazy"
 					class="h-full w-full object-cover"

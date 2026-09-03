@@ -1,8 +1,12 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 	import { Play } from '@lucide/svelte';
+	import { siteImage } from '$lib/siteImages.svelte';
 
-	let { videoId = 'Pds8-d8su7s', poster = '/images/manufacture top view.webp' } = $props();
+	let { videoId = 'Pds8-d8su7s', poster = '' } = $props();
+
+	// Falls back to the admin-managed slot when the caller doesn't override it.
+	const cover = $derived(poster || siteImage('home.video.poster'));
 
 	let playing = $state(false);
 </script>
@@ -37,7 +41,7 @@
 			<button
 				type="button"
 				class="group absolute inset-0 h-full w-full cursor-pointer bg-cover bg-center"
-				style="background-image:url('{poster}')"
+				style="background-image:url('{cover}')"
 				onclick={() => (playing = true)}
 				aria-label={m.video_showcase_play_label()}
 			>

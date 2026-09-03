@@ -1,13 +1,18 @@
 <script lang="ts">
 	import { ArrowRight, CalendarDays, MapPin, Layers } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	let {
-		image = '/images/manufacture.webp',
-		secondaryImage = '/assets/factory-gate.jpg',
+		image = '',
+		secondaryImage = '',
 		productsUrl = '/shop',
 		factoryUrl = '/factory'
 	} = $props();
+
+	// Admin-managed by default; an explicit prop still wins.
+	const primary = $derived(image || siteImage('home.about.primary'));
+	const secondary = $derived(secondaryImage || siteImage('home.about.secondary'));
 
 	const facts = [
 		{
@@ -66,7 +71,7 @@
 		<div class="grid gap-4">
 			<div class="overflow-hidden rounded-[2rem] shadow-2xl shadow-brand/20">
 				<img
-					src={image}
+					src={primary}
 					alt={m.about_us_img_alt()}
 					class="aspect-[4/3] w-full object-cover"
 					loading="lazy"
@@ -76,7 +81,7 @@
 			<div class="grid gap-4 sm:grid-cols-[1fr_1.1fr]">
 				<div class="overflow-hidden rounded-3xl shadow-xl shadow-brand/10">
 					<img
-						src={secondaryImage}
+						src={secondary}
 						alt={m.about_us_img_alt()}
 						class="h-full min-h-[150px] w-full object-cover"
 						loading="lazy"

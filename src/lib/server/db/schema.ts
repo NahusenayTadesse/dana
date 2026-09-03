@@ -8,6 +8,7 @@ import {
 	text,
 	timestamp,
 	uniqueIndex,
+	index,
 	date
 } from 'drizzle-orm/mysql-core';
 import { secureFields, user } from './auth.schema';
@@ -663,6 +664,34 @@ export const gallery = mysqlTable('gallery', {
 	imageUrl: varchar('image_url', { length: 255 }),
 	category: mysqlEnum('category', ['factory', 'products', 'projects', 'team']).default('factory')
 });
+
+/**
+ * Every editable image on the public site.
+ *
+ * A row is one image belonging to a `slot` — a stable key from
+ * SITE_IMAGE_SLOTS in `$lib/siteImages`. Single-image slots hold at most one
+ * row; gallery slots hold many, ordered by `sortOrder`.
+ *
+ * A slot with NO rows falls back to the bundled static default declared in the
+ * registry, so the site renders correctly on a fresh database and "reset to
+ * default" is just a DELETE.
+ *
+ * `imageUrl` is the file name returned by saveUploadedFile (served from
+ * /files/<name>). Values starting with "/" are passed through as-is, so a slot
+ * can also point at a bundled static asset.
+ */
+export const siteImages = mysqlTable(
+	'site_images',
+	{
+		id: int('id').primaryKey().autoincrement(),
+		slot: varchar('slot', { length: 100 }).notNull(),
+		imageUrl: varchar('image_url', { length: 255 }).notNull(),
+		alt: varchar('alt', { length: 255 }),
+		sortOrder: int('sort_order').default(0).notNull(),
+		createdAt: timestamp('created_at').defaultNow().notNull()
+	},
+	(table) => [index('site_images_slot_idx').on(table.slot, table.sortOrder)]
+);
 
 export const testimonials = mysqlTable('testimonials', {
 	id: int('id').primaryKey().autoincrement(),

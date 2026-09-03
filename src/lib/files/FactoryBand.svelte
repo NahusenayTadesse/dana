@@ -1,7 +1,10 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 
-	let { image = '/assets/factory-gate.jpg' } = $props();
+	let { image = '' } = $props();
+
+	const background = $derived(image || siteImage('home.factory_band.background'));
 
 	const stats = [
 		{ value: m.factory_stat1_value, label: m.factory_stat1_label },
@@ -13,7 +16,7 @@
 <section class="relative z-1 mx-auto max-w-[1280px] px-6 py-16 md:px-8">
 	<div
 		class="relative flex min-h-[420px] items-end overflow-hidden rounded-[2rem] bg-cover bg-center md:min-h-[440px]"
-		style="background-image:url('{image}')"
+		style="background-image:url('{background}')"
 	>
 		<!-- Fixed dark wash so the copy stays legible in both themes -->
 		<div

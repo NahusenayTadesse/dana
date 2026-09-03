@@ -13,16 +13,18 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	async function notifyBrowser(title: string, body: string) {
 		if (!('Notification' in window)) return; // Safari iOS etc.
 
 		if (Notification.permission === 'granted') {
-			new Notification(title, { body, icon: '/logo.png' });
+			new Notification(title, { body, icon: siteImage('global.logo') });
 		} else if (Notification.permission !== 'denied') {
 			const perm = await Notification.requestPermission();
 
-			if (perm === 'granted') new Notification(title, { body, icon: '/logo.png' });
+			if (perm === 'granted')
+				new Notification(title, { body, icon: siteImage('global.logo') });
 		}
 	}
 
@@ -59,7 +61,7 @@
 	});
 </script>
 
-<svelte:head><link rel="icon" href="/logo192.png" /></svelte:head>
+<svelte:head><link rel="icon" href={siteImage('global.favicon')} /></svelte:head>
 <ModeWatcher />
 
 <Toaster position="bottom-right" richColors closeButton />

@@ -7,6 +7,7 @@
 	import OrderSheet from './order-sheet.svelte';
 	import { buildOrderSheet, orderSheetCsvRows } from '$lib/order-sheet';
 	import * as m from '$lib/paraglide/messages.js';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	let {
 		items,
@@ -94,7 +95,7 @@
 	<div class="receipt-source" aria-hidden="true">
 		<div class="receipt" bind:this={receiptNode}>
 			<header class="receipt-head">
-				<img src="/logo.png" alt={m.header_logo_alt()} />
+				<img src={siteImage('global.logo')} alt={m.header_logo_alt()} />
 				<div class="receipt-head-meta">
 					<h1>{title}</h1>
 					<p>{m.receipt_reference()}: <strong>{reference || m.receipt_not_submitted()}</strong></p>

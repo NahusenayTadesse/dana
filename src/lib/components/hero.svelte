@@ -11,6 +11,7 @@
 	} from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { MediaQuery } from 'svelte/reactivity';
+	import { siteImages } from '$lib/siteImages.svelte';
 
 	let { quoteUrl = '/checkout', watchUrl = '/factory' } = $props();
 
@@ -21,14 +22,15 @@
 		{ icon: Factory, label: m.hero_stat_manufacturing }
 	];
 
-	// Hero gallery — crossfades through the factory shots on a timer
-	const slides = [
-		{ src: '/images/front desk.webp', position: 'object-[70%_center]' },
-		{ src: '/images/manufacture.webp', position: 'object-center' },
-		{ src: '/images/products show.webp', position: 'object-center' },
-		{ src: '/images/working.webp', position: 'object-center' },
-		{ src: '/images/manufacture top view.webp', position: 'object-center' }
-	];
+	// Hero gallery — crossfades through the factory shots on a timer. The photos
+	// come from the `home.hero.slides` slot, so an admin can swap them without a
+	// deploy; the first slide keeps its off-centre crop, the rest are centred.
+	const slides = $derived(
+		siteImages('home.hero.slides').map((src, i) => ({
+			src,
+			position: i === 0 ? 'object-[70%_center]' : 'object-center'
+		}))
+	);
 
 	const SLIDE_DURATION = 4500;
 
@@ -36,11 +38,16 @@
 	let paused = $state(false);
 	const reducedMotion = new MediaQuery('(prefers-reduced-motion: reduce)');
 
+	// The slide list is admin-managed and can shrink, so the raw counter is
+	// wrapped rather than trusted as an index.
+	const activeIndex = $derived(slides.length ? activeSlide % slides.length : 0);
+
 	$effect(() => {
-		if (paused || reducedMotion.current) return;
+		// Nothing to crossfade through with one image — and `% 0` is NaN.
+		if (paused || reducedMotion.current || slides.length < 2) return;
 
 		const id = setInterval(() => {
-			activeSlide = (activeSlide + 1) % slides.length;
+			activeSlide += 1;
 		}, SLIDE_DURATION);
 
 		return () => clearInterval(id);
@@ -174,8 +181,8 @@
 							src={slide.src}
 							alt={m.hero_product_showcase_alt()}
 							class="absolute inset-0 h-full w-full object-cover {slide.position} transition-opacity duration-1000 ease-out motion-reduce:transition-none"
-							style:opacity={activeSlide === i ? 1 : 0}
-							aria-hidden={activeSlide !== i}
+							style:opacity={activeIndex === i ? 1 : 0}
+							aria-hidden={activeIndex !== i}
 							loading={i === 0 ? 'eager' : 'lazy'}
 							fetchpriority={i === 0 ? 'high' : 'auto'}
 						/>
@@ -230,9 +237,9 @@
 						<button
 							type="button"
 							aria-label={m.hero_show_image({ number: i + 1 })}
-							aria-current={activeSlide === i}
+							aria-current={activeIndex === i}
 							onclick={() => (activeSlide = i)}
-							class="h-2.5 rounded-full bg-white/50 shadow-sm transition-all duration-300 hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none {activeSlide ===
+							class="h-2.5 rounded-full bg-white/50 shadow-sm transition-all duration-300 hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none {activeIndex ===
 							i
 								? 'w-7 bg-white'
 								: 'w-2.5'}"
