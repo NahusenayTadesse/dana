@@ -4,7 +4,8 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { PROMPT, searchProductsForAi } from '$lib/server/prompt';
+import { buildPrompt, searchProductsForAi } from '$lib/server/prompt';
+import { getSiteSettings } from '$lib/server/siteSettings';
 import { GEMINI_KEY, CHAT_LIMIT_SECRET } from '$env/static/private';
 
 // Import Google Gen AI SDK
@@ -208,6 +209,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			parts: [{ text: message.content }]
 		}));
 
+		// Built once per request so both Gemini calls below quote the same phone
+		// number and email — the ones currently set in dashboard/company-details.
+		const systemInstruction = buildPrompt(await getSiteSettings());
+
 		/**
 		 * First request:
 		 * Send history and configurations to Gemini.
@@ -216,7 +221,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			model: MODEL,
 			contents: contents,
 			config: {
-				systemInstruction: PROMPT,
+				systemInstruction,
 				tools: tools
 			}
 		});
@@ -288,7 +293,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			model: MODEL,
 			contents: followUpContents,
 			config: {
-				systemInstruction: PROMPT,
+				systemInstruction,
 				tools: tools
 			}
 		});

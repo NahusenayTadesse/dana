@@ -23,6 +23,18 @@ import {
 	orderDeliveredSms
 } from '$lib/server/email';
 import { SMTP_USER as USER } from '$env/static/private';
+import { getSiteSettings } from '$lib/server/siteSettings';
+import { vatRateOf } from '$lib/siteSettings';
+
+/**
+ * Where staff notifications go. Business Settings can point them at a sales
+ * inbox; left blank they fall back to the mailbox the site sends from, which
+ * is what happened before the setting existed.
+ */
+async function alertsRecipient(): Promise<string> {
+	const settings = await getSiteSettings();
+	return settings['alerts_recipient_email']?.trim() || USER;
+}
 
 /**
  * Sends the customer notification and the staff notification independently.
@@ -66,8 +78,9 @@ export async function sendQuotePaymentLink(orderId: number, origin: string) {
 
 	// Customer — full detail in the email, a concise total/VAT/link in the SMS.
 	// Staff — always notified when a priced quote goes out, same full detail.
-	const { subject, html } = quotePaymentLinkTemplate(orderId, items, offer, payUrl);
-	const adminTemplate = adminQuotePaymentLinkTemplate(orderId, items, offer);
+	const vatRate = vatRateOf(await getSiteSettings());
+	const { subject, html } = quotePaymentLinkTemplate(orderId, items, offer, payUrl, vatRate);
+	const adminTemplate = adminQuotePaymentLinkTemplate(orderId, items, offer, vatRate);
 
 	await notifyBoth(
 		`quote payment link (order #${orderId})`,
@@ -79,7 +92,7 @@ export async function sendQuotePaymentLink(orderId: number, origin: string) {
 				details.customer!.phone ?? undefined,
 				quotePaymentLinkSms(orderId, offer, payUrl)
 			),
-		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
 	);
 }
 
@@ -94,8 +107,9 @@ export async function sendPaymentConfirmation(orderId: number, payAmount: number
 
 	const { offer, items } = details;
 
-	const customerTemplate = paymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance);
-	const adminTemplate = adminPaymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance);
+	const vatRate = vatRateOf(await getSiteSettings());
+	const customerTemplate = paymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance, vatRate);
+	const adminTemplate = adminPaymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance, vatRate);
 
 	await notifyBoth(
 		`payment confirmation (order #${orderId})`,
@@ -107,7 +121,7 @@ export async function sendPaymentConfirmation(orderId: number, payAmount: number
 				details.customer!.phone ?? undefined,
 				paymentConfirmedSms(orderId, offer, payAmount, isAdvance)
 			),
-		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
 	);
 }
 
@@ -160,7 +174,7 @@ export async function sendBalancePaymentLink(orderId: number, origin: string) {
 				customer.phone ?? undefined,
 				balancePaymentLinkSms(orderId, remainingBalance, payUrl)
 			),
-		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
 	);
 }
 
@@ -193,14 +207,14 @@ export async function sendOrderAdjustmentNotice(
 				details.customer!.phone ?? undefined,
 				`Order #${orderId} adjusted: ${adjustment.type === 'addition' ? '+' : '-'}${adjustment.amount.toLocaleString()} ETB. New total: ${adjusted.total.toLocaleString()} ETB.`
 			),
-		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
 	);
 }
 
 /** Customer submitted an adjustment request — staff needs to review it. */
 export async function sendAdjustmentRequestedNotice(orderId: number, customerName: string, reason: string, requestedAmount: number) {
 	const template = adjustmentRequestedTemplate(orderId, customerName, reason, requestedAmount);
-	await sendEmail(USER, template.subject, template.html);
+	await sendEmail(await alertsRecipient(), template.subject, template.html);
 }
 
 /** Staff approved or rejected a customer's adjustment request. */
@@ -238,8 +252,9 @@ export async function sendOrderDeliveredNotice(orderId: number, fallbackTotal?: 
 	const total = adjusted?.total ?? fallbackTotal ?? 0;
 	const { items } = details;
 
-	const customerTemplate = customerDeliveredTemplate(orderId, items, total);
-	const adminTemplate = adminDeliveredTemplate(orderId, items, total);
+	const vatRate = vatRateOf(await getSiteSettings());
+	const customerTemplate = customerDeliveredTemplate(orderId, items, total, vatRate);
+	const adminTemplate = adminDeliveredTemplate(orderId, items, total, vatRate);
 
 	await notifyBoth(
 		`delivery notice (order #${orderId})`,
@@ -251,18 +266,18 @@ export async function sendOrderDeliveredNotice(orderId: number, fallbackTotal?: 
 				details.customer!.phone ?? undefined,
 				orderDeliveredSms(orderId, total)
 			),
-		() => sendEmail(USER, adminTemplate.subject, adminTemplate.html)
+		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
 	);
 }
 
 /** Customer rejected the price offer on the magic-link page — staff-only heads-up. */
 export async function sendOfferRejectedNotice(orderId: number, reason?: string | null) {
 	const template = adminOfferRejectedTemplate(orderId, reason);
-	await sendEmail(USER, template.subject, template.html);
+	await sendEmail(await alertsRecipient(), template.subject, template.html);
 }
 
 /** Customer cancelled the order from the magic-link page — staff-only heads-up. */
 export async function sendOrderCancelledNotice(orderId: number, reason?: string | null) {
 	const template = adminOrderCancelledTemplate(orderId, reason);
-	await sendEmail(USER, template.subject, template.html);
+	await sendEmail(await alertsRecipient(), template.subject, template.html);
 }

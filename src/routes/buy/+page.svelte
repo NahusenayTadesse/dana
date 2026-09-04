@@ -10,6 +10,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ArrowRight, Trash2, ReceiptText, PackageSearch, Plus } from '@lucide/svelte';
 	import { netOf, vatOf, grossOf } from '$lib/vat';
+	import { siteVatRate } from '$lib/siteSettings.svelte';
+
+	const vatRate = $derived(siteVatRate());
 	import { toast } from 'svelte-sonner';
 	import { groupCartItems } from '$lib/cart-groups';
 	import * as m from '$lib/paraglide/messages.js';
@@ -79,24 +82,25 @@
 	});
 
 	// Through $lib/vat, not a hand-rolled 1.15/0.15: those constants used to be
-	// inlined here, so a change to VAT_RATE would have updated the cart drawer,
+	// inlined here, so changing the rate would have updated the cart drawer,
 	// the checkout summary, the receipt and the server while leaving this page
-	// quoting the old rate.
+	// quoting the old one. The rate itself is now admin-set, which is exactly
+	// why every surface has to read it from the same place.
 	const subtotalExclVat = $derived(
 		cart.items.reduce(
-			(sum, item) => sum + netOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+			(sum, item) => sum + netOf(Number(item.price), item.priceIncludesVat, vatRate) * item.quantity,
 			0
 		)
 	);
 	const vatTotal = $derived(
 		cart.items.reduce(
-			(sum, item) => sum + vatOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+			(sum, item) => sum + vatOf(Number(item.price), item.priceIncludesVat, vatRate) * item.quantity,
 			0
 		)
 	);
 	const grandTotal = $derived(
 		cart.items.reduce(
-			(sum, item) => sum + grossOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+			(sum, item) => sum + grossOf(Number(item.price), item.priceIncludesVat, vatRate) * item.quantity,
 			0
 		)
 	);
@@ -318,7 +322,7 @@
 							<dd class="font-mono font-medium">{formatPrice(subtotalExclVat)}</dd>
 						</div>
 						<div class="flex justify-between py-1 text-sm">
-							<dt class="text-slate-500 dark:text-slate-400">{m.checkout_vat_total()}</dt>
+							<dt class="text-slate-500 dark:text-slate-400">{m.checkout_vat_total({ rate: vatRate })}</dt>
 							<dd class="font-mono font-medium">{formatPrice(vatTotal)}</dd>
 						</div>
 

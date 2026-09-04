@@ -31,6 +31,7 @@
     import Mission from '$lib/components/mission.svelte';
     import * as m from '$lib/paraglide/messages.js';
     import { siteImage, siteImages } from '$lib/siteImages.svelte';
+    import { siteSetting } from '$lib/siteSettings.svelte';
 
     type TabKey = 'quality' | 'products' | 'support';
     let activeTab = $state<TabKey>('quality');
@@ -71,8 +72,8 @@
             text: m.about_page_tab_products_text,
             points: [
                 m.about_page_tab_products_point_mobile,
-                m.about_page_tab_products_point_storage,
-                m.about_page_tab_products_point_audio
+                m.about_page_tab_products_point_tiles,
+                m.about_page_tab_products_point_accessories
             ]
         },
         support: {
@@ -120,28 +121,30 @@
         }
     ];
 
-    const stats = [
+    // The four figures come from dashboard/page-text; the wording beside each
+    // one is still translated copy.
+    const stats = $derived([
         {
-            value: '4',
+            value: siteSetting('figure_about_product_lines'),
             label: m.about_page_stat_categories_label,
             detail: m.about_page_stat_categories_detail
         },
         {
-            value: '100%',
+            value: siteSetting('figure_about_quality'),
             label: m.about_page_stat_quality_label,
             detail: m.about_page_stat_quality_detail
         },
         {
-            value: '2023',
+            value: siteSetting('figure_about_since'),
             label: m.about_page_stat_commitment_label,
             detail: m.about_page_stat_commitment_detail
         },
         {
-            value: 'ET',
+            value: siteSetting('figure_about_market'),
             label: m.about_page_stat_market_label,
             detail: m.about_page_stat_market_detail
         }
-    ];
+    ]);
 
     const productLayers = [
         {
@@ -156,13 +159,13 @@
         },
         {
             icon: HouseIcon,
-            title: m.about_page_layer_storage_title,
-            text: m.about_page_layer_storage_text
+            title: m.about_page_layer_tiles_title,
+            text: m.about_page_layer_tiles_text
         },
         {
             icon: WrenchIcon,
-            title: m.about_page_layer_audio_title,
-            text: m.about_page_layer_audio_text
+            title: m.about_page_layer_accessories_title,
+            text: m.about_page_layer_accessories_text
         }
     ];
 

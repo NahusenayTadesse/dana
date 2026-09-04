@@ -26,89 +26,116 @@
 	import { IconBrandFacebook, IconBrandInstagram, IconBrandTiktok } from '@tabler/icons-svelte';
 	import { fly } from 'svelte/transition';
 	import * as m from '$lib/paraglide/messages.js';
+	import {
+		siteSetting,
+		siteSettingText,
+		siteEmailHref,
+		sitePhoneHref
+	} from '$lib/siteSettings.svelte';
 
 	let { data } = $props();
 	const { form, errors, enhance, delayed, message } = superForm(data.form, {
 		dataType: 'json'
 	});
 
-	const socialLinks = [
-		{
-			name: m.contact_social_phone,
-			url: 'tel:0919050607',
-			icon: Phone,
-			color: 'hover:text-pink-500 hover:border-pink-500/30'
-		},
-		{
-			name: m.contact_social_instagram,
-			url: 'https://www.instagram.com/dana_steel/',
-			icon: IconBrandInstagram,
-			color: 'hover:text-pink-500 hover:border-pink-500/30'
-		},
-		{
-			name: m.contact_social_tiktok,
-			url: 'https://www.tiktok.com/@danasteel',
-			icon: IconBrandTiktok,
-			color: 'hover:text-foreground hover:border-foreground/30'
-		},
-		{
-			name: m.contact_social_facebook,
-			url: 'https://web.facebook.com/danaflash0901020304?_rdc=1&_rdr#',
-			icon: IconBrandFacebook,
-			color: 'hover:text-blue-600 hover:border-blue-600/30'
-		},
-		{
-			name: m.contact_social_telegram,
-			url: 'https://t.me/+251911245892',
-			icon: Send,
-			color: 'hover:text-red-600 hover:border-red-600/30'
-		}
-	];
+	// Phone number and social handles come from Company Details in the dashboard.
+	// Anything the client clears there drops out of this grid instead of leaving
+	// a tile that goes nowhere.
+	const socialLinks = $derived(
+		[
+			{
+				name: m.contact_social_phone,
+				url: sitePhoneHref('contact_phone_primary'),
+				icon: Phone,
+				color: 'hover:text-pink-500 hover:border-pink-500/30'
+			},
+			{
+				name: m.contact_social_instagram,
+				url: siteSetting('social_instagram'),
+				icon: IconBrandInstagram,
+				color: 'hover:text-pink-500 hover:border-pink-500/30'
+			},
+			{
+				name: m.contact_social_tiktok,
+				url: siteSetting('social_tiktok'),
+				icon: IconBrandTiktok,
+				color: 'hover:text-foreground hover:border-foreground/30'
+			},
+			{
+				name: m.contact_social_facebook,
+				url: siteSetting('social_facebook'),
+				icon: IconBrandFacebook,
+				color: 'hover:text-blue-600 hover:border-blue-600/30'
+			},
+			{
+				name: m.contact_social_telegram,
+				url: siteSetting('social_telegram'),
+				icon: Send,
+				color: 'hover:text-red-600 hover:border-red-600/30'
+			}
+		].filter((link) => link.url)
+	);
 
-	// The two places DANA occupies. One entry each drives the contact list above
-	// and the map card below, so the label, the address and the pin a customer
-	// taps can never drift apart — they used to be written out three times, with
-	// both addresses sharing the generic "Location" label.
-	const locations = [
+	// The two places DANA occupies. One entry each drives the contact list below
+	// and the map card further down, so the label, the address and the pin a
+	// customer taps can never drift apart — they used to be written out three
+	// times, with both addresses sharing the generic "Location" label.
+	//
+	// Address, directions link and map embed now come from Company Details. The
+	// addresses are a translated pair, so editing the English one no longer
+	// silently drops the Amharic version.
+	const locations = $derived([
 		{
 			key: 'factory',
 			icon: FactoryIcon,
 			label: m.contact_factory_label,
-			address: m.contact_factory_address_value,
+			address: siteSettingText('location_factory_address'),
 			mapTitle: m.contact_map_factory_title,
-			href: 'https://www.google.com/maps/search/?api=1&query=Adama%2C+Oromia%2C+Ethiopia',
-			embed: 'https://www.google.com/maps?q=Adama,%20Oromia,%20Ethiopia&z=13&output=embed'
+			href: siteSetting('location_factory_map_link'),
+			embed: siteSetting('location_factory_map_embed')
 		},
 		{
 			key: 'office',
 			icon: Building2Icon,
 			label: m.contact_office_label,
-			address: m.contact_office_address_value,
+			address: siteSettingText('location_office_address'),
 			mapTitle: m.contact_map_office_title,
-			href: 'https://maps.app.goo.gl/nZwCjC4uNMCbV5eV7',
-			// `!1d` is the embed's viewport span. It shipped at 63048, which framed
-			// the whole of Addis with the office pin off-screen; 3940 is street
-			// level, where the "DANA INDUSTRIAL EQUIPMENT SUPPLIER" marker shows.
-			// The place id later in the string is what pins it, so it survives.
-			embed:
-				'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3940.0!2d38.67042494863281!3d9.014861600000009!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x164b8500410b9c13%3A0xabf29f54f3bb486b!2sDANA%20INDUSTRIAL%20EQUIPMENT%20SUPPLIER!5e0!3m2!1sen!2set!4v1787214479552!5m2!1sen!2set'
+			href: siteSetting('location_office_map_link'),
+			embed: siteSetting('location_office_map_embed')
 		}
-	];
+	]);
 
-	const contactInfo = [
+	// Two emails and two phone lines, each dropping out when cleared. `value` is
+	// a plain string now (the addresses call their message function here) so the
+	// card renders admin text and translated text through the same slot.
+	const contactInfo = $derived([
 		{
 			key: 'email',
 			icon: MailIcon,
 			label: m.contact_email_support_label,
-			value: m.contact_email_value,
-			href: 'mailto:support@dsfet.com'
+			value: siteSetting('contact_email_primary'),
+			href: siteEmailHref('contact_email_primary')
+		},
+		{
+			key: 'email-alt',
+			icon: MailIcon,
+			label: m.contact_email_alt_label,
+			value: siteSetting('contact_email_secondary'),
+			href: siteEmailHref('contact_email_secondary')
 		},
 		{
 			key: 'phone',
 			icon: PhoneIcon,
 			label: m.contact_direct_call_whatsapp_label,
-			value: m.contact_phone_value,
-			href: 'https://wa.me/251911245892'
+			value: siteSetting('contact_phone_primary'),
+			href: sitePhoneHref('contact_phone_primary')
+		},
+		{
+			key: 'phone-alt',
+			icon: PhoneIcon,
+			label: m.contact_phone_alt_label,
+			value: siteSetting('contact_phone_secondary'),
+			href: sitePhoneHref('contact_phone_secondary')
 		},
 		...locations.map((loc) => ({
 			key: `${loc.key}-address`,
@@ -117,12 +144,18 @@
 			value: loc.address,
 			href: loc.href
 		}))
-	];
+	].filter((info) => info.value && info.href));
 
-	const openingHours = [
-		{ key: 'weekdays', day: m.contact_day_mon_fri, hours: m.contact_hours_weekday_value },
-		{ key: 'saturday', day: m.contact_day_saturday, hours: m.contact_hours_saturday_value }
-	];
+	// Clearing Saturday takes the row off the card, for a week the factory is
+	// shut. The holiday note is blank until someone writes one.
+	const openingHours = $derived(
+		[
+			{ key: 'weekdays', day: m.contact_day_mon_fri, hours: siteSettingText('hours_weekday') },
+			{ key: 'saturday', day: m.contact_day_saturday, hours: siteSettingText('hours_saturday') }
+		].filter((slot) => slot.hours)
+	);
+
+	const hoursNote = $derived(siteSettingText('hours_note'));
 
 	$effect(() => {
 		if ($message) {
@@ -275,7 +308,7 @@
 									<div class="min-w-0 flex-1">
 										<p class="text-xs font-medium text-muted-foreground">{info.label()}</p>
 										<p class="truncate text-sm font-bold tracking-wide text-foreground">
-											{info.value()}
+											{info.value}
 										</p>
 									</div>
 								</a>
@@ -333,9 +366,12 @@
 									class="flex items-center justify-between gap-3 border-primary/5 pb-1.5 not-last:border-b"
 								>
 									<span class="text-muted-foreground">{slot.day()}</span>
-									<span class="font-mono font-semibold text-foreground">{slot.hours()}</span>
+									<span class="font-mono font-semibold text-foreground">{slot.hours}</span>
 								</div>
 							{/each}
+							{#if hoursNote}
+								<p class="pt-1 text-[13px] font-medium text-primary">{hoursNote}</p>
+							{/if}
 						</CardContent>
 					</Card>
 				</div>
@@ -378,7 +414,7 @@
 									{loc.label()}
 								</p>
 								<p class="truncate text-sm font-bold tracking-wide text-foreground">
-									{loc.address()}
+									{loc.address}
 								</p>
 							</div>
 

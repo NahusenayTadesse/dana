@@ -2,11 +2,23 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { Play } from '@lucide/svelte';
 	import { siteImage } from '$lib/siteImages.svelte';
+	import { siteSetting } from '$lib/siteSettings.svelte';
+	import { youtubeEmbedUrl } from '$lib/youtube';
 
-	let { videoId = 'Pds8-d8su7s', poster = '' } = $props();
+	let { videoId = '', poster = '' } = $props();
 
 	// Falls back to the admin-managed slot when the caller doesn't override it.
 	const cover = $derived(poster || siteImage('home.video.poster'));
+
+	// The dashboard stores whatever link was pasted; the id is parsed out here.
+	// An unparseable value can only get in by hand, so fall back to the link the
+	// registry ships rather than rendering an empty player.
+	const embedUrl = $derived(
+		videoId
+			? `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`
+			: youtubeEmbedUrl(siteSetting('home_video_url')) ||
+					youtubeEmbedUrl('https://www.youtube.com/watch?v=Pds8-d8su7s')
+	);
 
 	let playing = $state(false);
 </script>
@@ -32,7 +44,7 @@
 		{#if playing}
 			<iframe
 				class="absolute inset-0 h-full w-full"
-				src="https://www.youtube-nocookie.com/embed/{videoId}?autoplay=1&rel=0"
+				src={embedUrl}
 				title={m.video_showcase_title()}
 				allow="autoplay; encrypted-media; picture-in-picture"
 				allowfullscreen

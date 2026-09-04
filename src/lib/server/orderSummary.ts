@@ -17,6 +17,8 @@ import { inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { products, colors } from '$lib/server/db/schema';
 import { priceLine, type PricingBasis } from '$lib/server/pricing';
+import { getSiteSettings } from '$lib/server/siteSettings';
+import { vatRateOf } from '$lib/siteSettings';
 import type { ResolvedLine } from '$lib/server/orderLines';
 
 export type OrderSummaryLine = {
@@ -57,6 +59,8 @@ export type OrderSummary = {
 	/** Total pieces across the order. */
 	totalQuantity: number;
 	totalByUnit: UnitTotal[];
+	/** The rate these totals were computed at, so templates can label them. */
+	vatRate: number;
 	subtotalExclVat: number;
 	vatTotal: number;
 	grandTotal: number;
@@ -118,6 +122,9 @@ export async function buildOrderSummary(
 	resolved: ResolvedLine[],
 	tx: DbLike = db
 ): Promise<OrderSummary> {
+	// Read once here rather than per line: every figure in one summary has to
+	// be computed at the same rate, whatever an admin does mid-request.
+	const vatRate = vatRateOf(await getSiteSettings());
 	const productIds = [...new Set(resolved.map((l) => l.productId))];
 	const colorIds = [
 		...new Set(resolved.map((l) => l.colorId).filter((id): id is number => id != null))
@@ -155,15 +162,18 @@ export async function buildOrderSummary(
 		const unitPrice = line.price == null ? null : Number(line.price);
 		const isPriced = unitPrice != null && Number.isFinite(unitPrice);
 
-		const priced = priceLine({
-			quantity: line.quantity,
-			length: line.length == null ? null : Number(line.length),
-			width: line.width == null ? null : Number(line.width),
-			thickness: line.thickness == null ? null : Number(line.thickness),
-			basis: line.priceBasis,
-			unitPrice: isPriced ? unitPrice : 0,
-			priceIncludesVat: line.priceIncludesVat
-		});
+		const priced = priceLine(
+			{
+				quantity: line.quantity,
+				length: line.length == null ? null : Number(line.length),
+				width: line.width == null ? null : Number(line.width),
+				thickness: line.thickness == null ? null : Number(line.thickness),
+				basis: line.priceBasis,
+				unitPrice: isPriced ? unitPrice : 0,
+				priceIncludesVat: line.priceIncludesVat
+			},
+			vatRate
+		);
 
 		return {
 			productId: line.productId,
@@ -215,6 +225,7 @@ export async function buildOrderSummary(
 		productRows,
 		totalQuantity: lines.reduce((sum, l) => sum + l.quantity, 0),
 		totalByUnit,
+		vatRate,
 		subtotalExclVat,
 		vatTotal: round2(grandTotal - subtotalExclVat),
 		grandTotal,

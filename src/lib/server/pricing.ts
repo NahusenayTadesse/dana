@@ -31,7 +31,7 @@ export type PricedLine = PricingLineInput & {
 	gross: number; // VAT-inclusive amount for this line
 };
 
-import { VAT_RATE } from '$lib/vat';
+import { DEFAULT_VAT_RATE } from '$lib/vat';
 
 const WITHHOLDING_RATE = 3;
 
@@ -57,20 +57,20 @@ function unitsFor(line: PricingLineInput): number {
 	}
 }
 
-export function priceLine(line: PricingLineInput): PricedLine {
+export function priceLine(line: PricingLineInput, vatRate: number): PricedLine {
 	const units = unitsFor(line);
 	const raw = units * line.unitPrice;
 	// A rate that already includes VAT is never taxed again — its net
 	// equivalent is only backed out for the subtotal figure.
-	const gross = line.priceIncludesVat ? raw : raw * (1 + VAT_RATE / 100);
-	const net = line.priceIncludesVat ? raw / (1 + VAT_RATE / 100) : raw;
+	const gross = line.priceIncludesVat ? raw : raw * (1 + vatRate / 100);
+	const net = line.priceIncludesVat ? raw / (1 + vatRate / 100) : raw;
 	return { ...line, units, net, gross };
 }
 
 export type OrderPricingInput = {
 	lines: PricingLineInput[];
 	discountPercentage?: number | null;
-	vatRate?: number; // defaults to 15
+	vatRate?: number; // defaults to the shipped rate
 	withholdingRate?: number; // defaults to 3
 };
 
@@ -91,10 +91,10 @@ export type OrderPricingResult = {
 export function calculateOrderPricing({
 	lines,
 	discountPercentage = 0,
-	vatRate = VAT_RATE,
+	vatRate = DEFAULT_VAT_RATE,
 	withholdingRate = WITHHOLDING_RATE
 }: OrderPricingInput): OrderPricingResult {
-	const priced = lines.map(priceLine);
+	const priced = lines.map((line) => priceLine(line, vatRate));
 
 	const subtotal = round2(priced.reduce((sum, l) => sum + l.net, 0));
 	const grossSubtotal = round2(priced.reduce((sum, l) => sum + l.gross, 0));

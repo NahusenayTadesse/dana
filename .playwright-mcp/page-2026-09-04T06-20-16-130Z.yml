@@ -1,0 +1,75 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "Dana Steel Factory Logo" [ref=e6]
+      - navigation [ref=e7]:
+        - link "Home" [ref=e8] [cursor=pointer]:
+          - /url: /
+        - link "Products" [ref=e9] [cursor=pointer]:
+          - /url: /shop
+        - link "Buy Now" [ref=e10] [cursor=pointer]:
+          - /url: /buy
+        - link "About" [ref=e11] [cursor=pointer]:
+          - /url: /about
+        - link "Blog" [ref=e12] [cursor=pointer]:
+          - /url: /blogs
+        - link "Contact Us" [ref=e13] [cursor=pointer]:
+          - /url: /contact-us
+      - button "Search catalog... (Press Enter)" [ref=e15]
+  - contentinfo [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - link [ref=e19] [cursor=pointer]:
+          - /url: /
+          - img "Dana Steel Factory Logo" [ref=e20]
+        - paragraph [ref=e21]: DANA STEEL FACTORY — coated steel manufacturer in Adama, Oromia. PPGI, GI, roof tiles, coils and steel accessories, delivered across Ethiopia.
+      - generic [ref=e22]:
+        - generic [ref=e23]: Company
+        - generic [ref=e24]:
+          - link "Build your order" [ref=e25] [cursor=pointer]:
+            - /url: /buy
+          - link "Products" [ref=e26] [cursor=pointer]:
+            - /url: /shop
+          - link "Factory" [ref=e27] [cursor=pointer]:
+            - /url: /factory
+          - link "About us" [ref=e28] [cursor=pointer]:
+            - /url: /about
+      - generic [ref=e29]:
+        - generic [ref=e30]: Products
+        - generic [ref=e31]:
+          - link "PPGI Sheets" [ref=e32] [cursor=pointer]:
+            - /url: /shop
+          - link "Roof Tiles" [ref=e33] [cursor=pointer]:
+            - /url: /shop
+          - link "GI Coils" [ref=e34] [cursor=pointer]:
+            - /url: /shop
+          - link "Accessories" [ref=e35] [cursor=pointer]:
+            - /url: /shop
+      - generic [ref=e36]:
+        - generic [ref=e37]: Contact
+        - generic [ref=e38]:
+          - link "0919 05 06 07" [ref=e39] [cursor=pointer]:
+            - /url: tel:0919050607
+          - link "+251 911 24 58 92" [ref=e40] [cursor=pointer]:
+            - /url: tel:+251911245892
+          - link "support@dsfet.com" [ref=e41] [cursor=pointer]:
+            - /url: mailto:support@dsfet.com
+          - generic [ref=e42]: Adama, Oromia, Ethiopia
+    - paragraph [ref=e45]: DANA STEEL FACTORY — Delivering premium coated steel solutions that build Ethiopia’s and East Africa’s future with strength, reliability and innovation.
+    - generic [ref=e47]:
+      - generic [ref=e48]: © 2026 DANA STEEL FACTORY. All rights reserved.
+      - link [ref=e49] [cursor=pointer]:
+        - /url: https://digitalconstruct.com
+        - text: Developed by
+        - img "Digital Construct" [ref=e51]
+  - generic [ref=e52]:
+    - link "Chat on WhatsApp" [ref=e53] [cursor=pointer]:
+      - /url: https://wa.me/251911245892
+    - button "Inquiry List" [ref=e57]
+  - generic [ref=e62]:
+    - link "Chat on Telegram" [ref=e63] [cursor=pointer]:
+      - /url: https://t.me/+251911245892
+    - button "Launch virtual assistant console" [ref=e66]: Ask Dana AI

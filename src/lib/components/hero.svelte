@@ -12,8 +12,13 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { siteImages } from '$lib/siteImages.svelte';
+	import { siteSettingText } from '$lib/siteSettings.svelte';
 
 	let { quoteUrl = '/checkout', watchUrl = '/factory' } = $props();
+
+	// Both lines of the trust badge come from Page Text & Figures, per language.
+	const trustCount = $derived(siteSettingText('hero_trust_count'));
+	const trustSub = $derived(siteSettingText('hero_trust_sub'));
 
 	const stats = [
 		{ icon: ShieldCheck, label: m.hero_stat_quality },
@@ -129,8 +134,8 @@
 					></div>
 				</div>
 				<div class="leading-tight">
-					<div class="text-[15px] font-extrabold text-foreground">{m.hero_trust_count()}</div>
-					<div class="text-[13.5px] font-semibold text-muted-foreground">{m.hero_trust_sub()}</div>
+					<div class="text-[15px] font-extrabold text-foreground">{trustCount}</div>
+					<div class="text-[13.5px] font-semibold text-muted-foreground">{trustSub}</div>
 				</div>
 			</div>
 

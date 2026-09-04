@@ -1,18 +1,23 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 	import { siteImage } from '$lib/siteImages.svelte';
+	import { siteSetting } from '$lib/siteSettings.svelte';
 
 	let { image = '' } = $props();
 
 	const photo = $derived(image || siteImage('home.ral.image'));
 
-	// RAL codes carry fixed brand-neutral colors (kept as literals on purpose)
-	const swatches = [
-		{ code: 'RAL 3000', color: '#E5342A' },
-		{ code: 'RAL 6002', color: '#2C7D3E' },
-		{ code: 'RAL 5010', color: '#1E52A8' },
-		{ code: 'RAL 1004', color: '#D9A441' }
-	];
+	// Four slots from Business Settings' sibling screen. A slot with its code
+	// cleared drops out, so the band renders three or two just as happily —
+	// the colours a factory actually coats change more often than the design.
+	const swatches = $derived(
+		[1, 2, 3, 4]
+			.map((n) => ({
+				code: siteSetting(`ral_${n}_code`),
+				color: siteSetting(`ral_${n}_color`)
+			}))
+			.filter((swatch) => swatch.code && swatch.color)
+	);
 </script>
 
 <style>

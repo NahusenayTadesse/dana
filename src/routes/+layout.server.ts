@@ -9,12 +9,16 @@ import {
 	blogCategories,
 	orderItems,
 	testimonials,
-	siteImages as siteImagesTable
+	siteImages as siteImagesTable,
+	siteSettings as siteSettingsTable,
+	faqItems as faqItemsTable
 } from '$lib/server/db/schema';
 import { eq, sql, desc, inArray, getTableColumns } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
 import { resolveSiteImages } from '$lib/siteImages';
+import { resolveSiteSettings } from '$lib/siteSettings';
+import { resolveFaq } from '$lib/faqItems';
 
 const HOME_FEATURED_LIMIT = 9;
 
@@ -49,6 +53,34 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		.orderBy(siteImagesTable.slot, siteImagesTable.sortOrder);
 
 	const siteImages = resolveSiteImages(siteImageRows);
+
+	// Phone numbers, emails and social links. Same override rule: a key with no
+	// row falls back to the bundled default, a row holding '' means "hide this".
+	const siteSettingRows = await db
+		.select({
+			settingKey: siteSettingsTable.settingKey,
+			settingValue: siteSettingsTable.settingValue
+		})
+		.from(siteSettingsTable);
+
+	const siteSettings = resolveSiteSettings(siteSettingRows);
+
+	// The About page FAQ. No rows means "use the nine questions in the code".
+	const faqRows = await db
+		.select({
+			id: faqItemsTable.id,
+			sortOrder: faqItemsTable.sortOrder,
+			icon: faqItemsTable.icon,
+			questionEn: faqItemsTable.questionEn,
+			questionAm: faqItemsTable.questionAm,
+			answerEn: faqItemsTable.answerEn,
+			answerAm: faqItemsTable.answerAm,
+			isActive: faqItemsTable.isActive
+		})
+		.from(faqItemsTable)
+		.orderBy(faqItemsTable.sortOrder, faqItemsTable.id);
+
+	const faq = resolveFaq(faqRows);
 
 	// Rank active products by total ordered quantity (LEFT JOIN so products with zero
 	// orders still show up, just ranked last) — a single join, no fan-out.
@@ -114,6 +146,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		testimonialList,
 		imagesList,
 		siteImages,
+		siteSettings,
+		faq,
 		bestSelling: productList
 	};
 };

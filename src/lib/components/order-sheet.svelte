@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
 	import { blockTitle, buildOrderSheet } from '$lib/order-sheet';
+	import { siteVatRate } from '$lib/siteSettings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	/**
@@ -22,7 +23,7 @@
 		class?: string;
 	} = $props();
 
-	const sheet = $derived(buildOrderSheet(items));
+	const sheet = $derived(buildOrderSheet(items, siteVatRate()));
 
 	const amount = (value: number) =>
 		new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(

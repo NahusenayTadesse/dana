@@ -2,6 +2,12 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { PaintRoller, Layers, House, Wrench, ArrowRight } from '@lucide/svelte';
 	import { siteImage } from '$lib/siteImages.svelte';
+	import { siteSetting, siteSettingText } from '$lib/siteSettings.svelte';
+
+	// Same label as the homepage band, from dashboard/page-text — these three
+	// buttons all said "Contact Us" through one translation key, so they should
+	// keep moving together now that the client owns the wording.
+	const ctaButton = $derived(siteSettingText('cta_button'));
 
 	// Reveal-on-scroll: strips the hidden classes when the element enters view.
 	function reveal(node, delay = 0) {
@@ -119,12 +125,15 @@
 		}
 	];
 
-	const stats = [
-		{ v: m.stat_inspection_value, l: m.stat_inspection_label },
-		{ v: m.stat_gauge_value, l: m.stat_gauge_label },
-		{ v: m.stat_warranty_value, l: m.stat_warranty_label },
-		{ v: m.stat_iso_value, l: m.stat_iso_label }
-	];
+	// The four figures come from dashboard/page-text; the wording beside each
+	// one is still translated copy. The city is a translated pair, since it is
+	// a place name rather than a number.
+	const stats = $derived([
+		{ v: siteSetting('figure_factory_inspection'), l: m.stat_inspection_label },
+		{ v: siteSetting('figure_factory_product_lines'), l: m.stat_gauge_label },
+		{ v: siteSetting('figure_factory_since'), l: m.stat_warranty_label },
+		{ v: siteSettingText('figure_factory_city'), l: m.stat_iso_label }
+	]);
 
 	// reused hidden state for the reveal action
 	const hidden = 'opacity-0 translate-y-5 transition-all duration-700 ease-out';
@@ -167,7 +176,7 @@
 					href="/contact-us"
 					class="inline-flex items-center rounded-full px-4 py-3.5 text-[14.5px] font-bold text-primary underline-offset-4 hover:underline"
 				>
-					{m.cta_button()}
+					{ctaButton}
 				</a>
 			</div>
 		</div>
@@ -410,7 +419,7 @@
 		<div use:reveal={120} class="{hidden} grid grid-cols-2 gap-3.5">
 			{#each stats as st (st.l)}
 				<div class="rounded-2xl border border-border bg-card p-6">
-					<div class="display text-[38px] font-black text-primary">{st.v()}</div>
+					<div class="display text-[38px] font-black text-primary">{st.v}</div>
 					<div class="mt-1 text-[13px] text-muted-foreground">{st.l()}</div>
 				</div>
 			{/each}
@@ -442,7 +451,7 @@
 							href="/contact-us"
 							class="inline-flex items-center rounded-full border border-border bg-background px-6 py-3.5 text-[14.5px] font-bold transition duration-300 hover:-translate-y-0.5 hover:border-primary/40"
 						>
-							{m.cta_button()}
+							{ctaButton}
 						</a>
 					</div>
 				</div>

@@ -693,6 +693,47 @@ export const siteImages = mysqlTable(
 	(table) => [index('site_images_slot_idx').on(table.slot, table.sortOrder)]
 );
 
+/**
+ * Admin-editable company details — phone numbers, email addresses and social
+ * links. Same override shape as site_images: a key with no row here falls back
+ * to the bundled default declared in $lib/siteSettings, so an empty table is
+ * the site exactly as it ships, and "restore default" is a DELETE.
+ *
+ * A row holding an empty string is NOT the same as a missing row: it means the
+ * operator deliberately cleared an optional field (a closed TikTok account, a
+ * second line they no longer answer) and the link should disappear.
+ */
+export const siteSettings = mysqlTable('site_settings', {
+	id: int('id').primaryKey().autoincrement(),
+	settingKey: varchar('setting_key', { length: 100 }).notNull().unique(),
+	settingValue: varchar('setting_value', { length: 500 }).notNull(),
+	updatedBy: varchar('updated_by', { length: 255 }),
+	updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+/**
+ * The questions on the About page. A variable-length list, so unlike
+ * site_settings this is a table of rows rather than a key per field — the
+ * client can add a tenth question or drop one that stopped being asked.
+ *
+ * Same "empty means original" rule: with no rows here the page renders the
+ * nine questions declared in $lib/faqItems, so a fresh database is the site
+ * exactly as it ships and "restore originals" is a DELETE.
+ */
+export const faqItems = mysqlTable('faq_items', {
+	id: int('id').primaryKey().autoincrement(),
+	sortOrder: int('sort_order').default(0).notNull(),
+	icon: varchar('icon', { length: 40 }).notNull(),
+	questionEn: varchar('question_en', { length: 255 }).notNull(),
+	questionAm: varchar('question_am', { length: 255 }),
+	answerEn: text('answer_en').notNull(),
+	answerAm: text('answer_am'),
+	isActive: boolean('is_active').default(true).notNull(),
+	createdBy: varchar('created_by', { length: 255 }),
+	updatedBy: varchar('updated_by', { length: 255 }),
+	createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
 export const testimonials = mysqlTable('testimonials', {
 	id: int('id').primaryKey().autoincrement(),
 	name: varchar('name', { length: 255 }).notNull(),

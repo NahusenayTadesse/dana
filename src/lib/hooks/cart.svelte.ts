@@ -1,5 +1,6 @@
 import { setContext, getContext } from 'svelte';
 import { grossOf, netOf, round2, vatOf } from '$lib/vat';
+import { siteVatRate } from '$lib/siteSettings.svelte';
 
 // A cart line is anchored to a specific productVariant — that's the atomic
 // sellable unit (a fixed color+width+thickness+length combo with its own
@@ -126,11 +127,15 @@ class UseCart {
 	// neither the net nor the gross figure and matched nothing the server
 	// later computed.
 
+	// One rate for all three totals, from Business Settings. Read as a derived
+	// so a rate change propagates the way any other page data does.
+	vatRate = $derived(siteVatRate());
+
 	/** VAT-exclusive total. */
 	subtotalExclVat = $derived(
 		round2(
 			this.items.reduce(
-				(sum, item) => sum + netOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+				(sum, item) => sum + netOf(Number(item.price), item.priceIncludesVat, this.vatRate) * item.quantity,
 				0
 			)
 		)
@@ -140,7 +145,7 @@ class UseCart {
 	vatTotal = $derived(
 		round2(
 			this.items.reduce(
-				(sum, item) => sum + vatOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+				(sum, item) => sum + vatOf(Number(item.price), item.priceIncludesVat, this.vatRate) * item.quantity,
 				0
 			)
 		)
@@ -150,7 +155,7 @@ class UseCart {
 	totalPrice = $derived(
 		round2(
 			this.items.reduce(
-				(sum, item) => sum + grossOf(Number(item.price), item.priceIncludesVat) * item.quantity,
+				(sum, item) => sum + grossOf(Number(item.price), item.priceIncludesVat, this.vatRate) * item.quantity,
 				0
 			)
 		)

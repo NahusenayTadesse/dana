@@ -11,69 +11,47 @@
 		ShieldCheckIcon,
 		HelpCircleIcon,
 		CoinsIcon,
-		BatteryChargingIcon,
-		UsbIcon,
-		MonitorIcon
+		RulerIcon,
+		WrenchIcon,
+		LayersIcon,
+		FileTextIcon,
+		FactoryIcon
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
+	import { page } from '$app/state';
 	import * as m from '$lib/paraglide/messages.js';
+	import { getLocale } from '$lib/paraglide/runtime';
+	import { DEFAULT_FAQ, faqText, type FaqEntry, type FaqIconName } from '$lib/faqItems';
 
-	const features = [
-		{
-			id: 'product-quality',
-			title: m.faq_product_quality_title,
-			description: m.faq_product_quality_description,
-			icon: ShieldCheckIcon
-		},
-		{
-			id: 'product-categories',
-			title: m.faq_product_categories_title,
-			description: m.faq_product_categories_description,
-			icon: PackageIcon
-		},
-		{
-			id: 'power-solutions',
-			title: m.faq_power_solutions_title,
-			description: m.faq_power_solutions_description,
-			icon: BatteryChargingIcon
-		},
-		{
-			id: 'mobile-accessories',
-			title: m.faq_mobile_accessories_title,
-			description: m.faq_mobile_accessories_description,
-			icon: UsbIcon
-		},
-		{
-			id: 'storage-devices',
-			title: m.faq_storage_devices_title,
-			description: m.faq_storage_devices_description,
-			icon: MonitorIcon
-		},
-		{
-			id: 'pricing',
-			title: m.faq_pricing_title,
-			description: m.faq_pricing_description,
-			icon: CoinsIcon
-		},
-		{
-			id: 'availability',
-			title: m.faq_availability_title,
-			description: m.faq_availability_description,
-			icon: TruckIcon
-		},
-		{
-			id: 'warranty-support',
-			title: m.faq_warranty_support_title,
-			description: m.faq_warranty_support_description,
-			icon: ShieldCheckIcon
-		},
-		{
-			id: 'customer-support',
-			title: m.faq_customer_support_title,
-			description: m.faq_customer_support_description,
-			icon: HelpCircleIcon
-		}
-	];
+	// The list comes from dashboard/faq via the root layout. It used to be a
+	// fixed nine-entry array here, so a tenth question meant two new translation
+	// keys and a deploy.
+	const entries = $derived((page.data?.faq as FaqEntry[] | undefined) ?? DEFAULT_FAQ);
+
+	const icons: Record<FaqIconName, typeof ShieldCheckIcon> = {
+		shield: ShieldCheckIcon,
+		package: PackageIcon,
+		ruler: RulerIcon,
+		wrench: WrenchIcon,
+		layers: LayersIcon,
+		coins: CoinsIcon,
+		truck: TruckIcon,
+		file: FileTextIcon,
+		factory: FactoryIcon,
+		help: HelpCircleIcon
+	};
+
+	const features = $derived(
+		entries.map((entry, index) => {
+			const { question, answer } = faqText(entry, getLocale());
+			return {
+				id: `faq-${index}`,
+				title: question,
+				description: answer,
+				icon: icons[entry.icon] ?? HelpCircleIcon
+			};
+		})
+	);
 </script>
 
 <div
@@ -126,7 +104,7 @@
 								<h3
 									class="text-sm font-bold tracking-wide transition-colors duration-300 group-hover:text-primary group-data-[state=open]:text-primary"
 								>
-									{feature.title()}
+									{feature.title}
 								</h3>
 							</div>
 						</AccordionTrigger>
@@ -135,7 +113,7 @@
 							class="border-t border-primary/10 bg-background/40 px-6 py-4 backdrop-blur-xl"
 						>
 							<p class="text-xs leading-relaxed text-muted-foreground">
-								{feature.description()}
+								{feature.description}
 							</p>
 						</AccordionContent>
 					</AccordionItem>

@@ -6,6 +6,7 @@
 	import { downloadCSV, printElement } from '$lib/print';
 	import OrderSheet from './order-sheet.svelte';
 	import { buildOrderSheet, orderSheetCsvRows } from '$lib/order-sheet';
+	import { siteVatRate } from '$lib/siteSettings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { siteImage } from '$lib/siteImages.svelte';
 
@@ -28,7 +29,7 @@
 	// decoded by the time the print sheet clones it.
 	let receiptNode: HTMLDivElement | null = $state(null);
 
-	const sheet = $derived(buildOrderSheet(items));
+	const sheet = $derived(buildOrderSheet(items, siteVatRate()));
 
 	const issuedAt = $derived(new Date().toLocaleString());
 	const title = $derived(heading || m.receipt_title());

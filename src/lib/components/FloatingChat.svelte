@@ -7,6 +7,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as m from '$lib/paraglide/messages.js';
+	import { IconBrandTelegram } from '@tabler/icons-svelte';
+	import FloatingContact from './floating-contact.svelte';
+	import { siteSetting } from '$lib/siteSettings.svelte';
 
 	type ChatMessage = {
 		role: 'user' | 'assistant';
@@ -108,7 +111,21 @@
 	}
 </script>
 
-<div class="fixed left-5 bottom-22 z-50 md:bottom-5">
+<!--
+	A column, not a bare anchor point: the Telegram button stacks above the
+	launcher by flow rather than by a hardcoded offset, so it stays put however
+	tall the launcher's label makes it.
+-->
+<div class="fixed bottom-22 left-5 z-50 flex flex-col items-start gap-3 md:bottom-5">
+	{#if !open}
+		<FloatingContact
+			href={siteSetting('social_telegram')}
+			label={m.header_chat_telegram()}
+			icon={IconBrandTelegram}
+			brand="#229ED9"
+		/>
+	{/if}
+
 	{#if open}
 		<Card.Root
 			class="mb-4 flex h-[min(42rem,calc(100vh-6rem))] w-[calc(100vw-2.5rem)] max-w-sm flex-col overflow-hidden border bg-background shadow-2xl sm:w-96"
@@ -222,7 +239,7 @@
 	<Button
 		type="button"
 		size="lg"
-		class="py-8 px-4 rounded-2xl shadow-2xl"
+		class="rounded-2xl px-4 py-8 shadow-2xl"
 		aria-label={open ? m.floating_chat_close_chat() : m.floating_chat_open_chat()}
 		onclick={() => (open = !open)}
 	>
@@ -232,7 +249,5 @@
 			<BotMessageSquare class="h-8! w-8!" />
 			{m.floating_ask_chat()}
 		{/if}
-		
-
 	</Button>
 </div>

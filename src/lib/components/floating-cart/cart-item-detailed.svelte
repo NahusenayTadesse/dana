@@ -4,6 +4,7 @@
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
 	import { netOf, vatOf, grossOf } from '$lib/vat';
+	import { siteVatRate } from '$lib/siteSettings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	const { item }: { item: CartItem } = $props();
@@ -19,9 +20,10 @@
 	// Through $lib/vat rather than an inline 1.15/0.15: a rate may be quoted
 	// either VAT-inclusive or VAT-exclusive, and this row has to agree with the
 	// cart totals, the checkout summary and the server.
-	const unitExclVat = $derived(netOf(Number(item.price), item.priceIncludesVat));
-	const unitVat = $derived(vatOf(Number(item.price), item.priceIncludesVat));
-	const lineTotal = $derived(grossOf(Number(item.price), item.priceIncludesVat) * item.quantity);
+	const rate = $derived(siteVatRate());
+	const unitExclVat = $derived(netOf(Number(item.price), item.priceIncludesVat, rate));
+	const unitVat = $derived(vatOf(Number(item.price), item.priceIncludesVat, rate));
+	const lineTotal = $derived(grossOf(Number(item.price), item.priceIncludesVat, rate) * item.quantity);
 
 	const widthText = $derived(item.width != null ? `${item.width}${item.widthUnit ?? ''}` : null);
 	const thicknessText = $derived(

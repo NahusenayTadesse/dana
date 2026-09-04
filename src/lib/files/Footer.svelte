@@ -1,11 +1,24 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 	import { siteImage } from '$lib/siteImages.svelte';
+	import { siteSetting, siteSettingText } from '$lib/siteSettings.svelte';
+	import { mailHref, telHref } from '$lib/siteSettings';
 
-	// Phone, email and address come from the same messages the contact page uses,
-	// rather than the literals that used to sit in prop defaults here — those had
-	// drifted to a different email (info@danasteel.com) and a third formatting of
-	// the same phone number. Nothing ever passed these as props.
+	// Phone and email come from Company Details in the dashboard, so the client
+	// can change them without a deploy. They used to be literals here that had
+	// drifted from every other copy on the site: the displayed number was the
+	// 911 line while the `tel:` beside it dialled the 919 one, and the address
+	// had drifted to a different email (info@danasteel.com).
+	const phones = $derived(
+		[siteSetting('contact_phone_primary'), siteSetting('contact_phone_secondary')]
+			.map((value) => ({ value, href: telHref(value) }))
+			.filter((phone) => phone.value && phone.href)
+	);
+	const emails = $derived(
+		[siteSetting('contact_email_primary'), siteSetting('contact_email_secondary')]
+			.map((value) => ({ value, href: mailHref(value) }))
+			.filter((email) => email.value)
+	);
 
 	// /buy leads the column: it is the only link here that takes an order rather
 	// than describing the company, so it should be the first thing found.
@@ -13,8 +26,7 @@
 		{ label: m.footer_buy_link, href: '/buy' },
 		{ label: m.footer_link_products, href: '/shop' },
 		{ label: m.footer_link_factory, href: '/factory' },
-		{ label: m.footer_link_about, href: '/about' },
-		{ label: m.footer_link_projects, href: '/projects' }
+		{ label: m.footer_link_about, href: '/about' }
 	];
 	const products = [
 		{ label: m.footer_prod_ppgi, href: '/shop' },
@@ -79,16 +91,17 @@
 				{m.footer_col_contact()}
 			</div>
 			<div class="mt-4 flex flex-col gap-2.5 text-[14.5px]">
-				<a href="tel:+251919050607" class="w-fit transition-colors hover:text-white">
-					{m.contact_phone_value()}
-				</a>
-				<a
-					href="mailto:support@dsfet.com"
-					class="w-fit break-all transition-colors hover:text-white"
-				>
-					{m.contact_email_value()}
-				</a>
-				<span>{m.contact_factory_address_value()}</span>
+				{#each phones as phone (phone.value)}
+					<a href={phone.href} class="w-fit transition-colors hover:text-white">
+						{phone.value}
+					</a>
+				{/each}
+				{#each emails as email (email.value)}
+					<a href={email.href} class="w-fit break-all transition-colors hover:text-white">
+						{email.value}
+					</a>
+				{/each}
+				<span>{siteSettingText('location_factory_address')}</span>
 			</div>
 		</div>
 	</div>
@@ -116,8 +129,11 @@
 			>
 				{m.footer_developed_by()}
 				<span class="inline-flex rounded-md bg-white px-1.5 py-1">
+					<!-- The one image on the site that is deliberately not an editable
+					     slot: it is the builder's own mark, not the client's artwork, so
+					     it points straight at the bundled asset. -->
 					<img
-						src={siteImage('global.developer_logo')}
+						src="/digitalLogo.png"
 						alt={m.alt_digital_construct()}
 						class="h-3.5 w-auto object-contain"
 					/>

@@ -202,6 +202,47 @@
 			selected = selectedRows.map((row) => row.original);
 		});
 	}
+
+	// How much room is left below the table is only knowable at runtime — the
+	// wrapper sits at a different offset on every dashboard route — so a fixed
+	// or guessed-viewport cap either wastes screen or overflows it. Measure the
+	// wrapper's top instead and cap to the remainder; the class fallback on the
+	// wrapper covers SSR and the first frame before this runs.
+	const MIN_TABLE_HEIGHT = 320;
+	const BOTTOM_GUTTER = 16;
+
+	let tableShell: HTMLElement | null = $state(null);
+	let availableHeight = $state(0);
+
+	$effect(() => {
+		const shell = tableShell;
+		if (!shell) return;
+
+		// Deliberately not recomputed on scroll: the wrapper's top moves with the
+		// page, and resizing the table mid-scroll would make it jump under the
+		// cursor.
+		const measure = () => {
+			const top = shell.getBoundingClientRect().top;
+			const remaining = window.innerHeight - top - BOTTOM_GUTTER;
+			availableHeight = Math.min(
+				window.innerHeight - BOTTOM_GUTTER,
+				Math.max(MIN_TABLE_HEIGHT, remaining)
+			);
+		};
+
+		measure();
+		// Body observer catches layout shifts above the table (filters wrapping,
+		// sidebar toggles); the resize listener catches viewport height changes,
+		// which leave the body's own box untouched.
+		const observer = new ResizeObserver(measure);
+		observer.observe(document.body);
+		window.addEventListener('resize', measure);
+
+		return () => {
+			observer.disconnect();
+			window.removeEventListener('resize', measure);
+		};
+	});
 </script>
 
 <!-- min-h-0 is required for flex-child overflow -->
@@ -309,12 +350,18 @@
 						</div>
 					</ScrollArea>
 				
-				<div class="rounded-md border">
-					<!-- The height cap goes on the scroll container, not the <table>: a
-					     table box ignores max-height, so the old `max-h-96` on Table.Root
-					     (which lands on the <table>) did nothing and long tables still
-					     rendered at full height. -->
-					<Table.Root id={uniqueTableId} containerClass="max-h-96">
+				<!-- Flex column so the rows take every pixel the measured height
+				     leaves over after the pagination footer, and scroll inside it. -->
+				<div
+					bind:this={tableShell}
+					class="flex min-h-0 flex-col rounded-md border max-h-[max(20rem,calc(100dvh-16rem))]"
+					style:max-height={availableHeight ? `${availableHeight}px` : undefined}
+				>
+					<!-- The scroll box is the container, not the <table>: a table box
+					     ignores max-height, so a cap on Table.Root's `class` (which lands
+					     on the <table>) does nothing and long tables render at full
+					     height regardless. -->
+					<Table.Root id={uniqueTableId} containerClass="min-h-0 flex-1">
 						<Table.Header class="sticky top-0 z-30 bg-background">
 							{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
 								<Table.Row>
@@ -372,7 +419,7 @@
 					     containing block, so `absolute -bottom-5` sent these buttons to
 					     the bottom of the viewport instead of under the table. -->
 					{#if table.getPageCount() > 1}
-						<div class="flex items-center justify-end gap-2 border-t px-2 py-2">
+						<div class="flex shrink-0 items-center justify-end gap-2 border-t px-2 py-2">
 							<span class="mr-auto text-xs text-muted-foreground">
 								{m.table_page_of({
 									page: pagination.pageIndex + 1,

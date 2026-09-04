@@ -13,16 +13,9 @@
 	import * as Carousel from '$lib/components/ui/carousel/index.js';
 
 	import Hero from '$lib/components/hero.svelte';
-	import About from '$lib/components/about.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { ArrowBigRight } from '@lucide/svelte';
-	import Faq from '$lib/components/faq.svelte';
-	import Slider from '$lib/components/slider.svelte';
-	import Testimonial from '$lib/components/testimonial.svelte';
 	import BlogCard from '$lib/components/blogs/portfolio-card.svelte';
-	import ProductSeparator from '$lib/components/productSeparator.svelte';
-	import WaneSection from '$lib/components/waneSection.svelte';
-	import WhyChooseUs from '$lib/components/whyChooseUs.svelte';
 	import Home from '$lib/files/Home.svelte';
 
 	// Keeps setLocale available without changing this page UI.
@@ -56,11 +49,11 @@
 		<h2
 			class="bg-linear-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent sm:text-4xl"
 		>
-			{m.home_best_selling_devices_title()}
+			{m.home_best_selling_products_title()}
 		</h2>
 
 		<p class="max-w-xl text-sm text-muted-foreground">
-			{m.home_best_selling_devices_description()}
+			{m.home_best_selling_products_description()}
 		</p>
 	</div>
 
@@ -113,10 +106,6 @@
 {/if}
   
 </Home>
-
-<!-- {#if data?.imagesList?.length > 0}
-	<Slider imagesList={data?.imagesList} />
-{/if} -->
 
 
 

@@ -62,16 +62,6 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
 		defaults: ['/logo192.png'],
 		recommended: 'Square PNG, 192×192'
 	},
-	{
-		key: 'global.developer_logo',
-		label: 'Developer credit logo',
-		section: 'Global',
-		page: '/',
-		kind: 'single',
-		description: 'Small logo next to the "developed by" line at the bottom of the footer.',
-		defaults: ['/digitalLogo.png'],
-		recommended: 'Transparent PNG, height ~56'
-	},
 
 	/* -------------------------------------------------------------------- Home */
 	{

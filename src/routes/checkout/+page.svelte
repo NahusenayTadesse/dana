@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { siteVatRate } from '$lib/siteSettings.svelte';
+
+	const vatRate = $derived(siteVatRate());
 	import { useCart } from '$lib/hooks/cart.svelte.js';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -221,7 +224,7 @@
 							<span class="font-mono font-medium">{formatPrice(subtotalExclVat)}</span>
 						</div>
 						<div class="flex justify-between text-sm">
-							<span class="text-muted-foreground">{m.checkout_vat_total()}</span>
+							<span class="text-muted-foreground">{m.checkout_vat_total({ rate: vatRate })}</span>
 							<span class="font-mono font-medium">{formatPrice(vatTotal)}</span>
 						</div>
 						<div class="flex justify-between border-t border-border pt-2.5 text-base font-bold">

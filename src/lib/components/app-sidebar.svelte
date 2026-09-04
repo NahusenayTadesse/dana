@@ -11,6 +11,19 @@
 		Building2,
 		Book,
 		Images,
+		TicketPercent,
+		Contact,
+		Type,
+		MessageCircleQuestion,
+		SlidersHorizontal,
+		HardHat,
+		Warehouse,
+		Boxes,
+		Layers,
+		Factory,
+		ClipboardList,
+		Link2,
+		LifeBuoy,
 
 		Quote
 
@@ -60,12 +73,16 @@
 					url: '/dashboard/messages',
 					icon: Mail,
 					counter: messageNumber
-				}
+				},
+				{ title: 'Promo Codes', url: '/dashboard/promo-codes', icon: TicketPercent }
 			]
 		},
 		{
 			section: 'Content',
 			items: [
+				{ title: 'Company Details', url: '/dashboard/company-details', icon: Contact },
+				{ title: 'Page Text & Figures', url: '/dashboard/page-text', icon: Type },
+				{ title: 'FAQ', url: '/dashboard/faq', icon: MessageCircleQuestion },
 				{ title: 'Site Images', url: '/dashboard/site-images', icon: Images },
 				{ title: 'Testimonials', url: '/dashboard/testimonials', icon: Star },
 				{ title: 'Partner Logos', url: '/dashboard/logos', icon: Building2 },
@@ -81,6 +98,32 @@
 			]
 		},
 		{
+			section: 'Operations & stock',
+			items: [
+				{ title: 'Staff', url: '/dashboard/staff', icon: HardHat },
+				{
+					title: 'Inventory',
+					url: '/dashboard/stock',
+					icon: Boxes,
+					items: [
+						{ title: 'Stock by Warehouse', url: '/dashboard/stock' },
+						{ title: 'Warehouses', url: '/dashboard/warehouses' }
+					]
+				},
+				{
+					title: 'Production',
+					url: '/dashboard/production',
+					icon: Factory,
+					items: [
+						{ title: 'Batches', url: '/dashboard/production' },
+						{ title: 'Raw Materials', url: '/dashboard/raw-materials' }
+					]
+				},
+				{ title: 'Purchase Orders', url: '/dashboard/purchase-orders', icon: ClipboardList },
+				{ title: 'Payment Links', url: '/dashboard/payment-links', icon: Link2 }
+			]
+		},
+		{
 			section: 'Analytics',
 			items: [
 				{ title: 'Reports', url: '/dashboard/reports', icon: ChartArea },
@@ -93,7 +136,13 @@
 						{ title: 'Users', url: '/dashboard/admin-panel/users' },
 						{ title: 'Roles', url: '/dashboard/admin-panel/roles' }
 					]
-				}
+				},
+				{
+					title: 'Business Settings',
+					url: '/dashboard/business-settings',
+					icon: SlidersHorizontal
+				},
+				{ title: 'Help', url: '/dashboard/help', icon: LifeBuoy }
 			]
 		}
 	];

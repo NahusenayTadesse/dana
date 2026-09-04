@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
 import { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_PORT, SMS_KEY } from '$env/static/private';
-import { VAT_RATE } from '$lib/vat';
+
 import { basisLabel, formatLengthTotals, type OrderSummary } from '$lib/server/orderSummary';
 import { priceLine, type PricingBasis } from '$lib/server/pricing';
 
@@ -451,7 +451,7 @@ export const customerWelcomeTemplate = (name: string) => ({
     `
 });
 
-export const customerDeliveredTemplate = (orderId, items, total) => ({
+export const customerDeliveredTemplate = (orderId, items, total, vatRate: number) => ({
 	subject: `Your Order Has Been Delivered! (#${orderId})`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
@@ -473,7 +473,7 @@ export const customerDeliveredTemplate = (orderId, items, total) => ({
 
                 <p>We hope your new products serve you well! 😊</p>
 
-                ${generateVariantOrderTable(items)}
+                ${generateVariantOrderTable(items, vatRate)}
 
                 <div style="text-align: right; margin-top: 15px; font-weight: bold; font-size: 1.2em;">
                     Total: ${Number(total).toLocaleString()} ETB
@@ -492,7 +492,7 @@ export const customerDeliveredTemplate = (orderId, items, total) => ({
     `
 });
 
-export const adminDeliveredTemplate = (orderId, items, total) => ({
+export const adminDeliveredTemplate = (orderId, items, total, vatRate: number) => ({
 	subject: `Order Delivered: #${orderId}`,
 	html: `
         <div style="font-family: sans-serif; color: #333;">
@@ -503,7 +503,7 @@ export const adminDeliveredTemplate = (orderId, items, total) => ({
                 <strong>Order ID: #${orderId}</strong>
             </p>
 
-            ${generateVariantOrderTable(items)}
+            ${generateVariantOrderTable(items, vatRate)}
 
             <p style="font-size: 18px;">
                 <strong>Total Value: ${Number(total).toLocaleString()} ETB</strong>
@@ -720,7 +720,7 @@ export const customerResetPasswordTemplate = (url: string) => ({
 // field. Used for confirmed-price emails (quote payment link, payment
 // confirmation) — NOT for quote requests still awaiting a price, which should
 // keep using generateQuoteTable.
-const generateVariantOrderTable = (items) => {
+const generateVariantOrderTable = (items, vatRate: number) => {
 	// Values come off decimal columns, so they arrive as "1000.00" / "1.000" —
 	// Number() drops the trailing zeros the customer has no use for, and matches
 	// how the checkout summary renders the same spec.
@@ -745,15 +745,18 @@ const generateVariantOrderTable = (items) => {
 			// flat `unitPrice × quantity`, which silently dropped the length (or
 			// area) multiplier — on a per-metre product the rows and the total
 			// simply disagreed, and the customer had no way to tell which was right.
-			const priced = priceLine({
-				quantity: item.quantity,
-				length: item.length != null ? Number(item.length) : null,
-				width: item.width != null ? Number(item.width) : null,
-				thickness: item.thickness != null ? Number(item.thickness) : null,
-				basis,
-				unitPrice,
-				priceIncludesVat: item.priceIncludesVat
-			});
+			const priced = priceLine(
+				{
+					quantity: item.quantity,
+					length: item.length != null ? Number(item.length) : null,
+					width: item.width != null ? Number(item.width) : null,
+					thickness: item.thickness != null ? Number(item.thickness) : null,
+					basis,
+					unitPrice,
+					priceIncludesVat: item.priceIncludesVat
+				},
+				vatRate
+			);
 
 			// What the rate multiplies against, shown only when it isn't just the
 			// piece count — otherwise "6" and "6 pcs" would sit in the same cell.
@@ -855,7 +858,7 @@ const generateTotalsBlock = (offer: OfferTotals, opts: { payAmount?: number; isA
 
 // --- Quote → payment link (the "quote reply" email/SMS) ---
 
-export const quotePaymentLinkTemplate = (orderId, items, offer: OfferTotals, payUrl) => ({
+export const quotePaymentLinkTemplate = (orderId, items, offer: OfferTotals, payUrl, vatRate: number) => ({
 	subject: `Your Quote is Ready — ${BRAND_NAME} (#${orderId})`,
 	html: `
         <div style="max-width: 600px; margin: auto; font-family: sans-serif; border: 1px solid #eee;">
@@ -865,7 +868,7 @@ export const quotePaymentLinkTemplate = (orderId, items, offer: OfferTotals, pay
             </div>
             <div style="padding: 20px; color: #333;">
                 <p>Good news — we've priced your request <strong>#${orderId}</strong>. Review the details below and pay securely to confirm your order.</p>
-                ${generateVariantOrderTable(items)}
+                ${generateVariantOrderTable(items, vatRate)}
                 ${generateTotalsBlock(offer)}
                 ${
 									offer.advancePaymentPercentage != null && Number(offer.advancePaymentPercentage) < 100
@@ -904,13 +907,13 @@ export const quotePaymentLinkSms = (orderId, offer: OfferTotals, payUrl) => {
 
 // Sent to staff whenever a priced offer goes out — lets the team see what
 // was quoted without waiting for the customer to open the email.
-export const adminQuotePaymentLinkTemplate = (orderId, items, offer: OfferTotals) => ({
+export const adminQuotePaymentLinkTemplate = (orderId, items, offer: OfferTotals, vatRate: number) => ({
 	subject: `Quote Sent: Order #${orderId} — ${Number(offer.total).toLocaleString()} ETB`,
 	html: `
         <div style="font-family: sans-serif; color: #333;">
             <h2 style="color: ${BRAND_PRIMARY_DARK};">Priced Quote Sent to Customer</h2>
             <p>A payment link was just sent for <strong>Order #${orderId}</strong>.</p>
-            ${generateVariantOrderTable(items)}
+            ${generateVariantOrderTable(items, vatRate)}
             ${generateTotalsBlock(offer)}
             <a href="${BRAND_URL}dashboard/quotes"
                style="background: ${BRAND_HEADER_BG}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px;">
@@ -1132,7 +1135,8 @@ export const paymentConfirmedTemplate = (
 	items,
 	offer: OfferTotals,
 	payAmount: number,
-	isAdvance: boolean
+	isAdvance: boolean,
+	vatRate: number
 ) => ({
 	subject: isAdvance
 		? `Advance Payment Received - ${BRAND_NAME} (#${orderId})`
@@ -1145,7 +1149,7 @@ export const paymentConfirmedTemplate = (
             </div>
             <div style="padding: 20px; color: #333;">
                 <p>We've received your ${isAdvance ? 'advance payment' : 'payment'} for order <strong>#${orderId}</strong>. Thank you! Our team is now preparing your order.</p>
-                ${generateVariantOrderTable(items)}
+                ${generateVariantOrderTable(items, vatRate)}
                 ${generateTotalsBlock(offer, { payAmount, isAdvance })}
                 ${
 									isAdvance
@@ -1170,14 +1174,15 @@ export const adminPaymentConfirmedTemplate = (
 	items,
 	offer: OfferTotals,
 	payAmount: number,
-	isAdvance: boolean
+	isAdvance: boolean,
+	vatRate: number
 ) => ({
 	subject: `${isAdvance ? 'Advance Payment' : 'Payment'} Received: Order #${orderId}`,
 	html: `
         <div style="font-family: sans-serif; color: #333;">
             <h2 style="color: ${BRAND_PRIMARY_DARK};">${isAdvance ? 'Advance Payment' : 'Payment'} Confirmed</h2>
             <p>${isAdvance ? 'An advance payment' : 'Payment'} has been confirmed via Chapa for <strong>Order #${orderId}</strong>.</p>
-            ${generateVariantOrderTable(items)}
+            ${generateVariantOrderTable(items, vatRate)}
             ${generateTotalsBlock(offer, { payAmount, isAdvance })}
             ${
 							isAdvance
@@ -1497,7 +1502,7 @@ const generateEstimateTotalsTable = (summary: OrderSummary) => {
                     </td>
                 </tr>
                 ${totalRow('Subtotal (excl. VAT)', `${fmtMoney(summary.subtotalExclVat)} ETB`)}
-                ${totalRow(`VAT (${VAT_RATE}%)`, `${fmtMoney(summary.vatTotal)} ETB`)}
+                ${totalRow(`VAT (${summary.vatRate}%)`, `${fmtMoney(summary.vatTotal)} ETB`)}
                 ${totalRow('Estimated total', `${fmtMoney(summary.grandTotal)} ETB`, true)}
                 <tr>
                     <td colspan="2" style="padding: 4px 12px 12px 12px; font-size: 11px; color: ${TABLE_MUTED}; line-height: 1.5;">

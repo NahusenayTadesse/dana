@@ -1,6 +1,6 @@
 import type { CartItem } from '$lib/hooks/cart.svelte.js';
 import { groupCartItems } from '$lib/cart-groups';
-import { netOf, round2, vatOf, VAT_RATE } from '$lib/vat';
+import { netOf, round2, vatOf } from '$lib/vat';
 import * as m from '$lib/paraglide/messages.js';
 
 /**
@@ -96,7 +96,7 @@ export function sizeText(item: CartItem): string {
  * here is the same block, with the same letter, that the customer built the
  * order out of — "A2" on screen is row 2 of block A on the sheet.
  */
-export function buildOrderSheet(items: CartItem[]): OrderSheet {
+export function buildOrderSheet(items: CartItem[], vatRate: number): OrderSheet {
 	const sections: SheetSection[] = groupCartItems(items).map((group) => {
 		const head = group.items[0];
 		const byUnit: UnitTotal[] = [];
@@ -106,7 +106,7 @@ export function buildOrderSheet(items: CartItem[]): OrderSheet {
 		const rows: SheetRow[] = group.items.map((item, i) => {
 			// Number(): CartItem.price is nullable for quote-only variants, which
 			// never reach the cart (addItem refuses them).
-			const unitPrice = netOf(Number(item.price), item.priceIncludesVat);
+			const unitPrice = netOf(Number(item.price), item.priceIncludesVat, vatRate);
 			const totalLength = item.length == null ? null : round2(item.length * item.quantity);
 
 			totalQuantity += item.quantity;
@@ -147,8 +147,8 @@ export function buildOrderSheet(items: CartItem[]): OrderSheet {
 
 	for (const item of items) {
 		totalQuantity += item.quantity;
-		subTotal += netOf(Number(item.price), item.priceIncludesVat) * item.quantity;
-		vat += vatOf(Number(item.price), item.priceIncludesVat) * item.quantity;
+		subTotal += netOf(Number(item.price), item.priceIncludesVat, vatRate) * item.quantity;
+		vat += vatOf(Number(item.price), item.priceIncludesVat, vatRate) * item.quantity;
 		if (item.length != null) {
 			addLength(allUnits, item.length * item.quantity, item.lengthUnit ?? '');
 		}
@@ -160,7 +160,7 @@ export function buildOrderSheet(items: CartItem[]): OrderSheet {
 		totalLengthText: lengthText(allUnits),
 		subTotal: round2(subTotal),
 		vat: round2(vat),
-		vatRate: VAT_RATE,
+		vatRate,
 		totalAmount: round2(subTotal + vat)
 	};
 }

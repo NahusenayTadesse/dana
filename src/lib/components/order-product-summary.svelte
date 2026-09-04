@@ -6,6 +6,7 @@
 	import { downloadCSV, printElement } from '$lib/print';
 	import OrderSheet from './order-sheet.svelte';
 	import { buildOrderSheet, orderSheetCsvRows } from '$lib/order-sheet';
+	import { siteVatRate } from '$lib/siteSettings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	/**
@@ -39,7 +40,7 @@
 	// export buttons themselves (they carry data-print-hide).
 	let sheetNode: HTMLDivElement | null = $state(null);
 
-	const orderSheet = $derived(buildOrderSheet(items));
+	const orderSheet = $derived(buildOrderSheet(items, siteVatRate()));
 
 	function savePdf() {
 		if (sheetNode) printElement(sheetNode, { fileName, orientation: 'portrait' });
