@@ -42,6 +42,8 @@
 
 <svelte:head>
 	<title>{status} | {m.error_page_meta_title()}</title>
+	<meta name="description" content={getErrorDescription(status)} />
+	<meta name="robots" content="noindex" />
 </svelte:head>
 
 <section

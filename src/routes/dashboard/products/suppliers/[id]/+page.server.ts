@@ -5,6 +5,7 @@ import { eq, count } from 'drizzle-orm';
 import { add, edit } from './schema';
 import { db } from '$lib/server/db';
 import { products, productSuppliers as supplySuppliers } from '$lib/server/db/schema';
+import { error } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import type { PageServerLoad } from './$types.js';
 export const load: PageServerLoad = async ({ params }) => {
@@ -27,6 +28,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		.where(eq(supplySuppliers.id, Number(id)))
 		.groupBy(supplySuppliers.id)
 		.then((rows) => rows[0]);
+
+	if (!single) error(404, 'Supplier not found');
 
 	return {
 		form,

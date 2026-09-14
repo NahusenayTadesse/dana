@@ -7,7 +7,27 @@
 // widening had to be cast away at each call site, and a unit value outside the
 // set would have flowed unchecked into unit-conversion and display logic.
 
-export type WidthUnit = 'mm' | 'cm' | 'm' | 'in' | 'ft';
-export type ThicknessUnit = 'mm' | 'gauge';
-export type LengthUnit = 'mm' | 'm' | 'ft';
+export const WIDTH_UNITS = ['mm', 'cm', 'm', 'in', 'ft'] as const;
+export const THICKNESS_UNITS = ['mm', 'gauge'] as const;
+export const LENGTH_UNITS = ['mm', 'm', 'ft'] as const;
+
+export type WidthUnit = (typeof WIDTH_UNITS)[number];
+export type ThicknessUnit = (typeof THICKNESS_UNITS)[number];
+export type LengthUnit = (typeof LENGTH_UNITS)[number];
 export type WeightUnit = 'kg' | 'ton';
+
+const UNIT_NAMES: Record<WidthUnit | ThicknessUnit | LengthUnit, string> = {
+	mm: 'Millimeter',
+	cm: 'Centimeter',
+	m: 'Meter',
+	in: 'Inch',
+	ft: 'Feet',
+	gauge: 'Gauge'
+};
+
+// Dashboard select options. The thickness and length forms used to offer all
+// five width units, so picking anything the column's enum lacks failed on save
+// (and "gauge" could never be chosen at all).
+export function unitOptions(units: readonly (keyof typeof UNIT_NAMES)[]) {
+	return units.map((value) => ({ value, name: UNIT_NAMES[value] }));
+}

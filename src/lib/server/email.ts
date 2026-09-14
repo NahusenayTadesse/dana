@@ -149,12 +149,20 @@ export const sendSms = async (phone: string, msg: string) => {
 
 		const data = await res.json();
 
-		if (data.message_status !== 'success') {
+		// GeezSMS answers a successful send with
+		//   { error: false, msg: "SMS has been sent successfully.", sms_units, … }
+		// and a failure with `error: true` (an unknown token comes back as
+		// `{ error: true, msg: "API Not found" }`). There is no `message_status`
+		// field — testing for one meant EVERY delivered message was logged as
+		// "SMS send failed", so the logs said texting was broken while the
+		// messages were arriving. `message_status` is still honoured in case an
+		// older account shape returns it.
+		const failed = res.status >= 400 || data?.error === true || data?.message_status === 'failed';
+
+		if (failed) {
 			console.error('SMS send failed:', data);
 			return { success: false, message: data };
-		} 
-
-        console.log(data)
+		}
 
 		return { success: true, message: data };
 	} catch (err) {
@@ -643,8 +651,13 @@ export async function sendResetPasswordEmail(toEmail: string, newPassword: strin
 	await transporter.sendMail(mailOptions);
 
 	// Optionally also send an SMS if a phone number was provided.
+	//
+	// Via sendSmsToEthPhone, not sendSms directly: GeezSMS only accepts numbers
+	// already in 2519…/2517… form, so passing a raw "0947…" straight through —
+	// which is the shape every phone field in this app stores — failed every
+	// time. Every other SMS caller goes through the normaliser.
 	if (phone) {
-		await sendSms(phone, stripHtml(mailOptions.html));
+		await sendSmsToEthPhone(phone, stripHtml(mailOptions.html));
 	}
 
 	return { success: true, message: 'Reset email sent successfully' };

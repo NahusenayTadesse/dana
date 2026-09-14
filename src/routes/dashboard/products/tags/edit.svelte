@@ -33,7 +33,6 @@
 	$form.id = id;
 	$form.name = name;
 
-	$form.status = status;
 
 	import { toast } from 'svelte-sonner';
 	import InputComp from '$lib/formComponents/InputComp.svelte';

@@ -10,6 +10,7 @@ import {
 	user
 } from '$lib/server/db/schema';
 import { eq, sql, getTableColumns } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ params }) => {
@@ -44,6 +45,9 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		.where(eq(event.id, Number(id)))
 		.limit(1)
 		.then((rows) => rows[0]);
+
+	// A deleted or mistyped id crashed the page with "Invalid time value" (500).
+	if (!product) error(404, 'Blog post not found');
 
 	const form = await superValidate(product, zod4(edit));
 	const galleryEdit = await superValidate(zod4(editGallery));

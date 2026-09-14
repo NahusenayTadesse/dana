@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '$lib/components/Seo.svelte';
 	import PortfolioHero from '$lib/components/blogs/portfolio-hero.svelte';
 	import PortfolioFilters from '$lib/components/blogs/portfolio-filters.svelte';
 	import PortfolioGrid from '$lib/components/blogs/portfolio-grid.svelte';
@@ -34,25 +35,7 @@
 	const resultsCount = $derived(filteredItems.length);
 </script>
 
-<svelte:head>
-	<title>{m.blog_meta_title()}</title>
-	<meta name="title" content={m.blog_meta_title()} />
-	<meta name="description" content={m.blog_meta_description()} />
-	<meta name="keywords" content={m.blog_meta_keywords()} />
-
-	<meta property="og:type" content="website" />
-	<meta property="og:url" content="https://dana.et/blog" />
-	<meta property="og:title" content={m.blog_meta_title()} />
-	<meta property="og:description" content={m.blog_og_description()} />
-	<meta property="og:image" content="https://dana.et/logo.png" />
-
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content={m.blog_meta_title()} />
-	<meta name="twitter:description" content={m.blog_twitter_description()} />
-	<meta name="twitter:image" content="https://dana.et/logo.png" />
-
-	<link rel="canonical" href="https://dana.et/blog" />
-</svelte:head>
+<Seo title={m.blog_meta_title()} description={m.blog_meta_description()} />
 
 <div class="min-h-dvh  text-foreground">
 	<PortfolioHero />

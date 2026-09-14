@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '$lib/components/Seo.svelte';
 	import {
 		Card,
 		CardHeader,
@@ -167,10 +168,7 @@
 	});
 </script>
 
-<svelte:head>
-	<title>{m.contact_meta_title()}</title>
-	<meta name="description" content={m.contact_meta_description()} />
-</svelte:head>
+<Seo title={m.contact_meta_title()} description={m.contact_meta_description()} />
 
 <div
 	class="relative min-h-dvh w-full overflow-hidden px-4 py-20 text-foreground transition-colors duration-300 sm:px-6 lg:px-8"
@@ -192,11 +190,11 @@
 			>
 				{m.contact_support_center_badge()}
 			</span>
-			<h2
+			<h1
 				class="bg-gradient-to-r from-foreground via-foreground to-foreground/60 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl"
 			>
 				{m.contact_heading()}
-			</h2>
+			</h1>
 			<p class="max-w-xl text-base text-muted-foreground">
 				{m.contact_description()}
 			</p>

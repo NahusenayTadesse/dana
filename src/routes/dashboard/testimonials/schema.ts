@@ -24,10 +24,13 @@ export const editPaymentMethod = z.object({
 	name: z.string('Name of Payment Method is required').min(2).max(50),
 	position: z.string().optional(),
 	testimonial: z.string(),
+	// Optional on edit: a required file meant correcting a typo in the text
+	// failed validation unless the avatar was uploaded again.
 	avatar: z
 		.instanceof(File)
 		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
 		.refine((file) => ACCEPTED_FILE_TYPES.includes(file.type), 'Invalid file type.')
+		.optional()
 });
 
 export type EditPaymentMethod = z.infer<typeof editPaymentMethod>;

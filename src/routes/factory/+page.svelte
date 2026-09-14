@@ -1,5 +1,6 @@
 <script>
 	import { m } from '$lib/paraglide/messages.js';
+	import Seo from '$lib/components/Seo.svelte';
 	import { PaintRoller, Layers, House, Wrench, ArrowRight } from '@lucide/svelte';
 	import { siteImage } from '$lib/siteImages.svelte';
 	import { siteSetting, siteSettingText } from '$lib/siteSettings.svelte';
@@ -138,6 +139,8 @@
 	// reused hidden state for the reveal action
 	const hidden = 'opacity-0 translate-y-5 transition-all duration-700 ease-out';
 </script>
+
+<Seo title={m.factory_meta_title()} description={m.factory_meta_description()} />
 
 <main class="bg-background text-foreground">
 	<!-- HERO -->

@@ -30,8 +30,14 @@ import { vatRateOf } from '$lib/siteSettings';
  * Where staff notifications go. Business Settings can point them at a sales
  * inbox; left blank they fall back to the mailbox the site sends from, which
  * is what happened before the setting existed.
+ *
+ * Exported because the three notifications the setting's own description names
+ * — "new order" and "new quote request" — are raised outside this module (the
+ * checkout, quote and contact forms) and were hardcoding SMTP_USER, so setting
+ * a sales inbox moved every alert EXCEPT the ones staff actually configured it
+ * for. There must be exactly one answer to "where do staff alerts go".
  */
-async function alertsRecipient(): Promise<string> {
+export async function alertsRecipient(): Promise<string> {
 	const settings = await getSiteSettings();
 	return settings['alerts_recipient_email']?.trim() || USER;
 }

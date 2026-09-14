@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { THICKNESS_UNITS, unitOptions } from '$lib/units';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { SquarePen, Save } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -106,13 +107,7 @@
 			label="Unit"
 			type="select"
 			name="unit"
-items={[
-  { value: 'mm', name: 'Millimeter' },
-  { value: 'cm', name: 'Centimeter' },
-  { value: 'm', name: 'Meter' },
-  { value: 'in', name: 'Inch' },
-  { value: 'ft', name: 'Feet' },
-]}			required={true}
+items={unitOptions(THICKNESS_UNITS)}			required={true}
 			rows={10}
 		/>
 

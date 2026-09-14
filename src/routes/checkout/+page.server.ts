@@ -11,7 +11,7 @@ import {
 } from '$lib/server/email';
 import { buildOrderSummary, type OrderSummary } from '$lib/server/orderSummary';
 
-import { SMTP_USER as USER } from '$env/static/private';
+import { alertsRecipient } from '$lib/server/notifications';
 
 import { addUser, loginSchema } from '$lib/ZodSchema';
 import { add } from './schema';
@@ -376,9 +376,12 @@ export const actions: Actions = {
 				itemLabel,
 				summary
 			});
-			sendEmail(USER, adminTemplate.subject, adminTemplate.html).catch((err) =>
-				console.error('Email Error (Admin):', err)
-			);
+			// Business Settings → "Send order and quote alerts to". Hardcoding
+			// SMTP_USER meant the one notification that setting explicitly names
+			// ignored it, silently.
+			alertsRecipient()
+				.then((to) => sendEmail(to, adminTemplate.subject, adminTemplate.html))
+				.catch((err) => console.error('Email Error (Admin):', err));
 		}
 
 		// Redirect rather than returning a success message. Returning one left the

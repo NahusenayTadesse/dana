@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '$lib/components/Seo.svelte';
 	import ProductCard from '$lib/components/product-card.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -245,10 +246,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{m.shop_meta_title()}</title>
-	<meta name="description" content={m.shop_meta_description()} />
-</svelte:head>
+<Seo title={m.shop_meta_title()} description={m.shop_meta_description()} />
 
 <div class="min-h-screen antialiased transition-colors duration-300">
 	<!-- top-[--header-h], not top-0: the site header is sticky top-0 z-50, so a

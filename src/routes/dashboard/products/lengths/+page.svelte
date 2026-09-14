@@ -1,4 +1,5 @@
 <script>
+	import { LENGTH_UNITS, unitOptions } from '$lib/units';
 	import { renderComponent } from '$lib/components/ui/data-table/index.js';
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
@@ -130,13 +131,7 @@
 			label="Unit"
 			type="select"
 			name="unit"
-			items={[
-				{ value: 'mm', name: 'Millimeter' },
-				{ value: 'cm', name: 'Centimeter' },
-				{ value: 'm', name: 'Meter' },
-				{ value: 'in', name: 'Inch' },
-				{ value: 'ft', name: 'Feet' }
-			]}
+			items={unitOptions(LENGTH_UNITS)}
 			required={true}
 			rows={10}
 		/>

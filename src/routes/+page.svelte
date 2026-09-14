@@ -20,11 +20,53 @@
 
 	// Keeps setLocale available without changing this page UI.
 	void setLocale;
+
+	import Seo from '$lib/components/Seo.svelte';
+	import { absoluteUrl, siteOrigin } from '$lib/seo';
+	import { siteImage } from '$lib/siteImages.svelte';
+	import { siteSetting } from '$lib/siteSettings.svelte';
+
+	const origin = siteOrigin();
+
+	// Lets search engines tie the site to the business: knowledge panel name,
+	// logo, phone numbers and social profiles, all from dashboard settings.
+	const jsonLd = $derived({
+		'@context': 'https://schema.org',
+		'@graph': [
+			{
+				'@type': 'Organization',
+				'@id': `${origin}/#organization`,
+				name: m.brand_name(),
+				url: `${origin}/`,
+				logo: absoluteUrl(siteImage('global.logo'), origin),
+				email: siteSetting('contact_email_primary') || undefined,
+				telephone: siteSetting('contact_phone_secondary') || undefined,
+				foundingDate: '2023',
+				address: {
+					'@type': 'PostalAddress',
+					addressLocality: 'Adama',
+					addressRegion: 'Oromia',
+					addressCountry: 'ET'
+				},
+				sameAs: [
+					siteSetting('social_facebook'),
+					siteSetting('social_instagram'),
+					siteSetting('social_tiktok'),
+					siteSetting('social_telegram')
+				].filter(Boolean)
+			},
+			{
+				'@type': 'WebSite',
+				'@id': `${origin}/#website`,
+				name: m.brand_name(),
+				url: `${origin}/`,
+				publisher: { '@id': `${origin}/#organization` }
+			}
+		]
+	});
 </script>
 
-<svelte:head>
-	<title>{m.home_meta_title()}</title>
-</svelte:head>
+<Seo title={m.home_meta_title()} description={m.home_meta_description()} {jsonLd} />
 <Hero />
 
 <Home testimonials={data?.testimonialList}>

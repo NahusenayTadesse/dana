@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { user, roles } from '$lib/server/db/schema';
+import { getRoleName } from '$lib/server/adminGuard';
 import { error, redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
@@ -18,12 +18,7 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 	// admin boundary used to rest on a roleName computed in the ROOT layout,
 	// which meant any change to that unrelated query silently widened access to
 	// the whole dashboard.
-	const roleName = await db
-		.select({ name: roles.name })
-		.from(user)
-		.leftJoin(roles, eq(user.roleId, roles.id))
-		.where(eq(user.id, locals.user.id))
-		.then((rows) => rows[0]?.name ?? null);
+	const roleName = await getRoleName(locals.user.id);
 
 	if (roleName !== 'Admin') {
 		error(404, 'Not Allowed');

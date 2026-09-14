@@ -24,6 +24,8 @@
 		description: string;
 	} = $props();
 
+	let open = $state(false);
+
 	const { form, errors, enhance, delayed, message, allErrors } = superForm(data, {
 		resetForm: false
 	});
@@ -48,7 +50,7 @@
 	});
 </script>
 
-<DialogComp title={icon ? 'Edit' : name} variant="ghost" IconComp={icon ? SquarePen : undefined}>
+<DialogComp bind:open title={icon ? 'Edit' : name} variant="ghost" IconComp={icon ? SquarePen : undefined}>
 	<form {action} use:enhance method="post" id="edit" class="flex w-full flex-col gap-4 p-4">
 		<Errors allErrors={$allErrors} />
 		<input type="hidden" name="id" value={$form.id} />

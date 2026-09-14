@@ -23,13 +23,6 @@
 			}
 		}
 	});
-
-	let videoId = $derived.by(() => {
-		const regex =
-			/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-		const match = rawUrl?.match(regex);
-		return match ? match[1] : null;
-	});
 </script>
 
 <svelte:head>

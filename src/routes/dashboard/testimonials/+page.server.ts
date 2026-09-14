@@ -82,14 +82,15 @@ export const actions: Actions = {
 		const { id, name, position, testimonial, avatar } = form.data;
 
 		try {
-			const avatarFile = await saveUploadedFile(avatar);
+			// Keep the current avatar unless a new one was chosen.
+			const avatarFile = avatar?.size ? await saveUploadedFile(avatar) : undefined;
 			await db
 				.update(paymentMethods)
 				.set({
 					name,
 					position,
 					message: testimonial,
-					avatar: avatarFile,
+					...(avatarFile ? { avatar: avatarFile } : {}),
 					updatedBy: locals?.user?.id
 				})
 				.where(eq(paymentMethods.id, id));

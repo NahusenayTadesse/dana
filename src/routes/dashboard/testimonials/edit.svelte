@@ -28,6 +28,8 @@
 		icon: boolean;
 	} = $props();
 
+	let open = $state(false);
+
 	const { form, errors, enhance, delayed, message, allErrors } = superForm(data, {
 		resetForm: false
 	});
@@ -52,7 +54,7 @@
 	});
 </script>
 
-<DialogComp title={icon ? 'Edit' : name} variant="ghost" IconComp={icon ? SquarePen : undefined}>
+<DialogComp bind:open title={icon ? 'Edit' : name} variant="ghost" IconComp={icon ? SquarePen : undefined}>
 	<form
 		{action}
 		use:enhance

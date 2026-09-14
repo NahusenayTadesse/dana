@@ -5,6 +5,7 @@ import type { Handle } from '@sveltejs/kit';
 import { building } from '$app/environment';
 import { auth } from '$lib/server/auth';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
+import { isAdmin } from '$lib/server/adminGuard';
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	const session = await auth.api.getSession({ headers: event.request.headers });
@@ -29,4 +30,18 @@ const handleParaglide: Handle = ({ event, resolve }) =>
 		});
 	});
 
-export const handle: Handle = sequence(handleBetterAuth, handleParaglide);
+// Form actions never run layout `load`, so the Admin check in
+// dashboard/+layout.server.ts guarded the pages but not a single POST: anyone,
+// signed in or not, could call ?/add, ?/edit, ?/delete on every dashboard
+// route. Page loads (GET) keep the layout's redirect-to-login behaviour.
+const handleDashboardActions: Handle = async ({ event, resolve }) => {
+	const isRead = event.request.method === 'GET' || event.request.method === 'HEAD';
+
+	if (!isRead && event.route.id?.startsWith('/dashboard') && !(await isAdmin(event.locals.user?.id))) {
+		return new Response('Not allowed', { status: event.locals.user ? 403 : 401 });
+	}
+
+	return resolve(event);
+};
+
+export const handle: Handle = sequence(handleBetterAuth, handleDashboardActions, handleParaglide);

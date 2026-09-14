@@ -9,7 +9,5 @@ export const editRoleSchema = z.object({
 	description: z
 		.string()
 		.min(1, 'Role description is required')
-		.max(500, 'Role description must be under 500 characters'),
-
-	permissions: z.array(z.string().min(1)).nonempty('At least one permission must be selected')
+		.max(500, 'Role description must be under 500 characters')
 });

@@ -24,6 +24,7 @@ import {
 } from '$lib/server/db/schema';
 import { calculateOrderPricing, type PricingBasis } from '$lib/server/pricing';
 import { sendQuotePaymentLink } from '$lib/server/notifications';
+import { ensureQuoteCustomer } from '$lib/server/quoteCustomers';
 import type { Actions, PageServerLoad } from './$types';
 
 const spec = (value: string | number | null, unit: string | null) =>
@@ -168,11 +169,19 @@ export const actions: Actions = {
 		if (!quote) return fail(404);
 		if (quote.orderId) return { started: true };
 
+		// An order created without a customer is a dead end: it can be priced but
+		// never sent (sendQuotePaymentLink reads the address off the customer row)
+		// and never paid (/pay/[token] refuses to render without one). The quote
+		// request carries the contact details, so resolve them into a real
+		// customer up front rather than inheriting a null.
+		const resolved = await ensureQuoteCustomer(quoteId);
+		if (resolved.error) return fail(400, { message: resolved.error });
+
 		try {
 			const [order] = await db
 				.insert(orders)
 				.values({
-					customerId: quote.customerId,
+					customerId: resolved.customerId,
 					status: 'pending',
 					requestStatus: 'pending',
 					createdBy: locals?.user?.id
@@ -399,6 +408,18 @@ export const actions: Actions = {
 
 			orderId = order.id;
 			quoteRequestId = quote.id;
+
+			// Orders started before this was enforced (and any whose customer row
+			// has since been deleted) still carry a null customerId, which the
+			// notification below can only report as "missing customer" — a state
+			// no dashboard action could clear. Heal it here from the quote's own
+			// contact details so an existing broken order becomes sendable.
+			if (!order.customerId) {
+				const resolved = await ensureQuoteCustomer(quote.id);
+				if (resolved.error) {
+					return message(form, { type: 'error', text: resolved.error }, { status: 400 });
+				}
+			}
 
 			// Money plumbing only. This half IS idempotent — a retry updates the
 			// same transaction rather than creating a second one — so it is safe

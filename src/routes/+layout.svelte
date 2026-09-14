@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Pathname } from '$app/types';
 	import { resolve } from '$app/paths';
-	import { locales, localizeHref } from '$lib/paraglide/runtime';
+	import { deLocalizeUrl, getLocale, locales, localizeHref } from '$lib/paraglide/runtime';
+	import { siteOrigin } from '$lib/seo';
 	import './layout.css';
 	import { getFlash } from 'sveltekit-flash-message';
 	import { page } from '$app/state';
@@ -41,6 +42,12 @@
 
 	setCart();
 
+	// One canonical per page: no query string (shop filters, quote params) and
+	// no /am prefix, since the language comes from a cookie, not the URL.
+	const canonicalUrl = $derived(
+		siteOrigin() + deLocalizeUrl(page.url).pathname.replace(/(.)\/$/, '$1')
+	);
+
 	$effect(() => {
 		if (!$flash) return;
 		if (page.data.flash?.type === 'success') toast.success($flash.message);
@@ -61,7 +68,17 @@
 	});
 </script>
 
-<svelte:head><link rel="icon" href={siteImage('global.favicon')} /></svelte:head>
+<svelte:head>
+	<link rel="icon" href={siteImage('global.favicon')} />
+	<link rel="apple-touch-icon" href="/logo192.png" />
+	<meta name="theme-color" content="#1B3A8C" />
+	{#if !page.error && !page.url.pathname.startsWith('/dashboard')}
+		<link rel="canonical" href={canonicalUrl} />
+		<meta property="og:url" content={canonicalUrl} />
+	{/if}
+	<meta property="og:site_name" content={m.brand_name()} />
+	<meta property="og:locale" content={getLocale() === 'am' ? 'am_ET' : 'en_US'} />
+</svelte:head>
 <ModeWatcher />
 
 <Toaster position="bottom-right" richColors closeButton />

@@ -5,6 +5,10 @@
 	let { children, data } = $props();
 </script>
 
+<svelte:head>
+	<meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
 <Sidebar.Provider>
 	<AppSidebar name={data.name} />
 	<main class="flex w-full min-w-0 flex-1 flex-col">

@@ -7,7 +7,7 @@ import {
 	adminContactTemplate,
 	contactReceivedSms
 } from '$lib/server/email';
-import { SMTP_USER } from '$env/static/private';
+import { alertsRecipient } from '$lib/server/notifications';
 import { contactSchema } from './schema';
 import { db } from '$lib/server/db';
 import { contactMessages } from '$lib/server/db/schema';
@@ -41,10 +41,14 @@ export const actions: Actions = {
 			// `.catch` is what makes that safe: without it a mail outage became
 			// an unhandled rejection that escaped this try block and took the
 			// whole Node process down, one contact-form submission at a time.
+			// Business Settings → "Send order and quote alerts to". This used to
+			// go to SMTP_USER unconditionally, so a site that pointed its alerts
+			// at a sales inbox still had contact messages land in the sending
+			// mailbox — with nothing to indicate the setting was being ignored.
 			const adminMail = adminContactTemplate(form.data);
-			sendEmail(SMTP_USER, adminMail.subject, adminMail.html).catch((err) =>
-				console.error('Email Error (Admin contact):', err)
-			);
+			alertsRecipient()
+				.then((to) => sendEmail(to, adminMail.subject, adminMail.html))
+				.catch((err) => console.error('Email Error (Admin contact):', err));
 
 			const userMail = customerContactTemplate(name, subject);
 			sendEmail(

@@ -75,11 +75,11 @@
 				{m.faq_customer_support_badge()}
 			</span>
 
-			<h1
+			<h2
 				class="bg-gradient-to-r from-foreground via-foreground to-foreground/60 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl"
 			>
 				{m.faq_heading()}
-			</h1>
+			</h2>
 
 			<p class="max-w-xl text-base text-muted-foreground">
 				{m.faq_description()}

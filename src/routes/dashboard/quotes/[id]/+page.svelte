@@ -88,7 +88,16 @@
 			action="?/startOrder"
 			use:svelteEnhance={() => {
 				startingOrder = true;
-				return async ({ update }) => {
+				return async ({ result, update }) => {
+					// Starting an order can now fail for a reason staff can act on
+					// (a quote with no email address can't be turned into a
+					// customer). Without this the action failed silently and the
+					// button just stopped spinning.
+					if (result.type === 'failure') {
+						toast.error(
+							(result.data?.message as string | undefined) ?? 'Could not start an order for this quote.'
+						);
+					}
 					await update();
 					startingOrder = false;
 				};

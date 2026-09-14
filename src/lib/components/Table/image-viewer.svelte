@@ -9,6 +9,9 @@
 
 	const { src, alt = 'Image' }: Props = $props();
 
+	// A row with no image used to request a bare /files/ and 404 on every render.
+	const missing = $derived(!src);
+
 	let isOpen = $state(false);
 	let hasError = $state(false);
 
@@ -24,7 +27,7 @@
 				{...props}
 				class="group relative size-12 overflow-hidden rounded-md border border-border bg-muted transition-all hover:ring-2 hover:ring-ring hover:ring-offset-2 hover:ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden"
 			>
-				{#if hasError}
+				{#if hasError || missing}
 					<div class="flex size-full items-center justify-center">
 						<ImageIcon class="size-5 text-muted-foreground" />
 					</div>
@@ -41,11 +44,11 @@
 	</DialogTrigger>
 	<DialogContent class="max-w-2xl p-2">
 		<div class="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
-			{#if hasError}
+			{#if hasError || missing}
 				<div class="flex size-full items-center justify-center">
 					<div class="flex flex-col items-center gap-2 text-muted-foreground">
 						<ImageIcon class="size-12" />
-						<span class="text-sm">Failed to load image</span>
+						<span class="text-sm">{missing ? 'No image' : 'Failed to load image'}</span>
 					</div>
 				</div>
 			{:else}

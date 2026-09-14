@@ -26,7 +26,7 @@ import {
 	quoteRequestReceivedSms,
 	sendSmsToEthPhone
 } from '$lib/server/email';
-import { SMTP_USER as USER } from '$env/static/private';
+import { alertsRecipient } from '$lib/server/notifications';
 import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile } from '$lib/server/upload';
 
@@ -148,7 +148,44 @@ export const actions: Actions = {
 						.limit(1)
 						.then((rows) => rows[0]);
 
-					customerInfo = customer;
+					if (!customer) {
+						// Signed in, but no customers row was ever created for this
+						// user — so `customerInfo` stayed undefined and both the
+						// order and the quote request were written with a NULL
+						// customerId. That is the state the dashboard can price but
+						// never send: sendQuotePaymentLink reads the address off the
+						// customer row, and /pay/[token] refuses to render without
+						// one. Create the profile instead. (Checkout already does
+						// this; the quote form was the remaining way in.)
+						if (!locals.user.email) {
+							throw new Error(
+								'Your account has no email on file. Add one in Account → Settings, then submit again.'
+							);
+						}
+
+						const resolvedDocs = docs ? await saveUploadedFile(docs) : null;
+
+						const [inserted] = await tx
+							.insert(customers)
+							.values({
+								name: name ?? locals.user.name ?? locals.user.email,
+								email: locals.user.email,
+								phone,
+								tinNo,
+								docs: resolvedDocs,
+								userId: locals.user.id
+							})
+							.$returningId();
+
+						customerInfo = {
+							value: inserted.id,
+							name: name ?? locals.user.name ?? locals.user.email,
+							email: locals.user.email,
+							phone: phone ?? null
+						};
+					} else {
+						customerInfo = customer;
+					}
 				} else {
 					if (!email) {
 						throw new Error('Email is required to submit a quote request.');
@@ -356,9 +393,12 @@ export const actions: Actions = {
 			message: userMessage,
 			itemLabel
 		});
-		sendEmail(USER, adminTemplate.subject, adminTemplate.html).catch((err) =>
-			console.error('Email Error (Admin):', err)
-		);
+		// Business Settings → "Send order and quote alerts to". Hardcoding
+		// SMTP_USER meant the one notification that setting explicitly names
+		// ignored it, silently.
+		alertsRecipient()
+			.then((to) => sendEmail(to, adminTemplate.subject, adminTemplate.html))
+			.catch((err) => console.error('Email Error (Admin):', err));
 
 		return message(form, {
 			type: 'success',

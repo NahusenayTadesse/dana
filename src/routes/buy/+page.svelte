@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '$lib/components/Seo.svelte';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
 	import BuyProductCard from '$lib/components/buy-product-card.svelte';
@@ -106,10 +107,7 @@
 	);
 </script>
 
-<svelte:head>
-	<title>{m.buy_meta_title()}</title>
-	<meta name="description" content={m.buy_meta_description()} />
-</svelte:head>
+<Seo title={m.buy_meta_title()} description={m.buy_meta_description()} />
 
 <div class="min-h-screen bg-slate-50 pb-24 antialiased dark:bg-slate-950">
 	<!-- Step-by-step banner, plain language, no jargon -->

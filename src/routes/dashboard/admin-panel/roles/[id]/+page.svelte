@@ -30,7 +30,7 @@
 			name: 'User Count',
 			value: data?.singleUser?.userCount || 0
 		},
-		{ name: 'Permission Count', value: data?.permissionList?.length || 0 }
+		{ name: 'Permission Count', value: data?.singleUser?.permissionsCount || 0 }
 	]);
 
 	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = superForm(
@@ -61,7 +61,6 @@
 
 	$form.name = data.singleUser?.name;
 	$form.description = data.singleUser?.description || '';
-	// $form.permissions = data.permissionList.map((item) => String(item.id)) || [];
 </script>
 
 <svelte:head>
@@ -112,16 +111,6 @@
 					{errors}
 					placeholder="Enter Role Description"
 				/>
-				<InputComp
-					label="Permissions"
-					name="permissions"
-					type="checkbox"
-					{form}
-					{errors}
-					placeholder="Enter Role Name"
-					items={data?.allPermissions}
-				/>
-
 				<Button type="submit" class="mt-4" form="main">
 					{#if $delayed}
 						<LoadingBtn name="Saving Change" />

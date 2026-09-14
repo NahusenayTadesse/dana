@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
-export const widthUnitEnum = z.enum(['mm', 'cm', 'm', 'in', 'ft']);
+import { THICKNESS_UNITS } from '$lib/units';
+export const widthUnitEnum = z.enum(THICKNESS_UNITS);
 export const add = z.object({
 	value: z
     .string()

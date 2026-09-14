@@ -1,7 +1,7 @@
     {
     "name": "Dana Steel",
     "short_name": "Dana Steel",
-    "start_url": "/dash/",
+    "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#1B3A8C",

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Login from '$lib/forms/Login.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	import type { ActionData, PageData } from './$types';
@@ -7,9 +8,7 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<svelte:head>
-	<title>{m.login_title()}</title>
-</svelte:head>
+<Seo title={m.login_meta_title()} description={m.login_meta_description()} />
 
 <div class="flex h-screen w-full items-center justify-center px-4">
 	<Login data={data?.form} action="?/login" />

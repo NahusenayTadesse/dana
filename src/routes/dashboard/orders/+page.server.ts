@@ -501,17 +501,31 @@ export const actions: Actions = {
 				createdBy: locals?.user?.id
 			});
 
-			await sendOrderAdjustmentNotice(orderId, { type, amount, reason, causedBy: 'company' }).catch((err) =>
-				console.error('Adjustment notice failed:', err)
-			);
+			// The adjustment is committed, so a mail failure must not fail the
+			// action — but it must not be hidden either. "Adjustment applied."
+			// on its own told staff the customer had been informed when the
+			// notification (and, for an addition, the payment link they are now
+			// waiting on) never left the building.
+			let notifyFailed = false;
+
+			await sendOrderAdjustmentNotice(orderId, { type, amount, reason, causedBy: 'company' }).catch((err) => {
+				notifyFailed = true;
+				console.error('Adjustment notice failed:', err);
+			});
 
 			if (type === 'addition') {
-				await sendBalancePaymentLink(orderId, url.origin).catch((err) =>
-					console.error('Adjustment balance link failed:', err)
-				);
+				await sendBalancePaymentLink(orderId, url.origin).catch((err) => {
+					notifyFailed = true;
+					console.error('Adjustment balance link failed:', err);
+				});
 			}
 
-			return message(form, { type: 'success', text: 'Adjustment applied.' });
+			return message(form, {
+				type: notifyFailed ? 'error' : 'success',
+				text: notifyFailed
+					? 'Adjustment applied, but the customer could not be notified. Check the order and resend the balance link.'
+					: 'Adjustment applied.'
+			});
 		} catch (err) {
 			console.error('Add adjustment failed:', err);
 			return message(form, { type: 'error', text: 'Could not apply the adjustment.' }, { status: 500 });
@@ -551,9 +565,15 @@ export const actions: Actions = {
 				})
 				.where(eq(orderAdjustments.id, adjustmentId));
 
-			await sendAdjustmentDecisionNotice(adjustment.orderId, approve, note).catch((err) =>
-				console.error('Adjustment decision notice failed:', err)
-			);
+			// Same reasoning as addAdjustment: the decision is recorded either
+			// way, but staff must not read "Adjustment approved." as "and the
+			// customer knows".
+			let notifyFailed = false;
+
+			await sendAdjustmentDecisionNotice(adjustment.orderId, approve, note).catch((err) => {
+				notifyFailed = true;
+				console.error('Adjustment decision notice failed:', err);
+			});
 
 			if (approve) {
 				await sendOrderAdjustmentNotice(adjustment.orderId, {
@@ -561,16 +581,24 @@ export const actions: Actions = {
 					amount: Number(adjustment.amount),
 					reason: adjustment.reason,
 					causedBy: adjustment.causedBy
-				}).catch((err) => console.error('Adjustment notice failed:', err));
+				}).catch((err) => {
+					notifyFailed = true;
+					console.error('Adjustment notice failed:', err);
+				});
 
 				if (adjustment.type === 'addition') {
-					await sendBalancePaymentLink(adjustment.orderId, url.origin).catch((err) =>
-						console.error('Adjustment balance link failed:', err)
-					);
+					await sendBalancePaymentLink(adjustment.orderId, url.origin).catch((err) => {
+						notifyFailed = true;
+						console.error('Adjustment balance link failed:', err);
+					});
 				}
 			}
 
-			return message(form, { type: 'success', text: approve ? 'Adjustment approved.' : 'Adjustment rejected.' });
+			const decision = approve ? 'Adjustment approved.' : 'Adjustment rejected.';
+			return message(form, {
+				type: notifyFailed ? 'error' : 'success',
+				text: notifyFailed ? `${decision} The customer could not be notified — please follow up.` : decision
+			});
 		} catch (err) {
 			console.error('Decide adjustment failed:', err);
 			return message(form, { type: 'error', text: 'Could not process the decision.' }, { status: 500 });

@@ -9,6 +9,10 @@
 	let { children, data } = $props();
 </script>
 
+<svelte:head>
+	<meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
 <Sidebar.Provider>
 	<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
 	<main class="w-full min-w-0 px-2">

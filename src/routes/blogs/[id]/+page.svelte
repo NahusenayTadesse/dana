@@ -7,6 +7,10 @@
 	import Gallery from '$lib/components/gallery.svelte';
 	import { formatEthiopianDate } from '$lib/global.svelte.js';
 	import * as m from '$lib/paraglide/messages.js';
+	import Seo from '$lib/components/Seo.svelte';
+	import { absoluteUrl, metaDescription, siteOrigin } from '$lib/seo';
+	import { assetUrl } from '$lib/utils';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	const { data } = $props();
 
@@ -21,36 +25,42 @@
 		m.blog_post_meta_title({ title: post?.title ?? m.blog_post_default_title() })
 	);
 	const pageDescription = $derived(post?.excerpt || m.blog_post_meta_description());
+
+	const origin = siteOrigin();
+	const jsonLd = $derived(
+		post && {
+			'@context': 'https://schema.org',
+			'@type': 'BlogPosting',
+			headline: post.title,
+			description: metaDescription(pageDescription),
+			image: post.featuredImage ? [absoluteUrl(assetUrl(post.featuredImage), origin)] : undefined,
+			datePublished: post.createdAt ? new Date(post.createdAt).toISOString() : undefined,
+			dateModified: post.updatedAt ? new Date(post.updatedAt).toISOString() : undefined,
+			articleSection: post.category ?? undefined,
+			mainEntityOfPage: `${origin}/blogs/${encodeURIComponent(post.slug)}`,
+			author: { '@type': 'Organization', name: m.brand_name(), url: `${origin}/` },
+			publisher: {
+				'@type': 'Organization',
+				name: m.brand_name(),
+				logo: { '@type': 'ImageObject', url: absoluteUrl(siteImage('global.logo'), origin) }
+			}
+		}
+	);
 </script>
 
+<Seo
+	title={pageTitle}
+	description={pageDescription}
+	image={post?.featuredImage ? assetUrl(post.featuredImage) : ''}
+	type="article"
+	{jsonLd}
+/>
+
 <svelte:head>
-	<title>{pageTitle}</title>
-	<meta name="title" content={pageTitle} />
-	<meta name="description" content={pageDescription} />
-	<meta name="keywords" content={m.blog_post_meta_keywords()} />
-
-	<meta property="og:type" content="article" />
-	<meta property="og:url" content={`https://dana.et/blogs/${post?.slug ?? ''}`} />
-	<meta property="og:title" content={pageTitle} />
-	<meta property="og:description" content={pageDescription} />
-	<meta
-		property="og:image"
-		content={`https://dana.et/files/${post?.featuredImage ?? 'logo.png'}`}
-	/>
 	<meta property="article:section" content={post?.category || m.blog_post_default_section()} />
-	<meta property="article:author" content={m.brand_name()} />
-
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:url" content={`https://dana.et/blogs/${post?.slug ?? ''}`} />
-	<meta name="twitter:title" content={pageTitle} />
-	<meta name="twitter:description" content={pageDescription} />
-	<meta
-		name="twitter:image"
-		content={`https://dana.et/files/${post?.featuredImage ?? 'logo.png'}`}
-	/>
-
-	<link rel="canonical" href={`https://dana.et/blogs/${post?.slug ?? ''}`} />
-	<meta name="author" content={m.brand_name()} />
+	{#if post?.createdAt}
+		<meta property="article:published_time" content={new Date(post.createdAt).toISOString()} />
+	{/if}
 </svelte:head>
 
 <div

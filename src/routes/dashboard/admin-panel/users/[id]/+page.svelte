@@ -24,7 +24,6 @@
 	let singleTable = $derived([
 		{ name: 'Name', value: data.singleUser?.name },
 		{ name: 'Email', value: data.singleUser?.email },
-		{ name: 'Phone', value: data.singleUser?.phone },
 		{ name: 'Role', value: data.singleUser?.role },
 		{ name: 'Created At', value: data.singleUser?.createdAt.toLocaleString() },
 		{ name: 'Updated At', value: data.singleUser?.updatedAt.toLocaleString() }

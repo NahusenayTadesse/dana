@@ -1,4 +1,5 @@
 <script lang="ts">
+    import Seo from '$lib/components/Seo.svelte';
     import { Card, CardContent } from '$lib/components/ui/card';
     import { Button } from '$lib/components/ui/button';
     import { Separator } from '$lib/components/ui/separator';
@@ -190,14 +191,11 @@
     let { data } = $props();
 </script>
 
-<svelte:head>
-    <title>{m.about_page_meta_title()}</title>
-    <meta name="description" content={m.about_page_meta_description()} />
-    <meta name="keywords" content={m.about_page_meta_keywords()} />
-    <meta property="og:title" content={m.about_page_meta_title()} />
-    <meta property="og:description" content={m.about_page_meta_description()} />
-    <meta property="og:image" content="https://dana.et/og-about.jpg" />
-</svelte:head>
+<Seo
+    title={m.about_page_meta_title()}
+    description={m.about_page_meta_description()}
+    image={siteImage('about.highlights')}
+/>
 
 <div class="relative min-h-screen overflow-hidden  text-foreground">
     <div
