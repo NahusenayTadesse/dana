@@ -1,13 +1,17 @@
 <script lang="ts">
-	import { LENGTH_UNITS, unitOptions } from '$lib/units';
+	import { untrack } from 'svelte';
+	import { LENGTH_UNITS, unitOptions, type LengthUnit } from '$lib/units';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { SquarePen, Save } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import type { Edit, widthUnitEnum } from './schema';
+	import type { Edit } from './schema';
 
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import Errors from '$lib/formComponents/Errors.svelte';
+	import { toast } from 'svelte-sonner';
+	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 
 	let {
 		data,
@@ -16,99 +20,73 @@
 		value,
 		unit,
 		label,
-		isActive=true,
-
-		icon = false,
+		isActive = true
 	}: {
 		data: SuperValidated<Edit>;
-		action: string;
+		action?: string;
 		id: number;
-			value: string | number,
-		unit: typeof widthUnitEnum,
-		label?: string,
-		isActive: boolean,
-		icon: boolean;
-		
+		value: string | number;
+		unit: LengthUnit;
+		label?: string | null;
+		isActive?: boolean | null;
 	} = $props();
 
-	const { form, errors, enhance, delayed, message, allErrors } = superForm(data, {
-		resetForm: false
+	let open = $state(false);
+
+	// One instance per row, each with its own id — a shared id sends every
+	// action result to the first row's form.
+	const { form, errors, enhance, delayed, message, allErrors } = untrack(() =>
+		superForm(data, { resetForm: false, id: `length-${id}` })
+	);
+
+	untrack(() => {
+		$form.id = id;
+		$form.value = String(value);
+		$form.unit = unit;
+		$form.isActive = isActive ?? true;
+		$form.label = label ?? '';
 	});
 
-	$form.id = id;
-	$form.value = value;
-
-	$form.unit = unit;
-	$form.isActive = isActive,
-	$form.label = label
-
-	import { toast } from 'svelte-sonner';
-	import InputComp from '$lib/formComponents/InputComp.svelte';
-	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	$effect(() => {
-		if ($message) {
-			if ($message.type === 'error') {
-				toast.error($message.text);
-			} else {
-				toast.success($message.text);
-			}
+		if (!$message) return;
+		if ($message.type === 'error') {
+			toast.error($message.text);
+		} else {
+			toast.success($message.text);
+			open = false;
 		}
 	});
 </script>
 
-<!-- <Tooltip.Provider>
-	<Tooltip.Root>
-		<Tooltip.Trigger class="{buttonVariants({ variant: 'ghost' })} justify-self-start p-0!">
-			<Dialog.Root bind:open>
-				<Dialog.Trigger class="flex w-auto flex-row items-center justify-center gap-2 border-0">
-					{#if icon}
-						<SquarePen /> Edit
-					{:else}
-						{name}
-					{/if}
-				</Dialog.Trigger>
-				<Dialog.Content class="w-full bg-white">
-					<Dialog.Header>
-						<Dialog.Title class="text-center text-4xl">Edit {name}</Dialog.Title>
-					</Dialog.Header> -->
-
-<DialogComp title={icon ? 'Edit' : label} IconComp={icon ? SquarePen : undefined} variant="ghost">
+<DialogComp bind:open title="Edit" IconComp={SquarePen} variant="ghost">
 	<form
 		{action}
 		use:enhance
 		method="post"
-		id="edit"
+		id="length-edit-{id}"
 		class="flex w-full flex-col gap-4 p-4"
 		enctype="multipart/form-data"
 	>
 		<Errors allErrors={$allErrors} />
 		<input type="hidden" name="id" value={$form.id} />
-		<InputComp 
-  {form} 
-  {errors} 
-  label="Width Value" 
-  type="number" 
-  name="value" 
+		<InputComp {form} {errors} label="Length Value" type="number" name="value" required={true} />
 
-  required={true} 
-/>
-
-<InputComp 
-  {form} 
-  {errors} 
-  label="Display Label" 
-  type="text" 
-  name="label" 
-  placeholder="e.g. Standard 1000mm" 
-/>
+		<InputComp
+			{form}
+			{errors}
+			label="Display Label"
+			type="text"
+			name="label"
+			placeholder="e.g. Standard 1000mm"
+		/>
 		<InputComp
 			{form}
 			{errors}
 			label="Unit"
 			type="select"
 			name="unit"
-items={unitOptions(LENGTH_UNITS)}			required={true}
-			rows={10}
+			items={unitOptions(LENGTH_UNITS)}
+			required={true}
 		/>
 
 		<InputComp
@@ -122,7 +100,7 @@ items={unitOptions(LENGTH_UNITS)}			required={true}
 				{ value: false, name: 'Inactive' }
 			]}
 		/>
-		<Button type="submit" class="mt-4" form="edit">
+		<Button type="submit" class="mt-4" form="length-edit-{id}">
 			{#if $delayed}
 				<LoadingBtn name="Saving Changes" />
 			{:else}
@@ -133,11 +111,3 @@ items={unitOptions(LENGTH_UNITS)}			required={true}
 		</Button>
 	</form>
 </DialogComp>
-<!-- </Dialog.Content>
-			</Dialog.Root>
-		</Tooltip.Trigger>
-		<Tooltip.Content>
-			<p>Edit {name}</p>
-		</Tooltip.Content>
-	</Tooltip.Root>
-</Tooltip.Provider> -->

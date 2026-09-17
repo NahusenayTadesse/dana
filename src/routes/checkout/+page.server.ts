@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import {
 	sendEmail,
 	quoteRequestReceivedTemplate,
@@ -21,6 +21,9 @@ import type { PageServerLoad, Actions } from './$types';
 import { saveUploadedFile, deleteUploadedFile } from '$lib/server/upload';
 import { resolveOrderLines, OrderLineError } from '$lib/server/orderLines';
 import { loadBuyProductList } from '$lib/server/buy-listing';
+
+/** A problem the customer can act on — its message is safe to show them. */
+class CheckoutError extends Error {}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const form = await superValidate(zod4(add));
@@ -165,11 +168,41 @@ export const actions: Actions = {
 						// undefined and inserted an order with customerId: NULL —
 						// an order nobody could look up. Create the profile instead.
 						if (!locals.user.email) {
-							throw new Error(
+							throw new CheckoutError(
 								'Your account has no email on file. Add one in Account → Settings, then submit again.'
 							);
 						}
 
+						// They may have requested a quote as a guest before signing
+						// up: a customers row with this email already exists, and
+						// inserting another violates the unique email. Link that
+						// row to the account instead.
+						const guest = await tx
+							.select({
+								value: customers.id,
+								email: customers.email,
+								name: customers.name,
+								phone: customers.phone
+							})
+							.from(customers)
+							.where(and(eq(customers.email, locals.user.email), isNull(customers.userId)))
+							.limit(1)
+							.then((rows) => rows[0]);
+
+						if (guest) {
+							await tx
+								.update(customers)
+								.set({
+									userId: locals.user.id,
+									...(uploadedDocPath ? { docs: uploadedDocPath } : {}),
+									...(guest.phone ? {} : phone ? { phone } : {})
+								})
+								.where(eq(customers.id, guest.value));
+							customerInfo = { ...guest, phone: guest.phone ?? phone ?? null };
+						}
+					}
+
+					if (!customer && !customerInfo) {
 						const [inserted] = await tx
 							.insert(customers)
 							.values({
@@ -189,7 +222,7 @@ export const actions: Actions = {
 							email: locals.user.email,
 							phone: phone ?? null
 						};
-					} else {
+					} else if (customer) {
 						customerInfo = customer;
 
 						// A returning customer's uploaded document used to be
@@ -204,7 +237,7 @@ export const actions: Actions = {
 					}
 				} else {
 					if (!email) {
-						throw new Error('Email is required to submit a quote request.');
+						throw new CheckoutError('Email is required to submit a quote request.');
 					}
 
 					const doesCustomerExist = await tx
@@ -233,7 +266,7 @@ export const actions: Actions = {
 						}
 					} else {
 						if (!name) {
-							throw new Error('Name is required to submit a quote request.');
+							throw new CheckoutError('Name is required to submit a quote request.');
 						}
 
 						const newCustomer = await tx
@@ -257,12 +290,12 @@ export const actions: Actions = {
 				// Safety net only — the checkout page now renders inputs for whatever
 				// is missing from the profile, so these should be unreachable.
 				if (!resolvedName) {
-					throw new Error(
+					throw new CheckoutError(
 						'We still need a name for this request. Add one below, or update your profile in Account → Settings.'
 					);
 				}
 				if (!resolvedPhone) {
-					throw new Error(
+					throw new CheckoutError(
 						'We still need a phone number for this request. Add one below, or update your profile in Account → Settings.'
 					);
 				}
@@ -332,9 +365,14 @@ export const actions: Actions = {
 				form,
 				{
 					type: 'error',
-					text: 'Error submitting your request: ' + (err instanceof Error ? err.message : String(err))
+					// Only our own messages reach the customer — a database error's
+					// message is raw SQL with their submitted values in it.
+					text:
+						err instanceof CheckoutError
+							? err.message
+							: 'We could not submit your request. Please try again in a moment.'
 				},
-				{ status: 500 }
+				{ status: err instanceof CheckoutError ? 400 : 500 }
 			);
 		}
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { ShieldCheckIcon, CheckCircle2, PackageIcon, Printer, Grid3x3 } from '@lucide/svelte';
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import OrderLinesTable, { type OrderLine } from '$lib/components/order-lines-table.svelte';
 	import { downloadCSV, printElement } from '$lib/print';
@@ -61,7 +62,8 @@
 		);
 	}
 
-	let choice = $state<'full' | 'advance'>(data.advanceAvailable ? 'advance' : 'full');
+	// Initial choice only — the customer's pick must survive later data refreshes.
+	let choice = $state<'full' | 'advance'>(untrack(() => (data.advanceAvailable ? 'advance' : 'full')));
 	const payAmount = $derived(
 		data.isBalancePayment
 			? data.remainingBalance
@@ -247,17 +249,19 @@
 				<div class="mt-6 border-t border-border/60 pt-4">
 					<p class="mb-2 text-center text-xs text-muted-foreground">{m.pay_not_happy()}</p>
 					<div class="flex justify-center gap-2">
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							onclick={() => {
-								showRejectForm = !showRejectForm;
-								showCancelForm = false;
-							}}
-						>
-							{m.pay_reject_offer()}
-						</Button>
+						{#if data.canReject}
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onclick={() => {
+									showRejectForm = !showRejectForm;
+									showCancelForm = false;
+								}}
+							>
+								{m.pay_reject_offer()}
+							</Button>
+						{/if}
 						<Button
 							type="button"
 							variant="outline"
@@ -271,7 +275,7 @@
 						</Button>
 					</div>
 
-					{#if showRejectForm}
+					{#if showRejectForm && data.canReject}
 						<form
 							method="post"
 							action="?/rejectOffer"
@@ -279,7 +283,9 @@
 							use:enhance={() => {
 								rejectSubmitting = true;
 								return async ({ update }) => {
-									await update();
+									// No invalidateAll: the rejection expires this link, so a
+									// reload would replace the confirmation with a 410 page.
+									await update({ invalidateAll: false });
 									rejectSubmitting = false;
 								};
 							}}
@@ -310,7 +316,8 @@
 							use:enhance={() => {
 								cancelSubmitting = true;
 								return async ({ update }) => {
-									await update();
+									// Same as above: cancelling expires this link.
+									await update({ invalidateAll: false });
 									cancelSubmitting = false;
 								};
 							}}

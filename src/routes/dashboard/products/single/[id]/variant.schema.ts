@@ -1,13 +1,5 @@
 import { z } from 'zod/v4';
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ACCEPTED_FILE_TYPES = [
-	'image/jpeg',
-	'image/png',
-	'image/webp',
-	'image/heic',
-	'image/heif'
-];
+import { imageFile } from '$lib/uploadTypes';
 
 // Empty string / undefined -> null so an unselected <select> or blank number
 // field doesn't coerce to 0 and violate an FK (or fail a positive() check).
@@ -19,17 +11,14 @@ const optionalId = z.preprocess(
 	z.coerce.number().int().positive().nullable()
 );
 
-const variantImage = z
-	.instanceof(File)
-	.refine((f) => f.size <= MAX_FILE_SIZE, 'Max file size is 10MB.')
-	.refine(
-		(f) => f.size === 0 || ACCEPTED_FILE_TYPES.includes(f.type),
-		'Invalid file type.'
-	)
-	.optional()
-	.nullable();
+// Only the image types $lib/server/upload.ts will actually store (no HEIC/HEIF);
+// an empty (0-byte) File from an untouched input counts as "no file".
+const variantImage = z.preprocess(
+	(v) => (v instanceof File && v.size === 0 ? undefined : v),
+	imageFile().optional().nullable()
+);
 
-export const addVariant = z.object({
+const variantFields = z.object({
 	colorId: optionalId,
 	widthId: optionalId,
 	thicknessId: optionalId,
@@ -38,21 +27,16 @@ export const addVariant = z.object({
 	sku: z.string().max(100, 'SKU must be 100 characters or less.').optional().nullable(),
 
 	// productVariants.price is nullable — a blank price means "quote-only".
+	// 0 is rejected rather than stored: the admin shows 0 as "Quote only" while
+	// checkout would have charged nothing for it.
 	price: z.preprocess(
 		emptyToNull,
-		z.coerce.number().nonnegative('Price cannot be negative.').nullable()
+		z.coerce
+			.number()
+			.positive('Price must be greater than 0 — leave it blank for quote-only.')
+			.max(99_999_999, 'Price is too large.')
+			.nullable()
 	),
-
-	// quantity is NOT NULL DEFAULT 0
-	quantity: z
-		.preprocess(
-			(v) => (v === '' || v == null ? 0 : v),
-			z.coerce
-				.number()
-				.int('Quantity must be a whole number.')
-				.nonnegative('Quantity cannot be negative.')
-		)
-		.default(0),
 
 	// nonnegative, not positive — the column is nullable with no default, so an
 	// existing row can legitimately hold 0 and must stay editable.
@@ -62,15 +46,33 @@ export const addVariant = z.object({
 			.number()
 			.int('Reorder level must be a whole number.')
 			.nonnegative('Reorder level cannot be negative.')
+			.max(1_000_000, 'Reorder level is too large.')
 			.nullable()
 	),
 
 	image: variantImage
 });
 
-// Edit is the same shape plus the row id.
-export const editVariant = addVariant.extend({
-	id: z.number('Variant not found')
+// Add takes an opening stock quantity, which is booked into the default
+// warehouse (stock_levels is the source of truth — see $lib/server/stock).
+export const addVariant = variantFields.extend({
+	quantity: z
+		.preprocess(
+			(v) => (v === '' || v == null ? 0 : v),
+			z.coerce
+				.number()
+				.int('Quantity must be a whole number.')
+				.nonnegative('Quantity cannot be negative.')
+				.max(1_000_000, 'Quantity is too large.')
+		)
+		.default(0)
+});
+
+// Edit is the same fields plus the row id. No quantity: after creation stock
+// only moves through stock movements (Stock page, Adjust / Damaged dialogs),
+// so a stale dialog can't overwrite a newer count.
+export const editVariant = variantFields.extend({
+	id: z.number('Variant not found').int().positive('Variant not found')
 });
 
 export type AddVariant = z.infer<typeof addVariant>;

@@ -8,9 +8,15 @@
 
 	let { data, row }: { data: SuperValidated<any>; row: StockRow } = $props();
 
-	const { enhance, message } = untrack(() =>
+	const { form, enhance, message } = untrack(() =>
 		superForm(data, { resetForm: false, dataType: 'json', id: `stock-del-${row.id}` })
 	);
+
+	// With dataType 'json' superforms posts $form and ignores plain inputs, so
+	// the row id has to be in the form store, not just a hidden input.
+	untrack(() => {
+		$form.id = row.id;
+	});
 
 	// Two taps rather than a browser confirm(): a dialog blocks the page, and a
 	// stock line is cheap enough to re-add that a full confirmation sheet would
@@ -25,7 +31,6 @@
 </script>
 
 <form action="?/remove" method="post" use:enhance>
-	<input type="hidden" name="id" value={row.id} />
 	{#if confirming}
 		<Button type="submit" variant="destructive" size="sm">Remove?</Button>
 	{:else}

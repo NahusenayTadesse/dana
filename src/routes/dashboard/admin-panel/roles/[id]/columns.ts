@@ -46,7 +46,7 @@ export const userColumns = [
 			return renderComponent(DataTableLinks, {
 				id: row.original.id,
 				name: row.original.name,
-				link: '/dashboard/users'
+				link: '/dashboard/admin-panel/users'
 			});
 		}
 	},
@@ -56,16 +56,6 @@ export const userColumns = [
 		header: ({ column }) =>
 			renderComponent(DataTableSort, {
 				name: 'Email',
-				onclick: column.getToggleSortingHandler()
-			}),
-		sortable: true
-	},
-
-	{
-		accessorKey: 'isActive',
-		header: ({ column }) =>
-			renderComponent(DataTableSort, {
-				name: 'Active',
 				onclick: column.getToggleSortingHandler()
 			}),
 		sortable: true

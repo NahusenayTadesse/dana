@@ -9,7 +9,7 @@
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import OrderFields from './order-fields.svelte';
 	import type { EditOrder } from './schema';
-	import type { OrderRow } from './types';
+	import { statusItemsFrom, type OrderRow } from './types';
 
 	let {
 		data,
@@ -61,7 +61,7 @@
 >
 	<form action="?/edit" method="post" use:enhance id="po-edit-{row.id}" class="flex flex-col gap-3">
 		<Errors allErrors={$allErrors} />
-		<OrderFields {form} {errors} {suppliers} {people} />
+		<OrderFields {form} {errors} {suppliers} {people} statuses={statusItemsFrom(row.status)} />
 
 		<Button type="submit" class="mt-2" form="po-edit-{row.id}">
 			{#if $delayed}

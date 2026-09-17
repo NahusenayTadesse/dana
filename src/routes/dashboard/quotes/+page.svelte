@@ -12,8 +12,12 @@
 	import Read from './read.svelte';
 	import Reply from './reply.svelte';
 	import Delete from './delete.svelte';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
+
+	const canReply = $derived(can(data.access, 'quotes.reply'));
+	const canDelete = $derived(can(data.access, 'quotes.delete'));
 
 	const columns = [
 		{
@@ -80,7 +84,9 @@
 			cell: ({ row }) =>
 				row.original.seen
 					? renderComponent(Statuses, { status: 'Read' })
-					: renderComponent(Read, { id: row.original.id, data: data.readForm })
+					: canReply
+						? renderComponent(Read, { id: row.original.id, data: data.readForm })
+						: renderComponent(Statuses, { status: 'Unread' })
 		},
 		{
 			accessorKey: 'builder',
@@ -103,7 +109,8 @@
 					data: data.replyForm,
 					name: row.original.name,
 					email: row.original.email,
-					replies: row.original.replies
+					replies: row.original.replies,
+					canReply
 				})
 		},
 		{
@@ -114,6 +121,8 @@
 		}
 	];
 
+	const visibleColumns = $derived(columns.filter((c) => c.header !== 'Delete' || canDelete));
+
 	let filteredList = $derived(data?.allQuotes);
 </script>
 
@@ -123,5 +132,5 @@
 
 {#key data?.allQuotes}
 	<FilterMenu data={data?.allQuotes} bind:filteredList filterKeys={['status', 'seen', 'orderRequestStatus']} />
-	<DataTable {columns} data={filteredList} search={true} fileName="Quote Requests" />
+	<DataTable columns={visibleColumns} data={filteredList} search={true} fileName="Quote Requests" />
 {/key}

@@ -1,13 +1,13 @@
 import { z } from 'zod/v4';
 
 export const markRead = z.object({
-	id: z.coerce.number()
+	id: z.coerce.number().int().positive()
 });
 
 export type MarkRead = z.infer<typeof markRead>;
 
-export const deleteTestimonial = z.object({
-	id: z.coerce.number()
+export const deleteMessage = z.object({
+	id: z.coerce.number().int().positive()
 });
 
-export type DeleteTestimonial = z.infer<typeof deleteTestimonial>;
+export type DeleteMessage = z.infer<typeof deleteMessage>;

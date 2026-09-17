@@ -6,6 +6,7 @@
 	import { superForm } from 'sveltekit-superforms';
 	import { Send, Reply as ReplyIcon, MessageSquareText, TagIcon } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { untrack } from 'svelte';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	import RichTextEditor from '$lib/formComponents/RichTextEditor.svelte';
@@ -24,7 +25,8 @@
 		name,
 		email,
 		productLabel,
-		replies = []
+		replies = [],
+		canReply = false
 	}: {
 		data: SuperValidated<schema>;
 		id: number;
@@ -32,11 +34,16 @@
 		email?: string;
 		productLabel?: string;
 		replies?: ReplyRecord[];
+		/** quotes.reply: show the new-reply form (history is always visible). */
+		canReply?: boolean;
 	} = $props();
 
-	const { form, enhance, errors, delayed, message, allErrors } = superForm(data, {
-		resetForm: false
-	});
+	// One Reply form per table row: each needs its own id, or superforms applies
+	// a submission's result to the FIRST mounted instance — and the next reply
+	// sent from that row goes to the other row's customer.
+	const { form, enhance, errors, delayed, message, allErrors } = untrack(() =>
+		superForm(data, { id: `reply-${id}`, resetForm: false })
+	);
 
 	$effect(() => {
 		if ($message) {
@@ -44,13 +51,19 @@
 		}
 	});
 
-	$form.quoteRequestId = id;
+	untrack(() => {
+		$form.quoteRequestId = id;
+	});
 
 	const formatDate = (d: string | Date) =>
 		new Date(d).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 </script>
 
-<DialogComp variant="default" title="Reply to Quote Request" IconComp={ReplyIcon}>
+<DialogComp
+	variant="default"
+	title={canReply ? 'Reply to Quote Request' : 'Reply History'}
+	IconComp={canReply ? ReplyIcon : MessageSquareText}
+>
 	<div class="flex max-h-[75vh] flex-col gap-5 overflow-y-auto pr-1">
 		{#if productLabel}
 			<div class="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -88,27 +101,29 @@
 		</div>
 
 		<!-- New reply form -->
-		<form method="post" id="reply-{id}" action="?/reply" use:enhance class="flex flex-col gap-3 border-t pt-4">
-			<Errors allErrors={$allErrors} />
+		{#if canReply}
+			<form method="post" action="?/reply" use:enhance class="flex flex-col gap-3 border-t pt-4">
+				<Errors allErrors={$allErrors} />
 
-			<InputComp {form} {errors} name="subject" label="Subject" type="text" placeholder="Re: Your quote request" />
+				<InputComp {form} {errors} name="subject" label="Subject" type="text" placeholder="Re: Your quote request" />
 
-			<div>
-				<span class="mb-1 block text-sm font-medium">Message</span>
+				<div>
+					<span class="mb-1 block text-sm font-medium">Message</span>
 
-				<RichTextEditor bind:value={$form.message} />
-				<InputComp {form} {errors} name="message" label="" type="hidden" />
-			</div>
+					<RichTextEditor bind:value={$form.message} />
+					<InputComp {form} {errors} name="message" label="" type="hidden" />
+				</div>
 
-			<input type="hidden" name="quoteRequestId" bind:value={$form.quoteRequestId} />
+				<input type="hidden" name="quoteRequestId" bind:value={$form.quoteRequestId} />
 
-			<Button type="submit" class="mt-1 w-full" form="reply-{id}">
-				{#if $delayed}
-					<LoadingBtn name="Sending..." />
-				{:else}
-					<Send class="size-4" /> Send
-				{/if}
-			</Button>
-		</form>
+				<Button type="submit" class="mt-1 w-full">
+					{#if $delayed}
+						<LoadingBtn name="Sending..." />
+					{:else}
+						<Send class="size-4" /> Send
+					{/if}
+				</Button>
+			</form>
+		{/if}
 	</div>
 </DialogComp>

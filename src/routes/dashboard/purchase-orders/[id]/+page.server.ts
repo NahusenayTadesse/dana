@@ -1,10 +1,10 @@
-import { error } from '@sveltejs/kit';
-import { superValidate, message } from 'sveltekit-superforms';
+import { superValidate, message, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq, asc } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
+import { and, eq, asc, sql } from 'drizzle-orm';
 
 import { addLine, editLine, editOrder, removeLine } from '../schema';
-import { toDateInput, toDateValue } from '$lib/dateFields';
+import { toDateInput } from '$lib/dateFields';
 import { db } from '$lib/server/db';
 import {
 	purchaseOrders,
@@ -14,12 +14,15 @@ import {
 	staff
 } from '$lib/server/db/schema';
 import { variantOptions } from '$lib/server/variantOptions';
-import type { Actions, PageServerLoad } from './$types';
+import { parseIdParam } from '$lib/server/params';
+import { StockError } from '$lib/server/stock';
+import { describeDbError } from '$lib/server/dbErrors';
+import { PoRuleError, assertLinesEditable, saveOrderHead } from '../po.server';
 import type { LineRow, OrderRow } from '../types';
+import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const orderId = Number(params.id);
-	if (!Number.isInteger(orderId)) error(404, 'Not found.');
+	const orderId = parseIdParam(params.id);
 
 	const [head] = await db
 		.select({
@@ -31,7 +34,8 @@ export const load: PageServerLoad = async ({ params }) => {
 			receivedDate: purchaseOrders.receivedDate,
 			raisedBy: purchaseOrders.raisedBy,
 			raisedByName: staff.name,
-			notes: purchaseOrders.notes
+			notes: purchaseOrders.notes,
+			stockReceivedAt: purchaseOrders.stockReceivedAt
 		})
 		.from(purchaseOrders)
 		.leftJoin(productSuppliers, eq(productSuppliers.id, purchaseOrders.supplierId))
@@ -41,7 +45,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	if (!head) error(404, 'That purchase order does not exist.');
 
-	const [lines, variants, materials, suppliers, people] = await Promise.all([
+	const [lines, allVariants, materials, suppliers, people] = await Promise.all([
 		db
 			.select({
 				id: purchaseOrderItems.id,
@@ -50,13 +54,18 @@ export const load: PageServerLoad = async ({ params }) => {
 				rawMaterialName: rawMaterials.name,
 				variantId: purchaseOrderItems.variantId,
 				quantity: purchaseOrderItems.quantity,
-				unitCost: purchaseOrderItems.unitCost
+				unitCost: purchaseOrderItems.unitCost,
+				// Rounded in SQL, the same way the list page sums it.
+				lineTotal: sql<
+					string | null
+				>`round(${purchaseOrderItems.quantity} * ${purchaseOrderItems.unitCost}, 2)`
 			})
 			.from(purchaseOrderItems)
 			.leftJoin(rawMaterials, eq(rawMaterials.id, purchaseOrderItems.rawMaterialId))
 			.where(eq(purchaseOrderItems.purchaseOrderId, orderId))
 			.orderBy(asc(purchaseOrderItems.id)),
-		variantOptions(),
+		// Archived variants still label existing lines but aren't offered in pickers.
+		variantOptions({ includeInactive: true }),
 		db
 			.select({ value: rawMaterials.id, name: rawMaterials.name })
 			.from(rawMaterials)
@@ -73,7 +82,8 @@ export const load: PageServerLoad = async ({ params }) => {
 			.orderBy(asc(staff.name))
 	]);
 
-	const variantLabels = new Map(variants.map((v) => [v.value, v.name]));
+	const variantLabels = new Map(allVariants.map((v) => [v.value, v.name]));
+	const variants = allVariants.filter((v) => !v.archived);
 
 	const allData: LineRow[] = lines.map((line) => {
 		const quantity = Number(line.quantity);
@@ -85,20 +95,24 @@ export const load: PageServerLoad = async ({ params }) => {
 			variantId: line.variantId,
 			itemName:
 				line.rawMaterialName ??
-				(line.variantId == null ? '—' : (variantLabels.get(line.variantId) ?? `Variant #${line.variantId}`)),
+				(line.variantId == null
+					? '—'
+					: (variantLabels.get(line.variantId) ?? `Variant #${line.variantId}`)),
 			quantity,
 			unitCost,
-			lineTotal: unitCost == null ? null : Math.round(quantity * unitCost * 100) / 100
+			lineTotal: line.lineTotal == null ? null : Number(line.lineTotal)
 		};
 	});
 
+	const { stockReceivedAt, ...headFields } = head;
 	const order: OrderRow = {
-		...head,
-		status: (head.status ?? 'draft') as OrderRow['status'],
+		...headFields,
+		// Stock already received counts as received whatever the label says.
+		status: (stockReceivedAt != null ? 'received' : (head.status ?? 'draft')) as OrderRow['status'],
 		expectedDate: toDateInput(head.expectedDate),
 		receivedDate: toDateInput(head.receivedDate),
 		lineCount: allData.length,
-		value: allData.reduce((sum, line) => sum + (line.lineTotal ?? 0), 0)
+		value: Math.round(allData.reduce((sum, line) => sum + (line.lineTotal ?? 0), 0) * 100) / 100
 	};
 
 	return {
@@ -115,82 +129,159 @@ export const load: PageServerLoad = async ({ params }) => {
 	};
 };
 
-const lineValues = (data: any) => ({
-	purchaseOrderId: data.purchaseOrderId,
+const lineValues = (data: {
+	rawMaterialId?: number | null;
+	variantId?: number | null;
+	quantity: number;
+	unitCost?: number | null;
+}) => ({
 	rawMaterialId: data.rawMaterialId ?? null,
 	variantId: data.variantId ?? null,
 	quantity: String(data.quantity),
 	unitCost: data.unitCost == null ? null : String(data.unitCost)
 });
 
+/** Shared catch for the line actions. */
+function lineFailure(form: any, err: unknown, what: string) {
+	if (err instanceof PoRuleError) {
+		return message(form, { type: 'error', text: err.message }, { status: 400 });
+	}
+	console.error(`po line ${what} failed`, err);
+	return message(
+		form,
+		{ type: 'error', text: describeDbError(err, `Could not ${what} this line.`) },
+		{ status: 500 }
+	);
+}
+
+// Every line action takes the PO from the URL and scopes its write to it, and
+// locks the PO row first so a line can't change while the order is being
+// received (received and cancelled orders refuse line changes outright).
 export const actions: Actions = {
-	addLine: async ({ request }) => {
+	addLine: async ({ request, params }) => {
+		const orderId = parseIdParam(params.id);
 		const form = await superValidate(request, zod4(addLine));
 		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Please check the form for errors' }, { status: 400 });
+			return message(
+				form,
+				{ type: 'error', text: 'Please check the form for errors' },
+				{ status: 400 }
+			);
 		}
 		try {
-			await db.insert(purchaseOrderItems).values(lineValues(form.data));
+			await db.transaction(async (tx) => {
+				await assertLinesEditable(tx, orderId);
+				await tx
+					.insert(purchaseOrderItems)
+					.values({ purchaseOrderId: orderId, ...lineValues(form.data) });
+			});
 			return message(form, { type: 'success', text: 'Line added' });
 		} catch (err) {
-			console.error('po line add failed', err);
-			return message(form, { type: 'error', text: 'Could not add this line.' }, { status: 500 });
+			return lineFailure(form, err, 'add');
 		}
 	},
 
-	editLine: async ({ request }) => {
+	editLine: async ({ request, params }) => {
+		const orderId = parseIdParam(params.id);
 		const form = await superValidate(request, zod4(editLine));
 		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Please check the form for errors' }, { status: 400 });
+			return message(
+				form,
+				{ type: 'error', text: 'Please check the form for errors' },
+				{ status: 400 }
+			);
 		}
 		try {
-			await db
-				.update(purchaseOrderItems)
-				.set(lineValues(form.data))
-				.where(eq(purchaseOrderItems.id, form.data.id));
+			const [result] = await db.transaction(async (tx) => {
+				await assertLinesEditable(tx, orderId);
+				return tx
+					.update(purchaseOrderItems)
+					.set(lineValues(form.data))
+					.where(
+						and(
+							eq(purchaseOrderItems.id, form.data.id),
+							eq(purchaseOrderItems.purchaseOrderId, orderId)
+						)
+					);
+			});
+			if (result.affectedRows === 0) {
+				return message(
+					form,
+					{ type: 'error', text: 'This line is not on this order any more. Reload the page.' },
+					{ status: 404 }
+				);
+			}
 			return message(form, { type: 'success', text: 'Line updated' });
 		} catch (err) {
-			console.error('po line edit failed', err);
-			return message(form, { type: 'error', text: 'Could not save this line.' }, { status: 500 });
+			return lineFailure(form, err, 'save');
 		}
 	},
 
-	removeLine: async ({ request }) => {
+	removeLine: async ({ request, params }) => {
+		const orderId = parseIdParam(params.id);
 		const form = await superValidate(request, zod4(removeLine));
 		if (!form.valid) {
 			return message(form, { type: 'error', text: 'Nothing to remove' }, { status: 400 });
 		}
 		try {
-			await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, form.data.id));
+			const [result] = await db.transaction(async (tx) => {
+				await assertLinesEditable(tx, orderId);
+				return tx
+					.delete(purchaseOrderItems)
+					.where(
+						and(
+							eq(purchaseOrderItems.id, form.data.id),
+							eq(purchaseOrderItems.purchaseOrderId, orderId)
+						)
+					);
+			});
+			if (result.affectedRows === 0) {
+				return message(
+					form,
+					{ type: 'error', text: 'That line was already removed.' },
+					{ status: 404 }
+				);
+			}
 			return message(form, { type: 'success', text: 'Line removed' });
 		} catch (err) {
-			console.error('po line delete failed', err);
-			return message(form, { type: 'error', text: 'Could not remove this line.' }, { status: 500 });
+			return lineFailure(form, err, 'remove');
 		}
 	},
 
-	editOrder: async ({ request, locals }) => {
+	editOrder: async ({ request, params, locals }) => {
+		const orderId = parseIdParam(params.id);
 		const form = await superValidate(request, zod4(editOrder));
 		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Please check the form for errors' }, { status: 400 });
+			return message(
+				form,
+				{ type: 'error', text: 'Please check the form for errors' },
+				{ status: 400 }
+			);
 		}
+		// The order being edited is the one in the URL.
+		form.data.id = orderId;
 		try {
-			await db
-				.update(purchaseOrders)
-				.set({
-					supplierId: form.data.supplierId,
-					status: form.data.status,
-					expectedDate: toDateValue(form.data.expectedDate),
-					receivedDate: toDateValue(form.data.receivedDate),
-					raisedBy: form.data.raisedBy ?? null,
-					notes: form.data.notes || null,
-					updatedBy: locals?.user?.id
-				})
-				.where(eq(purchaseOrders.id, form.data.id));
+			const found = await db.transaction((tx) => saveOrderHead(tx, form.data, locals?.user?.id));
+			if (!found) {
+				return message(
+					form,
+					{ type: 'error', text: 'This purchase order no longer exists.' },
+					{ status: 404 }
+				);
+			}
 			return message(form, { type: 'success', text: 'Order updated' });
 		} catch (err) {
+			if (err instanceof PoRuleError || err instanceof StockError) {
+				if (err instanceof PoRuleError && err.field === 'status')
+					setError(form, 'status', err.message);
+				return message(form, { type: 'error', text: err.message }, { status: 400 });
+			}
 			console.error('po edit failed', err);
-			return message(form, { type: 'error', text: 'Could not save this order.' }, { status: 500 });
+			return message(
+				form,
+				{ type: 'error', text: describeDbError(err, 'Could not save this order.') },
+				{ status: 500 }
+			);
 		}
 	}
 };

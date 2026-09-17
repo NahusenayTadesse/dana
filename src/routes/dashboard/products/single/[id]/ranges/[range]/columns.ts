@@ -1,6 +1,5 @@
 import { renderComponent } from '$lib/components/ui/data-table/index.js';
 import DataTableLinks from '$lib/components/Table/data-table-links.svelte';
-import DataTableActions from './data-table-actions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
 
 export const columns = [
@@ -40,14 +39,22 @@ export const columns = [
 			}),
 
 		sortable: true,
+		// DataTableLinks builds `${link}/${id}`; users live under admin-panel.
 		cell: ({ row }) => {
+			if (!row.original.changedById) return row.original.changedBy ?? '—';
 			return renderComponent(DataTableLinks, {
-				id: row.original.extraSettings,
+				id: row.original.changedById,
 				name: row.original.changedBy,
-				link: `/dashboard/users/${row.original.changedById}`,
+				link: '/dashboard/admin-panel/users',
 				target: '_blank'
 			});
 		}
+	},
+
+	{
+		accessorKey: 'reason',
+		header: 'Reason',
+		cell: ({ row }) => row.original.reason ?? '—'
 	},
 
 	{
@@ -58,10 +65,11 @@ export const columns = [
 			// You can pass whatever you need from `row.original` to the component
 			//
 			if (row.original.reciept) {
+				// Uploaded files are served from /files/[name].
 				return renderComponent(DataTableLinks, {
-					id: row.original.extraSettings,
+					id: row.original.reciept,
 					name: 'View Reciept',
-					link: `/dashboard/files/${row.original.reciept}`,
+					link: '/files',
 					target: '_blank'
 				});
 			} else {

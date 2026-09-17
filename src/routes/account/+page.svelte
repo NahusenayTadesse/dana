@@ -218,7 +218,7 @@
 							{m.account_no_offers()}
 						</p>
 					{:else}
-						{#each activeDiscounts as discount}
+						{#each activeDiscounts as discount (discount.id)}
 							<div
 								class="relative flex flex-col justify-between space-y-3 overflow-hidden rounded-lg border border-primary/20 bg-primary/5 p-4"
 							>
@@ -230,21 +230,25 @@
 										<span
 											class="inline-flex items-center rounded bg-primary px-1.5 py-0.5 font-mono text-xs font-bold text-primary-foreground"
 										>
-											-ETB{Number(discount.amount).toFixed(0)}
+											-{discount.percentage}%
 										</span>
 									</div>
 									<p class="text-xs leading-relaxed text-muted-foreground">
 										{discount.description ?? m.account_no_details_provided()}
 									</p>
 								</div>
-								{#if discount.productName}
+								{#if discount.products.length > 0}
 									<div
 										class="w-fit rounded border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground"
 									>
 										{m.account_applies_to()}
-										<span class="font-medium text-foreground">
-											{discount.productName}
-										</span>
+										{#each discount.products as product, i (product.slug)}
+											{#if i > 0},
+											{/if}<a
+												href="/shop/single/{product.slug}"
+												class="font-medium text-foreground hover:underline">{product.name}</a
+											>
+										{/each}
 									</div>
 								{/if}
 							</div>

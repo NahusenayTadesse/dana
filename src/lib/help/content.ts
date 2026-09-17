@@ -525,8 +525,12 @@ export const HELP_SECTIONS: HelpSection[] = [
 				summary: 'Who can log in, and what each of them is allowed to open.',
 				where: 'Analytics → Admin Panel → Users / Roles',
 				notes: [
-					'A role is a named set of permissions. Give someone a role rather than setting their permissions one by one.',
-					'Changing someone\'s account signs them out everywhere they are logged in. That is deliberate — it is how you cut off access immediately.'
+					'A role is a named set of permissions. Open a role and tick what it can see and do, section by section — View, Create, Edit, Delete and a few special ones like Send offers or Revoke.',
+					'Give someone a role rather than setting their permissions one by one. If one person needs a little more than their role, open their user page and tick the extra permissions there; ticks marked "(role)" come from the role.',
+					'The **Admin** role always has full access, including pages added later. It can\'t be renamed or deleted.',
+					'People only see the pages they have permission for, in the sidebar and in search. Anyone without any dashboard permission (like shop customers) can\'t open the dashboard at all.',
+					'You can only grant or remove permissions you hold yourself, so nobody can use the role editor to give themselves more access.',
+					'Permission changes apply on the user\'s next click — no need to sign them out. Changing someone\'s account details or role still signs them out everywhere, which is how you cut off access immediately.'
 				],
 				keywords: ['user', 'role', 'permission', 'access', 'login', 'password', 'admin']
 			}

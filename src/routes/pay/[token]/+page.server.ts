@@ -1,13 +1,22 @@
 import { db } from '$lib/server/db';
 import { orders, transactions, customers, orderItems, products, colors, priceOffers } from '$lib/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
-import { resolvePaymentLink } from '$lib/server/paymentLinks';
+import { resolvePaymentLink, expirePaymentLinks } from '$lib/server/paymentLinks';
+import { restoreStockForOrder } from '$lib/server/stock';
 import { initializeChapaTransaction } from '$lib/server/chapa';
 import { getAdjustedOrderTotals } from '$lib/server/orderAdjustments';
 import { sendOfferRejectedNotice, sendOrderCancelledNotice } from '$lib/server/notifications';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import type { PageServerLoad, Actions } from './$types';
+
+// Neither of these can be paid: a cancelled order has nothing to collect, and a
+// rejected offer is waiting for staff to send a revised one (with a new link).
+// Links are expired when either happens; these checks also cover links issued
+// before that was done.
+const CANCELLED_MESSAGE = 'This order has been cancelled, so it can no longer be paid.';
+const REJECTED_MESSAGE =
+	'This offer was declined. We will send you a new payment link once the offer has been revised.';
 
 /** Currency is 2dp everywhere else (pricing.ts, orderAdjustments.ts) — match it. */
 function round2(n: number): number {
@@ -24,6 +33,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.select({
 			id: orders.id,
 			status: orders.status,
+			requestStatus: orders.requestStatus,
 			transactionId: orders.transactionId,
 			customerId: orders.customerId
 		})
@@ -32,6 +42,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.then((rows) => rows[0]);
 
 	if (!order) error(404, 'Order not found');
+	if (order.status === 'cancelled') error(410, CANCELLED_MESSAGE);
 
 	const transaction = order.transactionId
 		? await db
@@ -86,6 +97,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.then((rows) => rows[0]);
 
 	if (!offer) error(500, 'This order has no price offer — contact support.');
+	if (offer.status === 'rejected') error(410, REJECTED_MESSAGE);
 
 	// The TRUE current total — every approved adjustment (see orderAdjustments)
 	// folded in, not just the accepted offer's own numbers.
@@ -124,7 +136,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		advancePercentage,
 		advanceAmount,
 		isBalancePayment,
-		remainingBalance
+		remainingBalance,
+		// Once staff have approved the order the offer is agreed — it can be
+		// paid or cancelled, not rejected.
+		canReject: order.requestStatus !== 'approved'
 	};
 };
 
@@ -140,6 +155,7 @@ export const actions: Actions = {
 			.then((rows) => rows[0]);
 
 		if (!order?.transactionId) return fail(500, { message: 'No payment record for this order.' });
+		if (order.status === 'cancelled') return fail(410, { message: CANCELLED_MESSAGE });
 
 		const transaction = await db
 			.select()
@@ -153,16 +169,18 @@ export const actions: Actions = {
 		if (!adjusted) return fail(500, { message: 'This order has no price offer.' });
 
 		const total = adjusted.total;
-		const advancePercentage = Number(
-			(
-				await db
-					.select({ advancePaymentPercentage: priceOffers.advancePaymentPercentage })
-					.from(priceOffers)
-					.where(eq(priceOffers.orderId, order.id))
-					.orderBy(desc(priceOffers.revision))
-					.limit(1)
-			)[0]?.advancePaymentPercentage ?? 100
-		);
+		const latestOffer = await db
+			.select({
+				advancePaymentPercentage: priceOffers.advancePaymentPercentage,
+				status: priceOffers.status
+			})
+			.from(priceOffers)
+			.where(eq(priceOffers.orderId, order.id))
+			.orderBy(desc(priceOffers.revision))
+			.limit(1)
+			.then((rows) => rows[0]);
+		if (latestOffer?.status === 'rejected') return fail(410, { message: REJECTED_MESSAGE });
+		const advancePercentage = Number(latestOffer?.advancePaymentPercentage ?? 100);
 
 		// See the load above: amountPaid is the collected total, `amount` is the
 		// in-flight attempt and must never be read as "already paid".
@@ -247,6 +265,13 @@ export const actions: Actions = {
 
 		const order = await db.select().from(orders).where(eq(orders.id, link.orderId)).then((rows) => rows[0]);
 		if (!order) return fail(404, { message: 'Order not found.' });
+		if (order.status === 'cancelled') return fail(410, { message: CANCELLED_MESSAGE });
+		if (order.requestStatus === 'approved') {
+			return fail(400, {
+				message:
+					'This offer has already been confirmed and your order is being prepared. If something is wrong, please contact us.'
+			});
+		}
 
 		const transaction = order.transactionId
 			? await db.select().from(transactions).where(eq(transactions.id, order.transactionId)).then((rows) => rows[0])
@@ -267,7 +292,12 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const reason = (formData.get('reason') as string | null)?.trim() || null;
 
-		await db.update(priceOffers).set({ status: 'rejected' }).where(eq(priceOffers.id, offer.id));
+		// A rejected offer can't be paid, so its links die with it — the revised
+		// offer goes out with a fresh one.
+		await db.transaction(async (tx) => {
+			await tx.update(priceOffers).set({ status: 'rejected' }).where(eq(priceOffers.id, offer.id));
+			await expirePaymentLinks(order.id, tx);
+		});
 
 		await sendOfferRejectedNotice(order.id, reason).catch((err) =>
 			console.error('Offer rejected notice failed:', err)
@@ -283,6 +313,11 @@ export const actions: Actions = {
 		const order = await db.select().from(orders).where(eq(orders.id, link.orderId)).then((rows) => rows[0]);
 		if (!order) return fail(404, { message: 'Order not found.' });
 
+		if (order.status === 'cancelled') return fail(410, { message: CANCELLED_MESSAGE });
+		if (order.status === 'delivered') {
+			return fail(400, { message: 'This order has already been delivered — contact us directly if something is wrong.' });
+		}
+
 		const transaction = order.transactionId
 			? await db.select().from(transactions).where(eq(transactions.id, order.transactionId)).then((rows) => rows[0])
 			: undefined;
@@ -293,7 +328,18 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const reason = (formData.get('reason') as string | null)?.trim() || null;
 
-		await db.update(orders).set({ status: 'cancelled' }).where(eq(orders.id, order.id));
+		try {
+			await db.transaction(async (tx) => {
+				await tx.update(orders).set({ status: 'cancelled' }).where(eq(orders.id, order.id));
+				// Nothing left to pay on a cancelled order — kill every live link.
+				await expirePaymentLinks(order.id, tx);
+				// No-op unless stock was taken out for this order.
+				await restoreStockForOrder(tx, order.id);
+			});
+		} catch (err) {
+			console.error('Customer cancel failed:', err);
+			return fail(500, { message: 'Could not cancel the order right now. Please contact us.' });
+		}
 
 		await sendOrderCancelledNotice(order.id, reason).catch((err) =>
 			console.error('Order cancelled notice failed:', err)

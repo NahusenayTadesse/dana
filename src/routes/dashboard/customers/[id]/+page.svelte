@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 
 	let { data } = $props();
@@ -16,6 +17,10 @@
 	import SingleView from '$lib/components/SingleView.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import { edit } from './schema.js';
+	import { can } from '$lib/permissions';
+
+	const canEdit = $derived(can(data.access, 'customers.edit'));
+	const canDelete = $derived(can(data.access, 'customers.delete'));
 
 	let singleTable = $derived([
 		{ name: 'Name', value: data.customer?.customerName },
@@ -35,18 +40,17 @@
 			value: data?.orderCounts?.find((item) => item.status === 'delivered')?.count ?? 0
 		},
 		{
-			name: 'Number of Delivered Orders',
+			name: 'Number of Cancelled Orders',
 			value: data?.orderCounts?.find((item) => item.status === 'cancelled')?.count ?? 0
 		},
 		{ name: 'Number of Days Since Joined', value: data.customer?.daysSinceJoined + ' Days' }
 	]);
 
-	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = superForm(
-		data.form,
-		{
+	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = untrack(() =>
+		superForm(data.form, {
 			validators: zod4Client(edit),
 			resetForm: false
-		}
+		})
 	);
 
 	export const snapshot: Snapshot = { capture, restore };
@@ -66,12 +70,6 @@
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import OrderHistoryTable from '$lib/components/OrderHistoryTable.svelte';
 	import { page } from '$app/state';
-
-	$form.name = data?.customer?.customerName;
-	$form.phone = data?.customer?.phone;
-	$form.email = data?.customer?.email;
-	$form.address = data?.customer?.address;
-	$form.status = data?.customer?.status;
 </script>
 
 <svelte:head>
@@ -81,16 +79,18 @@
 {#if data?.customer}
 	<SingleView title="Customer Details">
 		<div class="mt-4 flex w-full flex-row items-start justify-start gap-2 pl-4">
-			<Button onclick={() => (editCus = !editCus)}>
-				{#if !editCus}
-					<Pencil class="h-4 w-4" />
-					Edit
-				{:else}
-					<ArrowLeft class="h-4 w-4" />
+			{#if canEdit}
+				<Button onclick={() => (editCus = !editCus)}>
+					{#if !editCus}
+						<Pencil class="h-4 w-4" />
+						Edit
+					{:else}
+						<ArrowLeft class="h-4 w-4" />
 
-					Back
-				{/if}
-			</Button>
+						Back
+					{/if}
+				</Button>
+			{/if}
 			<Button href="{page.url.pathname}/history">
 				<History /> Order History
 			</Button>
@@ -99,9 +99,11 @@
 				<Eye /> Trade Licence
 			</Button>
 			{/if}
-			<Delete redirect="/dashboard/customers" />
+			{#if canDelete}
+				<Delete redirect="/dashboard/customers" />
+			{/if}
 		</div>
-		{#if editCus === false}
+		{#if editCus === false || !canEdit}
 			<div class="w-full p-4"><SingleTable {singleTable} /></div>
 		{:else}
 			<form
@@ -129,7 +131,7 @@
 					type="tel"
 					{form}
 					{errors}
-					required={true}
+					required={false}
 					placeholder="Enter Customer Phone"
 				/>
 				<InputComp
@@ -138,7 +140,7 @@
 					type="email"
 					{form}
 					{errors}
-					required={false}
+					required={true}
 					placeholder="Enter Customer Email"
 				/>
 				<InputComp

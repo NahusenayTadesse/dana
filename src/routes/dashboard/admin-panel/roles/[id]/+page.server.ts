@@ -1,6 +1,6 @@
 import { message, superValidate, setError } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { editRoleSchema as schema } from './schema';
+import { editRoleSchema as schema, rolePermissionsSchema } from './schema';
 
 import { db } from '$lib/server/db';
 import { roles, user, rolePermissions } from '$lib/server/db/schema';
@@ -9,9 +9,19 @@ import type { Actions, PageServerLoad } from './$types';
 import { fail } from 'sveltekit-superforms';
 import { setFlash } from 'sveltekit-flash-message/server';
 import { error } from '@sveltejs/kit';
+import { parseIdParam } from '$lib/server/params';
+import { isDuplicateEntry } from '$lib/server/dbErrors';
+import {
+	catalogKeys,
+	changedKeys,
+	getRoleGrants,
+	replaceRoleGrants,
+	ungrantable
+} from '$lib/server/permissions';
+import { PERMISSIONS, SUPER_ADMIN_ROLE } from '$lib/permissions';
 
-export const load: PageServerLoad = async ({ params }) => {
-	const { id } = params;
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const id = parseIdParam(params.id);
 
 	const form = await superValidate(zod4(schema));
 
@@ -27,12 +37,19 @@ export const load: PageServerLoad = async ({ params }) => {
 		.leftJoin(user, and(eq(user.roleId, roles.id)))
 		.leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
 		.groupBy(roles.id)
-		.where(eq(roles.id, Number(id)))
+		.where(eq(roles.id, id))
 		.then((rows) => rows[0]);
 
 	if (!singleUser) {
-		return error(404, { message: 'Role not found' });
+		error(404, { message: 'Role not found' });
 	}
+
+	const grants = await getRoleGrants(id);
+	const permissionsForm = await superValidate(
+		{ permissions: grants },
+		zod4(rolePermissionsSchema),
+		{ id: 'role-permissions', errors: false }
+	);
 
 	const userList = await db
 		.select({
@@ -41,23 +58,30 @@ export const load: PageServerLoad = async ({ params }) => {
 			name: user.name
 		})
 		.from(user)
-		.where(eq(user.roleId, Number(id)));
+		.where(eq(user.roleId, id));
 
 	return {
 		singleUser,
 		id,
 		form,
-		userList
+		userList,
+		permissionsForm,
+		isSuperAdminRole: singleUser.name === SUPER_ADMIN_ROLE,
+		// Keys the current editor can't change — they don't hold them themselves.
+		lockedPermissions: ungrantable(
+			locals.access,
+			PERMISSIONS.map((p) => p.key)
+		)
 	};
 };
 
-// The dashboard gate matches the role *name* "Admin", so renaming or deleting
-// that role would lock every administrator out.
-const PROTECTED_ROLE = 'Admin';
+// The Admin role is the super-admin role: renaming or deleting it would lock
+// every administrator out.
+const PROTECTED_ROLE = SUPER_ADMIN_ROLE;
 
 export const actions: Actions = {
-	edit: async ({ request, params }) => {
-		const id = Number(params.id);
+	edit: async ({ request, params, locals }) => {
+		const id = parseIdParam(params.id);
 		const form = await superValidate(request, zod4(schema));
 
 		if (!form.valid) {
@@ -74,6 +98,14 @@ export const actions: Actions = {
 
 		if (!current) error(404, 'Role not found');
 
+		if (current.name === PROTECTED_ROLE && !locals.access?.superAdmin) {
+			return message(
+				form,
+				{ type: 'error', text: 'Only an Admin can change the Admin role.' },
+				{ status: 403 }
+			);
+		}
+
 		if (current.name === PROTECTED_ROLE && name !== PROTECTED_ROLE) {
 			return setError(form, 'name', 'The Admin role cannot be renamed.');
 		}
@@ -81,14 +113,19 @@ export const actions: Actions = {
 		try {
 			await db.update(roles).set({ name, description }).where(eq(roles.id, id));
 			return message(form, { type: 'success', text: 'Role updated successfully.' });
-		} catch (err: any) {
-			if (err.code === 'ER_DUP_ENTRY') return setError(form, 'name', 'Role name already exists.');
-			return message(form, { type: 'error', text: err.message });
+		} catch (err) {
+			if (isDuplicateEntry(err)) return setError(form, 'name', 'Role name already exists.');
+			console.error('Error updating role:', err);
+			return message(
+				form,
+				{ type: 'error', text: 'Could not update the role. Please try again.' },
+				{ status: 500 }
+			);
 		}
 	},
 
-	delete: async ({ params, cookies }) => {
-		const id = Number(params.id);
+	delete: async ({ params, cookies, locals }) => {
+		const id = parseIdParam(params.id);
 
 		const role = await db
 			.select({ name: roles.name, userCount: countDistinct(user.id) })
@@ -115,11 +152,79 @@ export const actions: Actions = {
 		}
 
 		try {
+			// A role carries permissions; only someone holding all of them may remove it.
+			if (ungrantable(locals.access, await getRoleGrants(id)).length > 0) {
+				setFlash(
+					{
+						type: 'error',
+						message: 'This role has permissions you don’t hold, so you can’t delete it.'
+					},
+					cookies
+				);
+				return fail(403);
+			}
+
 			await db.delete(roles).where(eq(roles.id, id));
 			setFlash({ type: 'success', message: 'Role Deleted Successfully!' }, cookies);
-		} catch (err: any) {
-			setFlash({ type: 'error', message: `Unexpected Error: ${err?.message}` }, cookies);
-			return fail(400);
+		} catch (err) {
+			console.error('Error deleting role:', err);
+			setFlash({ type: 'error', message: 'Could not delete the role. Please try again.' }, cookies);
+			return fail(500);
+		}
+	},
+
+	editPermissions: async ({ request, params, locals }) => {
+		const id = parseIdParam(params.id);
+		const form = await superValidate(request, zod4(rolePermissionsSchema), {
+			id: 'role-permissions'
+		});
+		if (!form.valid) {
+			return message(form, { type: 'error', text: 'Invalid permission list.' }, { status: 400 });
+		}
+
+		const role = await db
+			.select({ name: roles.name })
+			.from(roles)
+			.where(eq(roles.id, id))
+			.then((rows) => rows[0]);
+		if (!role) error(404, 'Role not found');
+
+		if (role.name === PROTECTED_ROLE) {
+			return message(
+				form,
+				{ type: 'error', text: 'The Admin role always has full access; its permissions can’t be changed.' },
+				{ status: 400 }
+			);
+		}
+
+		const next = catalogKeys(form.data.permissions);
+		const current = await getRoleGrants(id);
+		const blocked = ungrantable(locals.access, changedKeys(current, next));
+		if (blocked.length > 0) {
+			return message(
+				form,
+				{
+					type: 'error',
+					text: `You can only grant or remove permissions you hold yourself (${blocked.slice(0, 5).join(', ')}${blocked.length > 5 ? '…' : ''}).`
+				},
+				{ status: 403 }
+			);
+		}
+
+		try {
+			await replaceRoleGrants(id, next, locals.user?.id);
+			form.data.permissions = next;
+			return message(form, {
+				type: 'success',
+				text: `Saved — ${next.length} permission${next.length === 1 ? '' : 's'} on ${role.name}.`
+			});
+		} catch (err) {
+			console.error('Error saving role permissions:', err);
+			return message(
+				form,
+				{ type: 'error', text: 'Could not save the permissions. Please try again.' },
+				{ status: 500 }
+			);
 		}
 	}
 };

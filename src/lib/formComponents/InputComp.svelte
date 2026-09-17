@@ -27,6 +27,7 @@
 		oldDays = true,
 		year = false,
 		futureDays = false,
+		clearable = false,
 		image = '',
 		images = $bindable()
 	} = $props();
@@ -41,7 +42,7 @@
 	{:else if type === 'gallery'}
 		<GalleryUpload {name} {form} {errors} title={placeholder} bind:images />
 	{:else if type === 'select'}
-		<SelectComp {name} bind:value={$form[name]} {items} />
+		<SelectComp {name} bind:value={$form[name]} {items} {clearable} />
 	{:else if type === 'date'}
 		<DatePicker2 bind:data={$form[name]} {oldDays} {year} {futureDays} />
 		<input type="hidden" {name} bind:value={$form[name]} />
@@ -49,7 +50,7 @@
 		<DatePicker bind:data={$form[name]} {oldDays} {year} {futureDays} />
 		<input type="hidden" {name} bind:value={$form[name]} />
 	{:else if type === 'combo'}
-		<ComboboxComp {name} bind:value={$form[name]} {items} {required} />
+		<ComboboxComp {name} bind:value={$form[name]} {items} {required} {clearable} />
 	{:else if type === 'checkbox'}
 		<CheckboxComp {items} bind:checkedValues={$form[name]} />
 		<input type="hidden" {name} bind:value={$form[name]} />

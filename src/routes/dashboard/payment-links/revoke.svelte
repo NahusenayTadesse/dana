@@ -8,9 +8,15 @@
 
 	let { data, row }: { data: SuperValidated<any>; row: LinkRow } = $props();
 
-	const { enhance, message } = untrack(() =>
+	const { form, enhance, message } = untrack(() =>
 		superForm(data, { resetForm: false, dataType: 'json', id: `link-revoke-${row.id}` })
 	);
+
+	// dataType 'json' posts $form and ignores plain inputs, so the id has to live
+	// in the form store — a hidden <input> alone sent id 0 and nothing was revoked.
+	untrack(() => {
+		$form.id = row.id;
+	});
 
 	let confirming = $state(false);
 
@@ -23,7 +29,6 @@
 
 {#if row.state === 'live'}
 	<form action="?/revoke" method="post" use:enhance>
-		<input type="hidden" name="id" value={row.id} />
 		{#if confirming}
 			<Button type="submit" variant="destructive" size="sm">Revoke?</Button>
 		{:else}

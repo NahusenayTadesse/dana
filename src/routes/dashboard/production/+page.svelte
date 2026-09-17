@@ -12,10 +12,14 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import Fields from './fields.svelte';
 	import Edit from './edit.svelte';
+	import { can } from '$lib/permissions';
 	import type { BatchRow } from './types';
 
 	let { data } = $props();
 	let addOpen = $state(false);
+
+	const canCreate = $derived(can(data.access, 'production.create'));
+	const canEdit = $derived(can(data.access, 'production.edit'));
 
 	const { form, errors, enhance, delayed, message } = untrack(() =>
 		superForm(data.form, { dataType: 'json', id: 'batch-add' })
@@ -41,14 +45,11 @@
 		warehouses: data.warehouses
 	});
 
-	const columns: ColumnDef<BatchRow, unknown>[] = [
+	const baseColumns: ColumnDef<BatchRow, unknown>[] = [
 		{ accessorKey: 'index', header: '#', cell: (info) => info.row.index + 1 },
-		{
-			accessorKey: 'batchNumber',
-			header: 'Batch',
-			cell: ({ row }) =>
-				renderComponent(Edit, { row: row.original, data: data.editForm, ...pickers })
-		},
+		// Only the Edit column renders the edit dialog: two instances of one
+		// per-row superForm id would send the action result to the wrong one.
+		{ accessorKey: 'batchNumber', header: 'Batch' },
 		{ accessorKey: 'productionDate', header: 'Date' },
 		{ accessorKey: 'variantName', header: 'Product made' },
 		{ accessorKey: 'quantityProduced', header: 'Pieces' },
@@ -75,14 +76,18 @@
 						}`
 		},
 		{ accessorKey: 'producedByName', header: 'Produced by' },
-		{ accessorKey: 'warehouseName', header: 'Landed in' },
-		{
-			accessorKey: 'edit',
-			header: 'Edit',
-			cell: ({ row }) =>
-				renderComponent(Edit, { row: row.original, data: data.editForm, ...pickers, icon: true })
-		}
+		{ accessorKey: 'warehouseName', header: 'Landed in' }
 	];
+
+	const editColumn: ColumnDef<BatchRow, unknown> = {
+		accessorKey: 'edit',
+		header: 'Edit',
+		cell: ({ row }) =>
+			renderComponent(Edit, { row: row.original, data: data.editForm, ...pickers, icon: true })
+	};
+
+	// Only show the Edit column when this user's role may edit (the server refuses it anyway).
+	const columns = $derived(canEdit ? [...baseColumns, editColumn] : baseColumns);
 </script>
 
 <svelte:head>
@@ -95,8 +100,9 @@
 			<Factory class="h-5 w-5" /> Production Batches
 		</h1>
 		<p class="max-w-[70ch] text-sm text-muted-foreground">
-			Coil in, sheets out. Batch numbers are what a mill certificate is traced by, so each one has to
-			be unique.
+			Coil in, sheets out. Recording a batch takes the material consumed off its on-hand and adds the
+			pieces to warehouse stock; editing one applies only the difference. Batch numbers are what a
+			mill certificate is traced by, so each one has to be unique.
 		</p>
 		<div class="mt-2 flex flex-wrap gap-2">
 			<Badge variant="secondary">{rows.length} batches</Badge>
@@ -104,26 +110,28 @@
 		</div>
 	</div>
 
-	<DialogComp bind:open={addOpen} title="Record Batch" variant="default" IconComp={Plus} size="lg">
-		<form action="?/add" method="post" use:enhance id="batch-add-form" class="flex flex-col gap-3">
-			<Fields
-				{form}
-				{errors}
-				variants={data.variants}
-				materials={data.materials}
-				people={data.people}
-				warehouses={data.warehouses}
-			/>
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="Record Batch" variant="default" IconComp={Plus} size="lg">
+			<form action="?/add" method="post" use:enhance id="batch-add-form" class="flex flex-col gap-3">
+				<Fields
+					{form}
+					{errors}
+					variants={data.variants}
+					materials={data.materials}
+					people={data.people}
+					warehouses={data.warehouses}
+				/>
 
-			<Button type="submit" class="mt-2" form="batch-add-form">
-				{#if $delayed}
-					<LoadingBtn name="Recording" />
-				{:else}
-					<Plus /> Record batch
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="batch-add-form">
+					{#if $delayed}
+						<LoadingBtn name="Recording" />
+					{:else}
+						<Plus /> Record batch
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}

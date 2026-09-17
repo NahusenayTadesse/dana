@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { imageOrPdfFile } from '$lib/uploadTypes';
 
 export const quoteRequest = z.object({
 	name: z.string().optional(),
@@ -7,7 +8,9 @@ export const quoteRequest = z.object({
 	whatsapp: z.string().optional(),
 	companyName: z.string().optional(),
 	tinNo: z.coerce.string().min(10).max(10).optional(),
-	docs: z.file().max(10000000).optional(),
+	// Only what the uploader accepts — HEIC or any other type passed here and then
+	// failed inside the save.
+	docs: imageOrPdfFile().optional(),
 	productId: z.number().int().optional(),
 	variantId: z.number().int().optional(),
 	categoryId: z.number().int().optional(),

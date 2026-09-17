@@ -3,6 +3,7 @@ import DataTableLinks from '$lib/components/Table/data-table-links.svelte';
 import Copy from '$lib/Copy.svelte';
 import DataTableActions from './data-table-actions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
+import Statuses from '$lib/components/Table/statuses.svelte';
 import { Eye } from '@lucide/svelte';
 
 export const columns = [
@@ -41,14 +42,22 @@ export const columns = [
 
 	},
 	{
+		accessorKey: 'status',
+		header: 'Status',
+		sortable: true,
+		// Customers with orders are deactivated rather than deleted.
+		cell: ({ row }) =>
+			renderComponent(Statuses, { status: row.original.status ? 'active' : 'inactive' })
+	},
+	{
 		accessorKey: 'phone',
 		header: 'Phone',
 		sortable: true,
 		cell: ({ row }) => renderComponent(Copy, { data: row.original.phone })
 	},
 	{
-		accessorKey: 'Email',
-		header: 'email',
+		accessorKey: 'email',
+		header: 'Email',
 		sortable: true,
 		cell: ({ row }) => renderComponent(Copy, { data: row.original.email })
 	},
@@ -124,9 +133,8 @@ export const columns = [
 				id: row.original.id,
 				phone: row.original.phone,
 				createdBy: row.original.createdBy,
-				createdById: row.original.bookedById,
-				customerName: row.original.customerName,
-				date: row.original.date
+				createdById: row.original.createdById,
+				customerName: row.original.customerName
 			});
 		}
 	}

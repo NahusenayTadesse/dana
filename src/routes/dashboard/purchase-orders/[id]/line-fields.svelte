@@ -1,5 +1,6 @@
 <script lang="ts">
 	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import OptionalPicker from '../../production/optional-picker.svelte';
 
 	let {
 		form,
@@ -14,11 +15,18 @@
 	} = $props();
 </script>
 
-<InputComp {form} {errors} label="Raw material" type="select" name="rawMaterialId" items={materials} />
-<InputComp {form} {errors} label="…or finished product" type="combo" name="variantId" items={variants} />
+<OptionalPicker {form} {errors} label="Raw material" name="rawMaterialId" items={materials} />
+<OptionalPicker
+	{form}
+	{errors}
+	label="…or finished product"
+	type="combo"
+	name="variantId"
+	items={variants}
+/>
 <p class="px-1 text-xs text-muted-foreground">
-	A line buys one or the other. Picking both is refused, because there would be nothing to receive
-	the quantity against.
+	A line buys one or the other — set the other to None. Finished products are counted in whole
+	pieces.
 </p>
 <InputComp {form} {errors} label="Quantity" type="number" name="quantity" min="0" required={true} />
 <InputComp

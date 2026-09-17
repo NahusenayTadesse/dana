@@ -8,9 +8,15 @@
 
 	let { data, row }: { data: SuperValidated<any>; row: LineRow } = $props();
 
-	const { enhance, message } = untrack(() =>
+	const { form, enhance, message } = untrack(() =>
 		superForm(data, { resetForm: false, dataType: 'json', id: `poline-del-${row.id}` })
 	);
+
+	// With dataType 'json' superforms posts $form and ignores plain inputs, so
+	// the line id has to be in the form store, not just a hidden input.
+	untrack(() => {
+		$form.id = row.id;
+	});
 
 	let confirming = $state(false);
 
@@ -22,7 +28,6 @@
 </script>
 
 <form action="?/removeLine" method="post" use:enhance>
-	<input type="hidden" name="id" value={row.id} />
 	{#if confirming}
 		<Button type="submit" variant="destructive" size="sm">Remove?</Button>
 	{:else}

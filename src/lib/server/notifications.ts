@@ -1,4 +1,7 @@
-import { getOrderDetails } from '$lib/server/orders';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { quoteRequests } from '$lib/server/db/schema';
+import { getOrderDetails, getOrderTotal } from '$lib/server/orders';
 import { getAdjustedOrderTotals } from '$lib/server/orderAdjustments';
 import { createPaymentLink, buildPaymentLinkUrl } from '$lib/server/paymentLinks';
 import {
@@ -25,6 +28,34 @@ import {
 import { SMTP_USER as USER } from '$env/static/private';
 import { getSiteSettings } from '$lib/server/siteSettings';
 import { vatRateOf } from '$lib/siteSettings';
+
+/**
+ * A notification was refused for a reason staff can act on (order cancelled,
+ * offer rejected, nothing owed). Its `message` is safe to show in the
+ * dashboard; any other error thrown from here is not and must be logged.
+ */
+export class NotificationError extends Error {}
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+type Details = NonNullable<Awaited<ReturnType<typeof getOrderDetails>>>;
+
+/**
+ * The number to text. `customers.phone` is optional, but a quote request always
+ * carries the phone the customer typed into the form — fall back to it so an
+ * offer or balance SMS isn't silently skipped for guests.
+ */
+async function smsPhoneFor(details: Details): Promise<string | undefined> {
+	if (details.customer?.phone) return details.customer.phone;
+	const quote = await db
+		.select({ phone: quoteRequests.phone })
+		.from(quoteRequests)
+		.where(eq(quoteRequests.orderId, details.order.id))
+		.orderBy(desc(quoteRequests.id))
+		.limit(1)
+		.then((rows) => rows[0]);
+	return quote?.phone || undefined;
+}
 
 /**
  * Where staff notifications go. Business Settings can point them at a sales
@@ -73,8 +104,17 @@ async function notifyBoth(
 export async function sendQuotePaymentLink(orderId: number, origin: string) {
 	const details = await getOrderDetails(orderId);
 	if (!details?.customer || !details.transaction || !details.offer) {
-		throw new Error(
+		throw new NotificationError(
 			`Cannot send payment link — order #${orderId} is missing customer, transaction, or price offer data.`
+		);
+	}
+	// /pay refuses both of these, so a link sent now would be dead on arrival.
+	if (details.order.status === 'cancelled') {
+		throw new NotificationError(`Order #${orderId} is cancelled — no payment link was sent.`);
+	}
+	if (details.offer.status === 'rejected') {
+		throw new NotificationError(
+			`The customer rejected this offer — save a new revision before sending it again.`
 		);
 	}
 
@@ -87,6 +127,7 @@ export async function sendQuotePaymentLink(orderId: number, origin: string) {
 	const vatRate = vatRateOf(await getSiteSettings());
 	const { subject, html } = quotePaymentLinkTemplate(orderId, items, offer, payUrl, vatRate);
 	const adminTemplate = adminQuotePaymentLinkTemplate(orderId, items, offer, vatRate);
+	const phone = await smsPhoneFor(details);
 
 	await notifyBoth(
 		`quote payment link (order #${orderId})`,
@@ -95,7 +136,7 @@ export async function sendQuotePaymentLink(orderId: number, origin: string) {
 				details.customer!.email,
 				subject,
 				html,
-				details.customer!.phone ?? undefined,
+				phone,
 				quotePaymentLinkSms(orderId, offer, payUrl)
 			),
 		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
@@ -116,6 +157,7 @@ export async function sendPaymentConfirmation(orderId: number, payAmount: number
 	const vatRate = vatRateOf(await getSiteSettings());
 	const customerTemplate = paymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance, vatRate);
 	const adminTemplate = adminPaymentConfirmedTemplate(orderId, items, offer, payAmount, isAdvance, vatRate);
+	const phone = await smsPhoneFor(details);
 
 	await notifyBoth(
 		`payment confirmation (order #${orderId})`,
@@ -124,7 +166,7 @@ export async function sendPaymentConfirmation(orderId: number, payAmount: number
 				details.customer!.email,
 				customerTemplate.subject,
 				customerTemplate.html,
-				details.customer!.phone ?? undefined,
+				phone,
 				paymentConfirmedSms(orderId, offer, payAmount, isAdvance)
 			),
 		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
@@ -139,9 +181,23 @@ export async function sendPaymentConfirmation(orderId: number, payAmount: number
  */
 export async function sendBalancePaymentLink(orderId: number, origin: string) {
 	const details = await getOrderDetails(orderId);
-	if (!details?.customer || !details.transaction || !details.offer) {
-		throw new Error(
-			`Cannot send balance payment link — order #${orderId} is missing customer, transaction, or price offer data.`
+	if (!details) throw new NotificationError(`Order #${orderId} was not found.`);
+	if (!details.offer) {
+		throw new NotificationError(
+			`Order #${orderId} has no price offer — balance links only work for orders priced in the quote builder.`
+		);
+	}
+	if (!details.customer || !details.transaction) {
+		throw new NotificationError(
+			`Cannot send balance payment link — order #${orderId} is missing its customer or payment record. Send the offer from the quote builder first.`
+		);
+	}
+	if (details.order.status === 'cancelled') {
+		throw new NotificationError(`Order #${orderId} is cancelled — there is nothing to collect.`);
+	}
+	if (details.offer.status === 'rejected') {
+		throw new NotificationError(
+			`The customer rejected the offer on order #${orderId} — send a revised offer instead.`
 		);
 	}
 
@@ -150,18 +206,20 @@ export async function sendBalancePaymentLink(orderId: number, origin: string) {
 	// this is always the true current total, not just the accepted offer's.
 	const adjusted = await getAdjustedOrderTotals(orderId);
 	if (!adjusted) {
-		throw new Error(`Cannot send balance payment link — order #${orderId} has no price offer.`);
+		throw new NotificationError(`Cannot send balance payment link — order #${orderId} has no price offer.`);
 	}
 	const total = adjusted.total;
-	// transaction.amount tracks "amount charged on the most recent successful
-	// attempt" — for a paid-off transaction that's the running amount paid so far.
-	const amountPaid = transaction.paymentStatus === 'paid' || transaction.paymentStatus === 'partially_paid'
-		? Number(transaction.amount)
-		: 0;
-	const remainingBalance = Math.round(total - amountPaid);
+	// amountPaid is what has actually been collected. `transaction.amount` is
+	// the size of the checkout attempt currently in flight — reading it as
+	// "already paid" meant an abandoned balance attempt was quoted back to the
+	// customer as money received. Same 2dp rounding as the pay page, so the
+	// email and the page charge the same figure (and a sub-1 ETB remainder is
+	// still a remainder).
+	const amountPaid = Number(transaction.amountPaid);
+	const remainingBalance = round2(total - amountPaid);
 
 	if (remainingBalance <= 0) {
-		throw new Error(`Order #${orderId} has no remaining balance — nothing to request.`);
+		throw new NotificationError(`Order #${orderId} has no remaining balance — nothing to request.`);
 	}
 
 	const rawToken = await createPaymentLink(orderId);
@@ -169,6 +227,7 @@ export async function sendBalancePaymentLink(orderId: number, origin: string) {
 
 	const customerTemplate = balancePaymentLinkTemplate(orderId, adjusted, amountPaid, remainingBalance, payUrl);
 	const adminTemplate = adminBalancePaymentLinkTemplate(orderId, amountPaid, remainingBalance);
+	const phone = await smsPhoneFor(details);
 
 	await notifyBoth(
 		`balance payment link (order #${orderId})`,
@@ -177,7 +236,7 @@ export async function sendBalancePaymentLink(orderId: number, origin: string) {
 				customer.email,
 				customerTemplate.subject,
 				customerTemplate.html,
-				customer.phone ?? undefined,
+				phone,
 				balancePaymentLinkSms(orderId, remainingBalance, payUrl)
 			),
 		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
@@ -195,13 +254,18 @@ export async function sendOrderAdjustmentNotice(
 ) {
 	const details = await getOrderDetails(orderId);
 	const adjusted = await getAdjustedOrderTotals(orderId);
+	// Throw rather than log-and-return: callers report a rejection as "the
+	// customer could not be notified", and returning quietly let the dashboard
+	// say "Adjustment applied." when nobody was told anything.
 	if (!details?.customer || !adjusted) {
-		console.error(`Cannot send adjustment notice — order #${orderId} is missing customer or price offer data.`);
-		return;
+		throw new NotificationError(
+			`Cannot send adjustment notice — order #${orderId} is missing customer or price offer data.`
+		);
 	}
 
 	const customerTemplate = orderAdjustmentAppliedTemplate(orderId, adjustment, adjusted.total);
 	const adminTemplate = adminOrderAdjustmentTemplate(orderId, adjustment, adjusted.total);
+	const phone = await smsPhoneFor(details);
 
 	await notifyBoth(
 		`order adjustment (order #${orderId})`,
@@ -210,7 +274,7 @@ export async function sendOrderAdjustmentNotice(
 				details.customer!.email,
 				customerTemplate.subject,
 				customerTemplate.html,
-				details.customer!.phone ?? undefined,
+				phone,
 				`Order #${orderId} adjusted: ${adjustment.type === 'addition' ? '+' : '-'}${adjustment.amount.toLocaleString()} ETB. New total: ${adjusted.total.toLocaleString()} ETB.`
 			),
 		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)
@@ -233,7 +297,7 @@ export async function sendAdjustmentDecisionNotice(orderId: number, approved: bo
 		details.customer.email,
 		template.subject,
 		template.html,
-		details.customer.phone ?? undefined,
+		await smsPhoneFor(details),
 		`Order #${orderId}: your adjustment request was ${approved ? 'approved' : 'declined'}.`
 	);
 }
@@ -242,25 +306,24 @@ export async function sendAdjustmentDecisionNotice(orderId: number, approved: bo
  * The order reached the customer. Fires on the transition into `delivered` and
  * nowhere else — re-saving an already-delivered order must not re-announce it.
  *
- * `fallbackTotal` covers orders staff created directly on the Orders page:
- * those never went through the quote builder, so there is no price offer for
- * getAdjustedOrderTotals() to read and the action's own line total is the only
- * figure available.
+ * The total is the order's payable total (getOrderTotal): the adjusted offer
+ * for a quoted order, or the lines priced with VAT for an order staff created
+ * directly — the same figure recorded as collected on delivery.
  */
-export async function sendOrderDeliveredNotice(orderId: number, fallbackTotal?: number) {
+export async function sendOrderDeliveredNotice(orderId: number) {
 	const details = await getOrderDetails(orderId);
 	if (!details?.customer) {
 		console.error(`Cannot send delivery notice — order #${orderId} has no customer on file.`);
 		return;
 	}
 
-	const adjusted = await getAdjustedOrderTotals(orderId);
-	const total = adjusted?.total ?? fallbackTotal ?? 0;
+	const { total } = await getOrderTotal(orderId);
 	const { items } = details;
 
 	const vatRate = vatRateOf(await getSiteSettings());
 	const customerTemplate = customerDeliveredTemplate(orderId, items, total, vatRate);
 	const adminTemplate = adminDeliveredTemplate(orderId, items, total, vatRate);
+	const phone = await smsPhoneFor(details);
 
 	await notifyBoth(
 		`delivery notice (order #${orderId})`,
@@ -269,7 +332,7 @@ export async function sendOrderDeliveredNotice(orderId: number, fallbackTotal?: 
 				details.customer!.email,
 				customerTemplate.subject,
 				customerTemplate.html,
-				details.customer!.phone ?? undefined,
+				phone,
 				orderDeliveredSms(orderId, total)
 			),
 		async () => sendEmail(await alertsRecipient(), adminTemplate.subject, adminTemplate.html)

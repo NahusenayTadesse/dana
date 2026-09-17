@@ -14,10 +14,14 @@
 	import { Button } from '$lib/components/ui/button/index';
 	import OrderFields from './order-fields.svelte';
 	import Edit from './edit.svelte';
-	import { STATUS_BADGE, type OrderRow } from './types';
+	import { can } from '$lib/permissions';
+	import { CREATE_STATUS_ITEMS, STATUS_BADGE, type OrderRow } from './types';
 
 	let { data } = $props();
 	let addOpen = $state(false);
+
+	const canCreate = $derived(can(data.access, 'purchase_orders.create'));
+	const canEdit = $derived(can(data.access, 'purchase_orders.edit'));
 
 	const { form, errors, enhance, delayed, message } = untrack(() =>
 		superForm(data.form, { dataType: 'json', id: 'po-add' })
@@ -39,7 +43,7 @@
 		rows.filter((r) => r.status !== 'received' && r.status !== 'cancelled').reduce((s, r) => s + r.value, 0)
 	);
 
-	const columns: ColumnDef<OrderRow, unknown>[] = [
+	const baseColumns: ColumnDef<OrderRow, unknown>[] = [
 		{
 			accessorKey: 'id',
 			header: 'PO',
@@ -73,20 +77,24 @@
 			header: 'Received',
 			cell: ({ row }) => row.original.receivedDate || '—'
 		},
-		{ accessorKey: 'raisedByName', header: 'Raised by' },
-		{
-			accessorKey: 'edit',
-			header: 'Edit',
-			cell: ({ row }) =>
-				renderComponent(Edit, {
-					row: row.original,
-					data: data.editForm,
-					suppliers: data.suppliers,
-					people: data.people,
-					icon: true
-				})
-		}
+		{ accessorKey: 'raisedByName', header: 'Raised by' }
 	];
+
+	const editColumn: ColumnDef<OrderRow, unknown> = {
+		accessorKey: 'edit',
+		header: 'Edit',
+		cell: ({ row }) =>
+			renderComponent(Edit, {
+				row: row.original,
+				data: data.editForm,
+				suppliers: data.suppliers,
+				people: data.people,
+				icon: true
+			})
+	};
+
+	// Only show the Edit column when this user's role may edit (the server refuses it anyway).
+	const columns = $derived(canEdit ? [...baseColumns, editColumn] : baseColumns);
 </script>
 
 <svelte:head>
@@ -111,19 +119,27 @@
 		</div>
 	</div>
 
-	<DialogComp bind:open={addOpen} title="New Purchase Order" variant="default" IconComp={Plus} size="md">
-		<form action="?/add" method="post" use:enhance id="po-add-form" class="flex flex-col gap-3">
-			<OrderFields {form} {errors} suppliers={data.suppliers} people={data.people} />
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="New Purchase Order" variant="default" IconComp={Plus} size="md">
+			<form action="?/add" method="post" use:enhance id="po-add-form" class="flex flex-col gap-3">
+				<OrderFields
+					{form}
+					{errors}
+					suppliers={data.suppliers}
+					people={data.people}
+					statuses={CREATE_STATUS_ITEMS}
+				/>
 
-			<Button type="submit" class="mt-2" form="po-add-form">
-				{#if $delayed}
-					<LoadingBtn name="Creating" />
-				{:else}
-					<Plus /> Create order
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="po-add-form">
+					{#if $delayed}
+						<LoadingBtn name="Creating" />
+					{:else}
+						<Plus /> Create order
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}

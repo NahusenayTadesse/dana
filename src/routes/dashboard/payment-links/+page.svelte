@@ -8,8 +8,11 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import Revoke from './revoke.svelte';
 	import type { LinkRow } from './types';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
+
+	const canRevoke = $derived(can(data.access, 'payment_links.revoke'));
 
 	const rows = $derived(data.allData as LinkRow[]);
 	const live = $derived(rows.filter((r) => r.state === 'live').length);
@@ -48,6 +51,10 @@
 			cell: ({ row }) => renderComponent(Revoke, { row: row.original, data: data.revokeForm })
 		}
 	];
+
+	const visibleColumns = $derived(
+		canRevoke ? columns : columns.filter((c) => !('accessorKey' in c && c.accessorKey === 'revoke'))
+	);
 </script>
 
 <svelte:head>
@@ -71,5 +78,5 @@
 </div>
 
 {#key data.allData}
-	<DataTable {columns} data={rows} search={true} fileName="Payment Links" />
+	<DataTable columns={visibleColumns} data={rows} search={true} fileName="Payment Links" />
 {/key}

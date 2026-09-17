@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { SITE_IMAGE_SLOT_MAP } from '$lib/siteImages';
+import { imageFile } from '$lib/uploadTypes';
 
 const slotKey = z.string().refine((value) => value in SITE_IMAGE_SLOT_MAP, {
 	message: 'Unknown image slot.'
@@ -13,8 +14,9 @@ const slotKey = z.string().refine((value) => value in SITE_IMAGE_SLOT_MAP, {
 export const updateSlotSchema = z.object({
 	slot: slotKey,
 	existing: z.string().default(''),
-	image: z.file().max(10_000_000, 'Images must be 10MB or smaller.').optional(),
-	images: z.file().max(10_000_000, 'Images must be 10MB or smaller.').array().optional()
+	// Same allowlist as the uploader, so e.g. a HEIC fails validation up front.
+	image: imageFile().optional(),
+	images: imageFile().array().optional()
 });
 
 export const resetSlotSchema = z.object({

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { SquarePen, Save, Trash2 } from '@lucide/svelte';
+	import { SquarePen, Save, Trash2, Warehouse } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
 	import { untrack } from 'svelte';
@@ -33,6 +33,8 @@
 		widthItems = [],
 		thicknessItems = [],
 		lengthItems = [],
+		canEdit = true,
+		canDelete = true
 	}: {
 		data: SuperValidated<Infer<typeof editVariant>>;
 		variant: Variant;
@@ -40,13 +42,17 @@
 		widthItems?: Item[];
 		thicknessItems?: Item[];
 		lengthItems?: Item[];
+		/** products.edit — the Save button (editVariant). */
+		canEdit?: boolean;
+		/** products.delete — the Delete button (deleteVariant). */
+		canDelete?: boolean;
 	} = $props();
 
 	// A superForm id is fixed for the lifetime of the instance, so capturing the
 	// initial row id here is deliberate.
 	const formId = `variant-${untrack(() => variant.id)}`;
 
-	const { form, errors, enhance, delayed, message } = superForm(data, {
+	const { form, errors, enhance, delayed, message } = superForm(untrack(() => data), {
 		// Every row is handed the same `editVariantForm` from `load`, so without a
 		// unique id all rows share one form id and each response is applied to all
 		// of them — one row's save silently overwrites every other row's state.
@@ -77,7 +83,6 @@
 				lengthId: v.lengthId,
 				sku: v.sku,
 				price: v.price != null ? Number(v.price) : null,
-				quantity: v.quantity,
 				reorderLevel: v.reorderLevel
 			}),
 			{ taint: false }
@@ -155,14 +160,17 @@
 					label="Price (ETB)"
 					placeholder="Blank = quote only"
 				/>
-				<InputComp
-					{form}
-					{errors}
-					type="number"
-					name="quantity"
-					label="Quantity"
-					placeholder="0"
-				/>
+				<!-- Stock is read-only here: it is the synced total of this variant's
+				     warehouse rows and only changes through stock movements. -->
+				<div class="flex flex-col gap-1 p-1">
+					<span class="text-sm font-medium">Stock</span>
+					<div class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+						<span>{variant.quantity} units across warehouses</span>
+						<Button href="/dashboard/stock" variant="link" size="sm" class="h-auto p-0">
+							<Warehouse class="h-4 w-4" /> Manage stock
+						</Button>
+					</div>
+				</div>
 				<InputComp
 					{form}
 					{errors}
@@ -184,24 +192,28 @@
 			/>
 
 			<div class="flex flex-wrap gap-2">
-				<Button type="submit" size="lg" disabled={$delayed}>
-					{#if $delayed}
-						<LoadingBtn name="Saving" />
-					{:else}
-						<Save class="mr-2 h-4 w-4" /> Save Changes
-					{/if}
-				</Button>
+				{#if canEdit}
+					<Button type="submit" size="lg" disabled={$delayed}>
+						{#if $delayed}
+							<LoadingBtn name="Saving" />
+						{:else}
+							<Save class="mr-2 h-4 w-4" /> Save Changes
+						{/if}
+					</Button>
+				{/if}
 
-				<!-- Same superform, different server action -->
-				<Button
-					type="submit"
-					variant="destructive"
-					size="lg"
-					formaction="?/deleteVariant"
-					disabled={$delayed}
-				>
-					<Trash2 class="mr-2 h-4 w-4" /> Delete
-				</Button>
+				{#if canDelete}
+					<!-- Same superform, different server action -->
+					<Button
+						type="submit"
+						variant="destructive"
+						size="lg"
+						formaction="?/deleteVariant"
+						disabled={$delayed}
+					>
+						<Trash2 class="mr-2 h-4 w-4" /> Delete
+					</Button>
+				{/if}
 			</div>
 		</form>
 	</div>

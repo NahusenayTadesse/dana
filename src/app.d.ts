@@ -7,6 +7,10 @@ declare global {
 		interface Locals {
 			user?: User;
 			session?: Session;
+			/** Dashboard permissions, resolved in hooks for /dashboard requests. */
+			access?: import('$lib/server/permissions').ResolvedAccess;
+			/** Set by hooks when a dashboard page load isn't permitted. */
+			denied?: string;
 		}
 
 		// interface Error {}

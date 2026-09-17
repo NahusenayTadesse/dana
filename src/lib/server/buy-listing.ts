@@ -9,6 +9,7 @@ import {
 	lengths
 } from '$lib/server/db/schema';
 import { eq, asc, and, inArray } from 'drizzle-orm';
+import { withDiscounts } from '$lib/server/product-listing';
 
 /**
  * The full active catalog with every variant attached — no filters, no
@@ -43,7 +44,7 @@ export async function loadBuyProductList() {
 
 	const productIds = productsData.map((p) => p.productId);
 
-	const variantRows = productIds.length
+	const rawVariantRows = productIds.length
 		? await db
 				.select({
 					productId: productVariants.productId,
@@ -75,6 +76,10 @@ export async function loadBuyProductList() {
 				)
 		: [];
 
+	// Discounted prices, so the /buy and /checkout totals match what checkout
+	// charges (orderLines.ts applies the same discounts server-side).
+	const variantRows = await withDiscounts(rawVariantRows);
+
 	return productsData.map((p) => {
 		const variants = variantRows.filter((v) => v.productId === p.productId);
 		const pricedVariants = variants.map((v) => v.price).filter((v): v is string => v !== null);
@@ -87,7 +92,10 @@ export async function loadBuyProductList() {
 			lengthStep: p.lengthStep != null ? Number(p.lengthStep) : null,
 			minPrice: pricedVariants.length ? Math.min(...pricedVariants.map(Number)) : null,
 			maxPrice: pricedVariants.length ? Math.max(...pricedVariants.map(Number)) : null,
-			hasQuoteOnlyVariant: variants.some((v) => v.price === null)
+			hasQuoteOnlyVariant: variants.some((v) => v.price === null),
+			discountPercentage:
+				variants.map((v) => v.discountPercentage ?? 0).reduce((a, b) => Math.max(a, b), 0) ||
+				null
 		};
 	});
 }

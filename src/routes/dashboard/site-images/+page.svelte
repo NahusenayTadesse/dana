@@ -9,6 +9,7 @@
 	import SlotStatus from './slot-status.svelte';
 	import type { ColumnDef } from '@tanstack/table-core';
 	import type { SlotRow } from './types';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
 
@@ -17,7 +18,10 @@
 
 	// `sortable` isn't part of ColumnDef — sorting is on by default and the
 	// header component drives it, so the columns are plain tanstack defs.
-	const columns: ColumnDef<SlotRow, unknown>[] = [
+	// Replacing or restoring an image needs content.edit; viewers get no Manage column.
+	const canEdit = $derived(can(data.access, 'content.edit'));
+
+	const columns = $derived<ColumnDef<SlotRow, unknown>[]>([
 		{
 			accessorKey: 'index',
 			header: '#',
@@ -38,14 +42,9 @@
 				renderComponent(DataTableSort, {
 					name: 'Image',
 					onclick: column.getToggleSortingHandler()
-				}),
-			cell: ({ row }) =>
-				renderComponent(ManageSlot, {
-					slot: row.original,
-					updateForm: data.updateForm,
-					resetForm: data.resetForm,
-					trigger: 'label'
 				})
+			// Plain text: the Manage column holds the row's only ManageSlot, so its
+			// per-slot superForm ids aren't mounted twice.
 		},
 		{
 			accessorKey: 'description',
@@ -75,18 +74,22 @@
 			header: 'Status',
 			cell: ({ row }) => renderComponent(SlotStatus, { isCustom: row.original.isCustom })
 		},
-		{
-			accessorKey: 'manage',
-			header: 'Manage',
-			cell: ({ row }) =>
-				renderComponent(ManageSlot, {
-					slot: row.original,
-					updateForm: data.updateForm,
-					resetForm: data.resetForm,
-					trigger: 'button'
-				})
-		}
-	];
+		...(canEdit
+			? ([
+					{
+						accessorKey: 'manage',
+						header: 'Manage',
+						cell: ({ row }) =>
+							renderComponent(ManageSlot, {
+								slot: row.original,
+								updateForm: data.updateForm,
+								resetForm: data.resetForm,
+								trigger: 'button'
+							})
+					}
+				] satisfies ColumnDef<SlotRow, unknown>[])
+			: [])
+	]);
 </script>
 
 <svelte:head>

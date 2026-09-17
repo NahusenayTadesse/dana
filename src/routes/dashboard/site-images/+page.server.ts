@@ -1,10 +1,11 @@
-import { superValidate, message, fail } from 'sveltekit-superforms';
+import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { eq, inArray, and, ne } from 'drizzle-orm';
 
 import { db } from '$lib/server/db';
 import { siteImages as siteImagesTable } from '$lib/server/db/schema';
 import { saveUploadedFile, deleteUploadedFile, UploadError } from '$lib/server/upload';
+import { describeDbError } from '$lib/server/dbErrors';
 import { SITE_IMAGE_SLOTS, SITE_IMAGE_SLOT_MAP, type SiteImageSlot } from '$lib/siteImages';
 import { updateSlotSchema, resetSlotSchema } from './schema';
 import type { Actions, PageServerLoad } from './$types';
@@ -194,12 +195,16 @@ export const actions: Actions = {
 			// wrote are unreferenced — don't leave them behind.
 			await Promise.all(uploaded.map((name) => deleteUploadedFile(name).catch(() => {})));
 
-			const text =
-				err instanceof UploadError
-					? err.message
-					: `Could not update ${definition.label}: ${(err as Error)?.message ?? 'unexpected error'}`;
+			// Never echo a DB error's message: it is the raw SQL with its params.
 			console.error('site-images updateSlot failed:', err);
-			return message(form, { type: 'error', text }, { status: 500 });
+			if (err instanceof UploadError) {
+				return message(form, { type: 'error', text: err.message }, { status: 400 });
+			}
+			return message(
+				form,
+				{ type: 'error', text: describeDbError(err, `Could not update ${definition.label}.`) },
+				{ status: 500 }
+			);
 		}
 	},
 
@@ -207,7 +212,7 @@ export const actions: Actions = {
 		const form = await superValidate(request, zod4(resetSlotSchema));
 
 		if (!form.valid) {
-			return fail(400, { form });
+			return message(form, { type: 'error', text: 'Unknown image slot.' }, { status: 400 });
 		}
 
 		const definition = SITE_IMAGE_SLOT_MAP[form.data.slot];

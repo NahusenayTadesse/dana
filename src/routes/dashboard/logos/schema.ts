@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
+import { imageFile } from '$lib/uploadTypes';
 
 export const editGallery = z.object({
-	existing: z.string(),
-	images: z.file().max(10000000).array().optional()
+	existing: z.string().default(''),
+	images: imageFile().array().optional()
 });

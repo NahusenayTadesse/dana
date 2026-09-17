@@ -30,8 +30,13 @@ export async function loadSettingsScreen(screen: SettingScreen) {
 
 	const resolved = resolveSiteSettings(rows);
 
-	const form = await superValidate(resolved, zod4(buildSaveSchema(screen)));
-	const resetForm = await superValidate(zod4(resetSchema));
+	// The ids must match the ones settings-form.svelte gives its superForms:
+	// superforms only rebinds a form from fresh page data when the ids agree,
+	// so without them the inputs kept showing stale values after a reload.
+	const form = await superValidate(resolved, zod4(buildSaveSchema(screen)), {
+		id: `settings-${screen}`
+	});
+	const resetForm = await superValidate(zod4(resetSchema), { id: `settings-${screen}-reset` });
 
 	return {
 		form,

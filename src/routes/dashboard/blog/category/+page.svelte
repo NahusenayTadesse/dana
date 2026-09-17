@@ -1,12 +1,20 @@
 <script>
+	import { untrack } from 'svelte';
 	import { renderComponent } from '$lib/components/ui/data-table/index.js';
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
-	import Statuses from '$lib/components/Table/statuses.svelte';
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	import { Button } from '$lib/components/ui/button/index';
 	import Edit from './edit.svelte';
-	const columns = [
+	import { can } from '$lib/permissions';
+
+	let { data } = $props();
+
+	const canCreate = $derived(can(data.access, 'blog.create'));
+	const canEdit = $derived(can(data.access, 'blog.edit'));
+	const canDelete = $derived(can(data.access, 'blog.delete'));
+
+	const columns = $derived([
 		{
 			accessorKey: 'index',
 			header: '#',
@@ -20,18 +28,7 @@
 					name: 'Name',
 					onclick: column.getToggleSortingHandler()
 				}),
-			sortable: true,
-			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
-				return renderComponent(Edit, {
-					id: row.original.id,
-					name: row.original.name,
-					description: row.original.description,
-					action: '?/edit',
-					data: data?.editForm,
-					icon: false
-				});
-			}
+			sortable: true
 		},
 
 		{
@@ -45,48 +42,53 @@
 			}
 		},
 
-		{
-			accessorKey: '',
-			header: 'Edit',
-			sortable: true,
-			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
-				return renderComponent(Edit, {
-					id: row.original.id,
-					name: row.original.name,
-					description: row.original.description,
-					action: '?/edit',
-					data: data?.editForm,
-					icon: true
-				});
-			}
-		},
-		{
-			accessorKey: '',
-			header: 'Delete',
-			sortable: true,
-			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
-				return renderComponent(Delete, {
-					id: row.original.id,
-					action: '?/delete',
-					data: data.deleteForm
-				});
-			}
-		}
-	];
-	let { data } = $props();
+		...(canEdit
+			? [
+					{
+						accessorKey: '',
+						header: 'Edit',
+						sortable: false,
+						cell: ({ row }) => {
+							// The only edit sheet per row: two instances of the same form would
+							// share an id and the action result would land in the closed one.
+							return renderComponent(Edit, {
+								id: row.original.id,
+								name: row.original.name,
+								description: row.original.description,
+								action: '?/edit',
+								data: data?.editForm
+							});
+						}
+					}
+				]
+			: []),
+		...(canDelete
+			? [
+					{
+						accessorKey: '',
+						header: 'Delete',
+						sortable: false,
+						cell: ({ row }) => {
+							return renderComponent(Delete, {
+								id: row.original.id,
+								action: '?/delete',
+								data: data.deleteForm
+							});
+						}
+					}
+				]
+			: [])
+	]);
 	import { superForm } from 'sveltekit-superforms/client';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { Plus } from '@lucide/svelte';
 
-	const { form, errors, enhance, delayed, message } = superForm(data.form, {});
+	const { form, errors, enhance, delayed, message } = untrack(() => superForm(data.form, {}));
 
 	import { toast } from 'svelte-sonner';
 	import BigText from '$lib/components/Table/bigText.svelte';
 	import Delete from './delete.svelte';
-	import RichTextEditor from '$lib/formComponents/RichTextEditor.svelte';
 	$effect(() => {
 		if ($message) {
 			if ($message.type === 'error') {
@@ -103,30 +105,32 @@
 </svelte:head>
 
 {#key data.allData}
-	<DialogComp title="Add New Category" IconComp={Plus} variant="default">
-		<form action="?/add" use:enhance id="main" class="flex flex-col gap-4" method="post">
-			<InputComp {form} {errors} label="name" type="text" name="name" required={true} />
+	{#if canCreate}
+		<DialogComp title="Add New Category" IconComp={Plus} variant="default">
+			<form action="?/add" use:enhance id="main" class="flex flex-col gap-4" method="post">
+				<InputComp {form} {errors} label="name" type="text" name="name" required={true} />
 
-			<InputComp
-				{form}
-				{errors}
-				label="Description"
-				type="textarea"
-				name="description"
-				placeholder="Enter Category Description"
-				required={true}
-				rows={10}
-			/>
+				<InputComp
+					{form}
+					{errors}
+					label="Description"
+					type="textarea"
+					name="description"
+					placeholder="Enter Category Description"
+					required={true}
+					rows={10}
+				/>
 
-			<Button type="submit" form="main">
-				{#if $delayed}
-					<LoadingBtn name="Adding Category" />
-				{:else}
-					<Plus /> Add Category
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" form="main">
+					{#if $delayed}
+						<LoadingBtn name="Adding Category" />
+					{:else}
+						<Plus /> Add Category
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 
 	<DataTable {columns} data={data?.allData} search={true} />
 {/key}

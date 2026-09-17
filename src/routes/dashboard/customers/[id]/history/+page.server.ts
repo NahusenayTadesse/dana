@@ -4,18 +4,20 @@ import { customers } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { fetchCustomerOrderHistory, type OrderHistoryStatus } from '$lib/server/customerOrderHistory';
+import { parseIdParam } from '$lib/server/params';
 
 const STATUSES = ['pending', 'delivered', 'cancelled'] as const;
 
 export const load: PageServerLoad = async ({ params, url }) => {
-	const customerId = Number(params.id);
-	if (!Number.isInteger(customerId)) error(404, 'Not found.');
+	const customerId = parseIdParam(params.id);
 
 	const customer = await db
 		.select({ customerName: customers.name })
 		.from(customers)
 		.where(eq(customers.id, customerId))
 		.then((rows) => rows[0]);
+
+	if (!customer) error(404, 'Customer not found');
 
 	const raw = url.searchParams.get('status');
 	const status: OrderHistoryStatus | null = STATUSES.includes(raw as OrderHistoryStatus)

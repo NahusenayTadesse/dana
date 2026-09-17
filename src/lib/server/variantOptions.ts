@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	products,
@@ -25,12 +25,24 @@ const dimension = (value: unknown, unit: string | null, label: string | null): s
 	return unit === 'gauge' ? `${Number(value)} ga` : `${Number(value)}${unit ?? ''}`;
 };
 
-export type VariantOption = { value: number; name: string };
+export type VariantOption = { value: number; name: string; archived: boolean };
 
-export async function variantOptions(): Promise<VariantOption[]> {
+/**
+ * By default only variants that can still be picked: the variant and its
+ * product are both active. Deleting a variant or product that history refers
+ * to archives it (isActive=false) instead, and archived ones must not be
+ * offered for new stock, batches or purchase orders. Pass
+ * `includeInactive: true` to label stored rows — archived variants are then
+ * suffixed "(archived)".
+ */
+export async function variantOptions(
+	{ includeInactive = false }: { includeInactive?: boolean } = {}
+): Promise<VariantOption[]> {
 	const rows = await db
 		.select({
 			id: productVariants.id,
+			isActive: productVariants.isActive,
+			productIsActive: products.isActive,
 			sku: productVariants.sku,
 			productName: products.name,
 			colorName: colors.name,
@@ -49,7 +61,12 @@ export async function variantOptions(): Promise<VariantOption[]> {
 		.leftJoin(colors, eq(colors.id, productVariants.colorId))
 		.leftJoin(widths, eq(widths.id, productVariants.widthId))
 		.leftJoin(thicknesses, eq(thicknesses.id, productVariants.thicknessId))
-		.leftJoin(lengths, eq(lengths.id, productVariants.lengthId));
+		.leftJoin(lengths, eq(lengths.id, productVariants.lengthId))
+		.where(
+			includeInactive
+				? undefined
+				: and(eq(productVariants.isActive, true), eq(products.isActive, true))
+		);
 
 	return rows.map((row) => {
 		const spec = [
@@ -61,15 +78,18 @@ export async function variantOptions(): Promise<VariantOption[]> {
 			.filter(Boolean)
 			.join(' · ');
 
-		const name = [row.productName, spec || null, row.sku ? `(${row.sku})` : null]
-			.filter(Boolean)
-			.join(' — ');
+		const archived = !row.isActive || !row.productIsActive;
+		const name =
+			[row.productName, spec || null, row.sku ? `(${row.sku})` : null].filter(Boolean).join(' — ') +
+			(archived ? ' (archived)' : '');
 
-		return { value: row.id, name };
+		return { value: row.id, name, archived };
 	});
 }
 
 /** A lookup from variant id to label, for tables rendering a stored variant. */
 export async function variantLabels(): Promise<Map<number, string>> {
-	return new Map((await variantOptions()).map((option) => [option.value, option.name]));
+	return new Map(
+		(await variantOptions({ includeInactive: true })).map((option) => [option.value, option.name])
+	);
 }

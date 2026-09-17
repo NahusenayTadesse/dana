@@ -7,6 +7,7 @@
 	import Read from './read.svelte';
 	import Delete from './delete.svelte';
 	import BigText from './bigText.svelte';
+	import { can } from '$lib/permissions';
 
 	const columns = [
 		{
@@ -98,15 +99,13 @@
 			sortable: true,
 			cell: ({ row }) => {
 				// You can pass whatever you need from `row.original` to the component
-				return row.original.isRead
-					? renderComponent(Statuses, {
-							status: 'Read'
-						})
-					: renderComponent(Read, {
+				if (row.original.isRead) return renderComponent(Statuses, { status: 'Read' });
+				return canRead
+					? renderComponent(Read, {
 							id: row.original.id,
-							action: '?/read',
 							data: data.readForm
-						});
+						})
+					: renderComponent(Statuses, { status: 'Unread' });
 			}
 		},
 		{
@@ -125,17 +124,21 @@
 	];
 	let { data } = $props();
 
+	const canRead = $derived(can(data.access, 'messages.edit'));
+	const canDelete = $derived(can(data.access, 'messages.delete'));
+	const visibleColumns = $derived(columns.filter((c) => c.header !== 'Delete' || canDelete));
+
 	import Copy from '$lib/Copy.svelte';
 	import { formatEthiopianDate as formatDate } from '$lib/global.svelte.js';
 	import FilterMenu from '$lib/components/Table/FilterMenu.svelte';
 
-	let filteredList = $derived(data?.allPaymentMethods);
+	let filteredList = $derived(data?.allMessages);
 </script>
 
 <svelte:head>
 	<title>Messages</title>
 </svelte:head>
-{#key data?.allPaymentMethods}
-	<FilterMenu data={data?.allPaymentMethods} bind:filteredList filterKeys={['subject', 'isRead']} />
-	<DataTable {columns} data={filteredList} search={true} fileName="Messages" />
+{#key data?.allMessages}
+	<FilterMenu data={data?.allMessages} bind:filteredList filterKeys={['subject', 'isRead']} />
+	<DataTable columns={visibleColumns} data={filteredList} search={true} fileName="Messages" />
 {/key}

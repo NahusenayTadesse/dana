@@ -4,8 +4,11 @@
 	import { ChevronDownIcon } from '@lucide/svelte';
 
 	type PriceItem = {
-		amount: number;
-		price: number;
+		/** Unique per variant + basis — the basis label alone repeats across variants. */
+		key: string;
+		/** "SKU · Per piece" */
+		amount: string;
+		price: string;
 	};
 
 	const { priceList = [] }: { priceList: PriceItem[] } = $props();
@@ -20,14 +23,14 @@
 			</Button>
 		{/snippet}
 	</PopoverTrigger>
-	<PopoverContent class="w-56 p-0">
+	<PopoverContent class="w-72 p-0">
 		<div class="flex flex-col divide-y">
 			<div class="px-4 py-3">
 				<p class="text-sm font-semibold text-foreground">Available Prices</p>
 			</div>
 			<div class="max-h-64 overflow-y-auto">
 				{#if priceList.length > 0}
-					{#each priceList as price (price.amount)}
+					{#each priceList as price (price.key)}
 						<div
 							class="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-muted/50"
 						>

@@ -126,10 +126,19 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		.filter((p): p is (typeof featuredProductsData)[number] => p !== undefined)
 		.map((p) => assembleProductCard(p, featuredVariantRows));
 
+	// Only the fields the public cards render — not the staff user ids in
+	// created_by/updated_by. Newest first.
 	const testimonialList = await db
-		.select()
+		.select({
+			id: testimonials.id,
+			name: testimonials.name,
+			position: testimonials.position,
+			message: testimonials.message,
+			avatar: testimonials.avatar
+		})
 		.from(testimonials)
-		.where(eq(testimonials.isApproved, true));
+		.where(eq(testimonials.isApproved, true))
+		.orderBy(desc(testimonials.createdAt));
 
 	const blogItems = await db
 		.select({

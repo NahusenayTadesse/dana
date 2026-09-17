@@ -1,27 +1,31 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { ArrowLeft, Plus, PackagePlus } from '@lucide/svelte';
+	import { ArrowLeft, PackagePlus, Lock, TriangleAlert } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { enhance as svelteEnhance } from '$app/forms';
-	import { superForm } from 'sveltekit-superforms/client';
-	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import Errors from '$lib/formComponents/Errors.svelte';
 	import Statuses from '$lib/components/Table/statuses.svelte';
 	import { formatETB } from '$lib/global.svelte';
 
 	import LineForm from './LineForm.svelte';
 	import DecideOrder from './DecideOrder.svelte';
 	import SendOffer from './SendOffer.svelte';
+	import OfferBuilder from './OfferBuilder.svelte';
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import { lineColumns } from './lineColumns';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
+
+	const canEdit = $derived(can(data.access, 'quotes.edit'));
+	const canSend = $derived(can(data.access, 'quotes.send'));
+	const canApprove = $derived(can(data.access, 'quotes.approve'));
 
 	const itemColumns = $derived(
 		lineColumns({
 			updateLineForm: data.updateLineForm,
 			orderId: data.order?.id ?? 0,
+			locked: !!data.lockReason || !canEdit,
 			productList: data.productList,
 			variantList: data.variantList,
 			ratesByVariant: data.ratesByVariant,
@@ -31,30 +35,9 @@
 
 	let startingOrder = $state(false);
 
-	const {
-		form: offerForm,
-		errors: offerErrors,
-		enhance: offerEnhance,
-		delayed: offerDelayed,
-		message: offerMessage,
-		allErrors: offerAllErrors
-	} = superForm(data.saveOfferForm, {
-		id: 'save-offer',
-		resetForm: false
-	});
-
-	if (data.order) $offerForm.orderId = data.order.id;
-
 	const promoItems = $derived(
 		(data.promoCodeList ?? []).map((p) => ({ value: p.id, name: `${p.code} (${p.discountPercentage}%)` }))
 	);
-
-	$effect(() => {
-		if ($offerMessage) {
-			if ($offerMessage.type === 'error') toast.error($offerMessage.text);
-			else toast.success($offerMessage.text);
-		}
-	});
 </script>
 
 <svelte:head>
@@ -81,36 +64,38 @@
 {#if !data.order}
 	<section class="mb-6 rounded-xl border border-dashed border-border p-6 text-center">
 		<p class="mb-4 text-sm text-muted-foreground">
-			No order linked to this quote yet — start one to begin building a price offer.
+			No order linked to this quote yet{canEdit ? ' — start one to begin building a price offer' : ''}.
 		</p>
-		<form
-			method="post"
-			action="?/startOrder"
-			use:svelteEnhance={() => {
-				startingOrder = true;
-				return async ({ result, update }) => {
-					// Starting an order can now fail for a reason staff can act on
-					// (a quote with no email address can't be turned into a
-					// customer). Without this the action failed silently and the
-					// button just stopped spinning.
-					if (result.type === 'failure') {
-						toast.error(
-							(result.data?.message as string | undefined) ?? 'Could not start an order for this quote.'
-						);
-					}
-					await update();
-					startingOrder = false;
-				};
-			}}
-		>
-			<Button type="submit" disabled={startingOrder}>
-				{#if startingOrder}
-					<LoadingBtn name="Starting..." />
-				{:else}
-					<PackagePlus class="mr-2 h-4 w-4" /> Start Order
-				{/if}
-			</Button>
-		</form>
+		{#if canEdit}
+			<form
+				method="post"
+				action="?/startOrder"
+				use:svelteEnhance={() => {
+					startingOrder = true;
+					return async ({ result, update }) => {
+						// Starting an order can now fail for a reason staff can act on
+						// (a quote with no email address can't be turned into a
+						// customer). Without this the action failed silently and the
+						// button just stopped spinning.
+						if (result.type === 'failure') {
+							toast.error(
+								(result.data?.message as string | undefined) ?? 'Could not start an order for this quote.'
+							);
+						}
+						await update();
+						startingOrder = false;
+					};
+				}}
+			>
+				<Button type="submit" disabled={startingOrder}>
+					{#if startingOrder}
+						<LoadingBtn name="Starting..." />
+					{:else}
+						<PackagePlus class="mr-2 h-4 w-4" /> Start Order
+					{/if}
+				</Button>
+			</form>
+		{/if}
 	</section>
 {:else}
 	<section class="mb-6 flex items-center justify-between rounded-xl border border-border bg-background p-4">
@@ -118,21 +103,35 @@
 			<p class="text-sm font-medium">Order #{data.order.id}</p>
 			<Statuses status={data.order.status ?? 'pending'} />
 		</div>
-		<DecideOrder data={data.decideForm} orderId={data.order.id} requestStatus={data.order.requestStatus} />
+		<DecideOrder
+			data={data.decideForm}
+			orderId={data.order.id}
+			requestStatus={data.order.requestStatus}
+			canDecide={canApprove}
+		/>
 	</section>
+
+	{#if data.lockReason}
+		<p class="mb-6 flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+			<Lock class="size-4 shrink-0" />
+			{data.lockReason}
+		</p>
+	{/if}
 
 	<section class="mb-6">
 		<div class="mb-3 flex items-center justify-between">
 			<h3 class="text-lg font-semibold">Order Lines</h3>
-			<LineForm
-				mode="add"
-				data={data.addLineForm}
-				orderId={data.order.id}
-				productList={data.productList}
-				variantList={data.variantList}
-				ratesByVariant={data.ratesByVariant}
-				colorList={data.colorList}
-			/>
+			{#if !data.lockReason && canEdit}
+				<LineForm
+					mode="add"
+					data={data.addLineForm}
+					orderId={data.order.id}
+					productList={data.productList}
+					variantList={data.variantList}
+					ratesByVariant={data.ratesByVariant}
+					colorList={data.colorList}
+				/>
+			{/if}
 		</div>
 
 		{#if data.items.length === 0}
@@ -148,69 +147,12 @@
 		{/if}
 	</section>
 
-	<section class="mb-6 rounded-xl border border-border bg-background p-6">
-		<h3 class="mb-4 text-lg font-semibold">Build Price Offer</h3>
-		<form method="post" action="?/saveOffer" use:offerEnhance class="flex flex-col gap-4">
-			<Errors allErrors={$offerAllErrors} />
-			<input type="hidden" name="orderId" bind:value={$offerForm.orderId} />
-
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<InputComp
-					form={offerForm}
-					errors={offerErrors}
-					type="number"
-					name="discountPercentage"
-					label="Sales Discount %"
-					placeholder="0"
-				/>
-				<InputComp
-					form={offerForm}
-					errors={offerErrors}
-					type="select"
-					name="promoCodeId"
-					label="Promo Code"
-					placeholder="No promo code"
-					items={promoItems}
-				/>
-			</div>
-
-			<InputComp
-				form={offerForm}
-				errors={offerErrors}
-				type="text"
-				name="paymentTerms"
-				label="Payment Terms"
-				placeholder="e.g. Net 30, 50% advance"
-			/>
-
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<InputComp
-					form={offerForm}
-					errors={offerErrors}
-					type="number"
-					name="validityDays"
-					label="Offer Validity (days)"
-					placeholder="e.g. 14"
-				/>
-				<InputComp
-					form={offerForm}
-					errors={offerErrors}
-					type="number"
-					name="advancePaymentPercentage"
-					label="Advance Payment %"
-					placeholder="100"
-				/>
-			</div>
-
-			<Button type="submit" size="lg" disabled={$offerDelayed}>
-				{#if $offerDelayed}
-					<LoadingBtn name="Calculating & Saving" />
-				{:else}
-					<Plus class="mr-2 h-4 w-4" /> Save New Offer Revision
-				{/if}
-			</Button>
-		</form>
-	</section>
+	{#if !data.lockReason && canEdit}
+		<section class="mb-6 rounded-xl border border-border bg-background p-6">
+			<h3 class="mb-4 text-lg font-semibold">Build Price Offer</h3>
+			<OfferBuilder data={data.saveOfferForm} orderId={data.order.id} {promoItems} />
+		</section>
+	{/if}
 
 	<section class="mb-6">
 		<h3 class="mb-3 text-lg font-semibold">Offer Revisions</h3>
@@ -247,9 +189,25 @@
 								Discount: {offer.discountPercentage}% ({formatETB(Number(offer.discountAmount ?? 0))})
 							</p>
 						{/if}
-						<div class="mt-3">
-							<SendOffer data={data.sendOfferForm} priceOfferId={offer.id} revision={offer.revision} />
-						</div>
+						<!-- The email and pay page always use the latest revision, so only it can be sent. -->
+						{#if offer.id === data.latestOfferId}
+							<div class="mt-3">
+								{#if data.staleReason}
+									<p class="flex items-center gap-2 text-sm text-destructive">
+										<TriangleAlert class="size-4 shrink-0" />
+										{data.staleReason}
+									</p>
+								{:else if data.sendBlockReason}
+									<p class="text-sm text-muted-foreground">{data.sendBlockReason}</p>
+								{:else if offer.status === 'rejected'}
+									<p class="text-sm text-muted-foreground">
+										The customer rejected this revision. Save a new revision to send.
+									</p>
+								{:else if canSend}
+									<SendOffer data={data.sendOfferForm} priceOfferId={offer.id} revision={offer.revision} />
+								{/if}
+							</div>
+						{/if}
 					</div>
 				{/each}
 			</div>

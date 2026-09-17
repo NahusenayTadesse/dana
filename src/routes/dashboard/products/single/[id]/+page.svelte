@@ -8,11 +8,12 @@
 	import SingleTable from '$lib/components/SingleTable.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { superForm } from 'sveltekit-superforms/client';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import { ArrowLeft, Pencil, Save, History, X, Plus, ArrowDown, Tag } from '@lucide/svelte';
+	import { ArrowLeft, Pencil, Save, History, Plus, Tag, Archive, Warehouse } from '@lucide/svelte';
 	import type { Snapshot } from '@sveltejs/kit';
 	import { getCurrentMonthRange, formatETB } from '$lib/global.svelte';
 	import Delete from '$lib/forms/Delete.svelte';
@@ -20,6 +21,12 @@
 	import Errors from '$lib/formComponents/Errors.svelte';
 	import Adjustment from '$lib/forms/Adjustment.svelte';
 	import Damaged from '$lib/forms/Damaged.svelte';
+	import { can } from '$lib/permissions';
+
+	const canEdit = $derived(can(data.access, 'products.edit'));
+	const canDelete = $derived(can(data.access, 'products.delete'));
+	// Adjust / Damaged record stock movements, so they follow the stock permission.
+	const canEditStock = $derived(can(data.access, 'stock.edit'));
 
 	function scrollToVariants() {
 		const element = document.getElementById('variant-section-anchor');
@@ -43,7 +50,9 @@
 		{ name: 'Name', value: data.product?.name },
 		{ name: 'Price Range', value: priceRange },
 		{ name: 'Variants', value: `${(data?.variants ?? []).length} variant(s)` },
+		// Synced total of every variant's warehouse stock.
 		{ name: 'Available Quantity', value: data.product?.quantity },
+		{ name: 'Category', value: data.product?.category },
 		{ name: 'Product Description', value: data.product?.description },
 		{ name: 'Commission', value: data.product?.commission },
 		{ name: 'Reorder Notification Quantity', value: data.product?.reorderLevel },
@@ -60,7 +69,7 @@
 	]);
 
 	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = superForm(
-		data.form,
+		untrack(() => data.form),
 		{
 			validators: zod4Client(edit),
 			resetForm: false,
@@ -102,7 +111,7 @@
 			onclick: column.getToggleSortingHandler()
 		});
 
-	const columns = [
+	const allColumns = [
 		{
 			accessorKey: 'index',
 			header: '#',
@@ -186,7 +195,8 @@
 					widthItems: data?.widthItems,
 					thicknessItems: data?.thicknessItems,
 					lengthItems: data?.lengthItems,
-
+					canEdit,
+					canDelete
 				})
 		},
 		{
@@ -199,10 +209,15 @@
 					variantLabel: row.original.sku ?? row.original.colorName ?? `Variant #${row.original.id}`,
 					rates: data?.variantPricesByVariant?.[row.original.id] ?? [],
 					upsertData: data?.upsertVariantPriceForm,
-					deleteData: data?.deleteVariantPriceForm
+					deleteData: data?.deleteVariantPriceForm,
+					canEdit
 				})
 		}
 	];
+	// The edit dialog holds both Save (editVariant) and Delete (deleteVariant).
+	const columns = $derived(
+		canEdit || canDelete ? allColumns : allColumns.filter((column) => column.accessorKey !== 'actions')
+	);
 
 	let images = $derived(data?.images);
 
@@ -224,29 +239,50 @@
 
 <SingleView title={data?.product?.name} photo={String(data?.product?.image)} class="w-full!">
 	<div class="mt-4 flex w-full flex-row flex-wrap items-start justify-start gap-2 pl-4">
-		<Button onclick={() => (editForm = !editForm)}>
-			{#if !editForm}
-				<Pencil class="h-4 w-4" />
-				Edit
-			{:else}
-				<ArrowLeft class="h-4 w-4" />
-				Back
-			{/if}
-		</Button>
-		{#key data?.product}
-			<Adjustment data={data.adjustForm} name={data.product?.name} />
-		{/key}
+		{#if canEdit}
+			<Button onclick={() => (editForm = !editForm)}>
+				{#if !editForm}
+					<Pencil class="h-4 w-4" />
+					Edit
+				{:else}
+					<ArrowLeft class="h-4 w-4" />
+					Back
+				{/if}
+			</Button>
+		{/if}
+		{#if canEditStock}
+			{#key data?.product}
+				<Adjustment data={data.adjustForm} name={data.product?.name} variants={data.variantItems} />
+			{/key}
+		{/if}
 		<Button href="/dashboard/products/single/{page.params.id}/ranges/{getCurrentMonthRange()}">
 			<History /> See Change History
 		</Button>
-		<Damaged data={data.damagedForm} name={data.product?.name} />
+		{#if canEditStock}
+			<Damaged data={data.damagedForm} name={data.product?.name} variants={data.variantItems} />
+		{/if}
+		<Button href="/dashboard/stock" variant="outline">
+			<Warehouse /> Stock by Warehouse
+		</Button>
 		<Button href={`/dashboard/products/single/${page.params.id}/damaged/${getCurrentMonthRange()}`}>
 			<History /> See Damaged History
 		</Button>
 
-		<Delete redirect="/dashboard/products" />
+		{#if canDelete}
+			<Delete redirect="/dashboard/products" />
+		{/if}
 	</div>
-	{#if data.variants.length === 0}
+	{#if data.product && !data.product.isActive}
+		<div
+			class="mx-4 mt-4 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
+		>
+			<Archive class="h-5 w-5 shrink-0" />
+			<p>
+				This product is archived: it was deleted while orders or stock records still refer to it. It is
+				hidden from the shop, the product list and every picker.
+			</p>
+		</div>
+	{:else if data.variants.length === 0}
 		<div
 			class="mx-auto my-12 flex w-1/2 flex-col items-center rounded-xl border border-destructive p-8 text-center text-destructive backdrop-blur-sm"
 		>
@@ -260,10 +296,12 @@
 				purchasing.
 			</p>
 
-			<Button variant="default" class="mt-4" onclick={scrollToVariants}>
-				<Plus class="mr-2 h-4 w-4" />
-				Add Product Variant
-			</Button>
+			{#if canEdit}
+				<Button variant="default" class="mt-4" onclick={scrollToVariants}>
+					<Plus class="mr-2 h-4 w-4" />
+					Add Product Variant
+				</Button>
+			{/if}
 		</div>
 	{/if}
 	{#if editForm === false}
@@ -274,17 +312,17 @@
 			>
 				<div class="space-y-4">
 					<div class="border-b border-border pb-2">
-						<h3 class="text-lg font-semibold tracking-tight text-foreground">Categories</h3>
+						<h3 class="text-lg font-semibold tracking-tight text-foreground">Category</h3>
 						<p class="text-sm text-muted-foreground">
-							The primary classifications for this product.
+							The classification the shop filters and related products use.
 						</p>
 					</div>
 
 					{#if data?.categorized.length === 0}
-						<p class="text-sm text-muted-foreground italic">No categories assigned.</p>
+						<p class="text-sm text-muted-foreground italic">No category assigned.</p>
 					{:else}
 						<div class="grid gap-4 sm:grid-cols-2">
-							{#each data?.categorized as category}
+							{#each data?.categorized as category (category.value)}
 								<div
 									class="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm transition-colors hover:bg-accent/50"
 								>
@@ -312,7 +350,7 @@
 						<p class="text-sm text-muted-foreground italic">No tags assigned.</p>
 					{:else}
 						<div class="flex flex-wrap gap-2">
-							{#each data?.tagged as tag}
+							{#each data?.tagged as tag (tag.value)}
 								<span
 									class="inline-flex cursor-default items-center rounded-full border border-border bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
 								>
@@ -325,7 +363,7 @@
 			</section>
 		</div>
 	{/if}
-	{#if editForm}
+	{#if canEdit && editForm}
 		<div class="w-full p-4">
 			<form
 				action="?/editProduct"
@@ -362,15 +400,14 @@
 					name="brand"
 					label="Brand"
 					placeholder="Enter Product Brand"
-					required
 				/>
 				<InputComp
 					{form}
 					{errors}
-					type="checkbox"
-					name="category"
+					type="select"
+					name="categoryId"
 					label="Product Category"
-					placeholder="Select Product Categories"
+					placeholder="Select a category"
 					required
 					items={data?.allCategories}
 				/>
@@ -401,15 +438,6 @@
 					label="Commission Amount"
 					placeholder="Enter commission earned per sale"
 		
-				/>
-
-				<InputComp
-					{form}
-					{errors}
-					type="number"
-					name="quantity"
-					label="Quantity"
-					placeholder="Enter the number of items the product currently has"
 				/>
 
 				<InputComp
@@ -556,15 +584,17 @@
 	{#key data?.variants}
 		<div class="mb-6 flex flex-col gap-4 border-b border-gray-100 pb-4">
 			<h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Variants &amp; Pricing</h1>
-			<div class="w-sm">
-				<AddVariant
-					data={data?.addVariantForm}
-					colorItems={data?.colorItems}
-					widthItems={data?.widthItems}
-					thicknessItems={data?.thicknessItems}
-					lengthItems={data?.lengthItems}
-				/>
-			</div>
+			{#if canEdit}
+				<div class="w-sm">
+					<AddVariant
+						data={data?.addVariantForm}
+						colorItems={data?.colorItems}
+						widthItems={data?.widthItems}
+						thicknessItems={data?.thicknessItems}
+						lengthItems={data?.lengthItems}
+					/>
+				</div>
+			{/if}
 			{#if data.variants.length === 0}
 				<p class="animate-pulse text-destructive">No variants available for this product.</p>
 			{:else}
@@ -596,17 +626,19 @@
 		class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl transition-shadow hover:shadow-2xl"
 	>
 		<div class="p-3 sm:p-6">
-			<Button onclick={() => (editGallery = !editGallery)} class="mb-4">
-				{#if !editGallery}
-					<Pencil class="h-4 w-4" />
-					Edit
-				{:else}
-					<ArrowLeft class="h-4 w-4" />
-					Back
-				{/if}
-			</Button>
+			{#if canEdit}
+				<Button onclick={() => (editGallery = !editGallery)} class="mb-4">
+					{#if !editGallery}
+						<Pencil class="h-4 w-4" />
+						Edit
+					{:else}
+						<ArrowLeft class="h-4 w-4" />
+						Back
+					{/if}
+				</Button>
+			{/if}
 
-			{#if !editGallery}
+			{#if !canEdit || !editGallery}
 				<Gallery {images} title={data?.product?.name} />
 			{:else}
 				<EditGallery data={data?.galleryEdit} bind:images />

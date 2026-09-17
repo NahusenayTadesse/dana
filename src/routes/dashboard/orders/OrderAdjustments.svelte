@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Save, ReceiptText } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
@@ -38,11 +39,17 @@
 		adjustments = [],
 		currentTotals,
 		addData,
-		decideData
+		decideData,
+		cancelled = false,
+		canManage = false
 	}: {
 		orderId: number;
 		adjustments?: Adjustment[];
 		currentTotals: Totals;
+		/** A cancelled order takes no new adjustments. */
+		cancelled?: boolean;
+		/** orders.adjustments: add adjustments and approve/reject pending ones. */
+		canManage?: boolean;
 		addData: SuperValidated<AddAdjustment>;
 		decideData: SuperValidated<DecideAdjustmentType>;
 	} = $props();
@@ -52,28 +59,48 @@
 		{ value: 'deduction', name: 'Deduction (credit / refund)' }
 	];
 
-	const { form, errors, enhance, delayed, message } = superForm(addData, {
-		id: `add-adjustment-${orderId}`,
-		dataType: 'json',
-		resetForm: false
+	const { form, errors, enhance, delayed, message } = untrack(() =>
+		superForm(addData, {
+			id: `add-adjustment-${orderId}`,
+			dataType: 'json',
+			resetForm: false
+		})
+	);
+	untrack(() => {
+		$form.orderId = orderId;
 	});
-	$form.orderId = orderId;
+
+	// Adjustments only move an offer's total — an order without one (created
+	// directly on this page) or a cancelled order has nothing to adjust.
+	const canAdjust = $derived(!!currentTotals && !cancelled);
 
 	$effect(() => {
 		if ($message) $message.type === 'error' ? toast.error($message.text) : toast.success($message.text);
 	});
 
-	// Live preview of the new total, using the same VAT-exclusive-adjustment
-	// math as getAdjustedOrderTotals() server-side.
+	const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+	// Live preview of the new total — the same math as adjustOfferTotals()
+	// server-side. Only the adjustment itself is taxed at the flat rate; the
+	// current VAT amount is kept as-is, because re-taxing the whole base at the
+	// flat rate is wrong for offers with VAT-inclusive lines (the preview used
+	// to disagree with the real total even for a zero adjustment).
 	const preview = $derived.by(() => {
 		if (!currentTotals || !$form.amount) return null;
 		const delta = ($form.type === 'deduction' ? -1 : 1) * Number($form.amount || 0);
-		const priceExcludingVat = currentTotals.priceExcludingVat + delta;
-		const vatAmount = priceExcludingVat * (currentTotals.vatRate / 100);
-		const priceIncludingVat = priceExcludingVat + vatAmount;
-		const withholdingAmount = priceExcludingVat * (currentTotals.withholdingRate / 100);
-		const total = priceIncludingVat - withholdingAmount;
-		return { priceExcludingVat, vatAmount, priceIncludingVat, withholdingAmount, total };
+		const priceExcludingVat = round2(currentTotals.priceExcludingVat + delta);
+		const vatAmount = round2(currentTotals.vatAmount + delta * (currentTotals.vatRate / 100));
+		const priceIncludingVat = round2(priceExcludingVat + vatAmount);
+		const withholdingAmount = round2(priceExcludingVat * (currentTotals.withholdingRate / 100));
+		const total = round2(priceIncludingVat - withholdingAmount);
+		return {
+			priceExcludingVat,
+			vatAmount,
+			priceIncludingVat,
+			withholdingAmount,
+			total,
+			negative: priceExcludingVat < 0
+		};
 	});
 
 </script>
@@ -124,7 +151,7 @@
 								>
 									{adj.status}
 								</span>
-								{#if adj.status === 'pending'}
+								{#if adj.status === 'pending' && !cancelled && canManage}
 									<DecideAdjustment data={decideData} adjustmentId={adj.id} />
 								{/if}
 							</div>
@@ -134,49 +161,63 @@
 			{/if}
 		</div>
 
-		<div class="flex flex-col gap-3 border-t pt-4">
-			<h3 class="text-sm font-medium text-muted-foreground">Add Adjustment</h3>
-			<form method="post" action="?/addAdjustment" use:enhance class="flex flex-col gap-3">
-				<input type="hidden" name="orderId" bind:value={$form.orderId} />
+		{#if canManage}
+			<div class="flex flex-col gap-3 border-t pt-4">
+				<h3 class="text-sm font-medium text-muted-foreground">Add Adjustment</h3>
+				{#if !canAdjust}
+					<p class="text-sm text-muted-foreground italic">
+						{cancelled
+							? 'This order is cancelled, so it can’t be adjusted.'
+							: 'This order has no price offer, so an adjustment would not change what the customer owes. Edit the order’s items instead.'}
+					</p>
+				{:else}
+				<form method="post" action="?/addAdjustment" use:enhance class="flex flex-col gap-3">
+					<input type="hidden" name="orderId" bind:value={$form.orderId} />
 
-				<InputComp {form} {errors} type="select" name="type" label="Type" placeholder="Select type" items={typeItems} />
-				<InputComp {form} {errors} type="number" name="amount" label="Amount (ETB)" placeholder="0.00" />
-				<InputComp {form} {errors} type="text" name="reason" label="Reason" placeholder="e.g. Freight surcharge, damaged item credit" />
-				<InputComp {form} {errors} type="textarea" name="notes" label="Notes (optional)" placeholder="Additional detail" />
+					<InputComp {form} {errors} type="select" name="type" label="Type" placeholder="Select type" items={typeItems} />
+					<InputComp {form} {errors} type="number" name="amount" label="Amount (ETB)" placeholder="0.00" />
+					<InputComp {form} {errors} type="text" name="reason" label="Reason" placeholder="e.g. Freight surcharge, damaged item credit" />
+					<InputComp {form} {errors} type="textarea" name="notes" label="Notes (optional)" placeholder="Additional detail" />
 
-				{#if preview}
-					<div class="rounded-lg border border-dashed p-3 text-sm">
-						<p class="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">New Total (preview)</p>
-						<div class="grid grid-cols-2 gap-1">
-							<span class="text-muted-foreground">Excl. VAT</span>
-							<span class="text-right font-mono">{formatETB(preview.priceExcludingVat)}</span>
-							<span class="text-muted-foreground">VAT</span>
-							<span class="text-right font-mono">{formatETB(preview.vatAmount)}</span>
-							<span class="text-muted-foreground">Withholding</span>
-							<span class="text-right font-mono">-{formatETB(preview.withholdingAmount)}</span>
-							<span class="font-semibold">Total</span>
-							<span class="text-right font-mono font-semibold text-primary">{formatETB(preview.total)}</span>
+					{#if preview?.negative}
+						<p class="text-sm text-destructive">
+							A deduction can't be larger than the price before VAT ({formatETB(currentTotals?.priceExcludingVat ?? 0)}).
+						</p>
+					{:else if preview}
+						<div class="rounded-lg border border-dashed p-3 text-sm">
+							<p class="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">New Total (preview)</p>
+							<div class="grid grid-cols-2 gap-1">
+								<span class="text-muted-foreground">Excl. VAT</span>
+								<span class="text-right font-mono">{formatETB(preview.priceExcludingVat)}</span>
+								<span class="text-muted-foreground">VAT</span>
+								<span class="text-right font-mono">{formatETB(preview.vatAmount)}</span>
+								<span class="text-muted-foreground">Withholding</span>
+								<span class="text-right font-mono">-{formatETB(preview.withholdingAmount)}</span>
+								<span class="font-semibold">Total</span>
+								<span class="text-right font-mono font-semibold text-primary">{formatETB(preview.total)}</span>
+							</div>
+							{#if $form.type === 'addition'}
+								<p class="mt-2 text-xs text-muted-foreground">
+									A payment link for the extra amount will be sent to the customer automatically.
+								</p>
+							{:else}
+								<p class="mt-2 text-xs text-muted-foreground">
+									No payment link is sent — if the customer already paid more than the new total, refund it your usual way.
+								</p>
+							{/if}
 						</div>
-						{#if $form.type === 'addition'}
-							<p class="mt-2 text-xs text-muted-foreground">
-								A payment link for the extra amount will be sent to the customer automatically.
-							</p>
-						{:else}
-							<p class="mt-2 text-xs text-muted-foreground">
-								No payment link is sent — if the customer already paid more than the new total, refund it your usual way.
-							</p>
-						{/if}
-					</div>
-				{/if}
-
-				<Button type="submit" size="lg" disabled={$delayed}>
-					{#if $delayed}
-						<LoadingBtn name="Applying" />
-					{:else}
-						<Save class="mr-2 h-4 w-4" /> Apply Adjustment
 					{/if}
-				</Button>
-			</form>
-		</div>
+
+					<Button type="submit" size="lg" disabled={$delayed}>
+						{#if $delayed}
+							<LoadingBtn name="Applying" />
+						{:else}
+							<Save class="mr-2 h-4 w-4" /> Apply Adjustment
+						{/if}
+					</Button>
+				</form>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </DialogComp>

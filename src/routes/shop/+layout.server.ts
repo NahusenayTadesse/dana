@@ -10,30 +10,32 @@ import {
 } from '$lib/server/db/schema';
 import type { LayoutServerLoad } from './$types';
 import { eq, sql, and, like, asc, gte, lte, inArray, isNotNull } from 'drizzle-orm';
-import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
+import { assembleProductCard, withDiscounts } from '$lib/server/product-listing';
 
 const PAGE_SIZE = 20;
+const isPositiveInt = (n: number) => Number.isInteger(n) && n > 0;
 const THICKNESS_UNIT = 'mm' as const; // gauge is a different, non-comparable scale — see note to user
 
 export const load: LayoutServerLoad = async ({ url }) => {
 	// 1. Parse filters from the URL
 	const search = url.searchParams.get('search') || '';
-	const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
+	const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1') || 1);
 	const offset = (page - 1) * PAGE_SIZE;
 
 	const minThickParam = url.searchParams.get('minThick');
 	const maxThickParam = url.searchParams.get('maxThick');
-	const minThick = minThickParam ? Number(minThickParam) : undefined;
-	const maxThick = maxThickParam ? Number(maxThickParam) : undefined;
+	// A junk value (NaN) would be sent to MySQL unquoted and 500 the page.
+	const minThick = minThickParam && Number.isFinite(Number(minThickParam)) ? Number(minThickParam) : undefined;
+	const maxThick = maxThickParam && Number.isFinite(Number(maxThickParam)) ? Number(maxThickParam) : undefined;
 
 	const selectedColorIds =
-		url.searchParams.get('colors')?.split(',').filter(Boolean).map(Number) ?? [];
+		url.searchParams.get('colors')?.split(',').map(Number).filter(isPositiveInt) ?? [];
 	const selectedWidthIds =
-		url.searchParams.get('widths')?.split(',').filter(Boolean).map(Number) ?? [];
+		url.searchParams.get('widths')?.split(',').map(Number).filter(isPositiveInt) ?? [];
 	const selectedLengthIds =
-		url.searchParams.get('lengths')?.split(',').filter(Boolean).map(Number) ?? [];
+		url.searchParams.get('lengths')?.split(',').map(Number).filter(isPositiveInt) ?? [];
 	const selectedCats =
-		url.searchParams.get('categories')?.split(',').filter(Boolean).map(Number) ?? [];
+		url.searchParams.get('categories')?.split(',').map(Number).filter(isPositiveInt) ?? [];
 	const selectedCoatingTypes =
 		url.searchParams.get('coatingTypes')?.split(',').filter(Boolean) ?? [];
 	const selectedBrands = url.searchParams.get('brands')?.split(',').filter(Boolean) ?? [];
@@ -160,16 +162,14 @@ export const load: LayoutServerLoad = async ({ url }) => {
 			.orderBy(asc(products.createdAt));
 		allIds = rows.map((r) => r.id);
 	} else if (onlyAvailable) {
-		// "In stock" alone shouldn't hide simple retail products that don't have variants at all —
-		// so this checks the product's own quantity OR any in-stock variant
-		const availabilityCond = sql`(
-			${products.quantity} >= 1
-			OR EXISTS (
-				SELECT 1 FROM ${productVariants}
-				WHERE ${productVariants.productId} = ${products.id}
-				AND ${productVariants.isActive} = true
-				AND ${productVariants.quantity} >= 1
-			)
+		// Stock lives on variants (warehouse totals synced by $lib/server/stock);
+		// `products.quantity` also counts archived variants, so it can't say
+		// whether anything sellable is in stock.
+		const availabilityCond = sql`EXISTS (
+			SELECT 1 FROM ${productVariants}
+			WHERE ${productVariants.productId} = ${products.id}
+			AND ${productVariants.isActive} = true
+			AND ${productVariants.quantity} >= 1
 		)`;
 		const rows = await db
 			.selectDistinct({ id: products.id })
@@ -215,7 +215,7 @@ export const load: LayoutServerLoad = async ({ url }) => {
 
 	// 7. Fetch variants for this page. If a spec filter is active, only show the MATCHING
 	// variants (so price/swatches reflect the selection, not the whole catalog).
-	const variantRows = pagedIds.length
+	const rawVariantRows = pagedIds.length
 		? await db
 				.select({
 					productId: productVariants.productId,
@@ -250,6 +250,9 @@ export const load: LayoutServerLoad = async ({ url }) => {
 					)
 				)
 		: [];
+
+	// Discounted prices — the same discounts checkout applies (orderLines.ts).
+	const variantRows = await withDiscounts(rawVariantRows);
 
 	// 8. Assemble: price range + de-duped color swatches per product
 	const productList = productsData.map((p) => assembleProductCard(p, variantRows));

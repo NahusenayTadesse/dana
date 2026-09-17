@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
@@ -13,18 +14,20 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { gender } from '$lib/global.svelte';
 
-	let {
-		data,
-		action = '/dashboard/cusotmers?/addCustomer'
-	}: { data: SuperValidated<AddCustomerSchema>; action: string } = $props();
+	// No default action: the old default (`/dashboard/cusotmers?/addCustomer`)
+	// was a typo'd route, and the dashboard's addCustomer action it pointed at
+	// has been removed. A caller must name a real action.
+	let { data, action }: { data: SuperValidated<AddCustomerSchema>; action: string } = $props();
 
-	const { form, errors, enhance, delayed, message } = superForm(data, {
-		taintedMessage: () => {
-			return new Promise((resolve) => {
-				resolve(window.confirm('Do you want to leave?\nChanges you made may not be saved.'));
-			});
-		}
-	});
+	const { form, errors, enhance, delayed, message } = untrack(() =>
+		superForm(data, {
+			taintedMessage: () => {
+				return new Promise((resolve) => {
+					resolve(window.confirm('Do you want to leave?\nChanges you made may not be saved.'));
+				});
+			}
+		})
+	);
 
 	import { toast } from 'svelte-sonner';
 	$effect(() => {

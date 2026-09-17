@@ -1,57 +1,64 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import { SquarePen, Plus } from '@lucide/svelte';
+	import { SquarePen, Save } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import type { Edit } from './schema';
 
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import Errors from '$lib/formComponents/Errors.svelte';
+	import { toast } from 'svelte-sonner';
+	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 
 	let {
 		data,
 		action = '?/edit',
 		id,
 		name,
-		description,
-		icon = false
+		description
 	}: {
 		data: SuperValidated<Edit>;
-		action: string;
+		action?: string;
 		id: number;
 		name: string;
-		icon: boolean;
 		description: string;
 	} = $props();
 
 	let open = $state(false);
 
-	const { form, errors, enhance, delayed, message, allErrors } = superForm(data, {
-		resetForm: false
+	// One instance per row, each with its own id — a shared id sends every
+	// action result to the first row's form.
+	const { form, errors, enhance, delayed, message, allErrors } = untrack(() =>
+		superForm(data, { resetForm: false, id: `blog-category-${id}` })
+	);
+
+	untrack(() => {
+		$form.id = id;
+		$form.name = name;
+		$form.description = description;
 	});
 
-	$form.id = id;
-	$form.name = name;
-
-	$form.description = description;
-
-	import { toast } from 'svelte-sonner';
-	import InputComp from '$lib/formComponents/InputComp.svelte';
-	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	$effect(() => {
-		if ($message) {
-			if ($message.type === 'error') {
-				toast.error($message.text);
-			} else {
-				toast.success($message.text);
-				open = false;
-			}
+		if (!$message) return;
+		if ($message.type === 'error') {
+			toast.error($message.text);
+		} else {
+			toast.success($message.text);
+			open = false;
 		}
 	});
 </script>
 
-<DialogComp bind:open title={icon ? 'Edit' : name} variant="ghost" IconComp={icon ? SquarePen : undefined}>
-	<form {action} use:enhance method="post" id="edit" class="flex w-full flex-col gap-4 p-4">
+<DialogComp bind:open title="Edit" variant="ghost" IconComp={SquarePen}>
+	<form
+		{action}
+		use:enhance
+		method="post"
+		id="blog-category-edit-{id}"
+		class="flex w-full flex-col gap-4 p-4"
+	>
 		<Errors allErrors={$allErrors} />
 		<input type="hidden" name="id" value={$form.id} />
 		<InputComp {form} {errors} label="name" type="text" name="name" required={true} />
@@ -62,16 +69,16 @@
 			label="Description"
 			type="textarea"
 			name="description"
-			placeholder="Enter Department Description"
+			placeholder="Enter Category Description"
 			required={true}
 			rows={10}
 		/>
 
-		<Button type="submit" class="mt-4" form="edit">
+		<Button type="submit" class="mt-4" form="blog-category-edit-{id}">
 			{#if $delayed}
 				<LoadingBtn name="Saving Changes" />
 			{:else}
-				<Plus class="h-4 w-4" />
+				<Save class="h-4 w-4" />
 
 				Save Changes
 			{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { edit } from './schema.js';
 	let { data } = $props();
@@ -14,24 +15,27 @@
 	import Delete from '$lib/forms/Delete.svelte';
 	import SingleView from '$lib/components/SingleView.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
+	import { can } from '$lib/permissions';
+
+	const canEdit = $derived(can(data.access, 'blog.edit'));
+	const canDelete = $derived(can(data.access, 'blog.delete'));
 
 	let singleTable = $derived([
-		{ name: 'Title', value: data.product?.title },
-		{ name: 'Slug', value: data.product?.slug },
-		{ name: 'Category', value: data.product?.categoryName },
+		{ name: 'Title', value: data.product?.title ?? '' },
+		{ name: 'Slug', value: data.product?.slug ?? '' },
+		{ name: 'Category', value: data.product?.categoryName ?? '' },
 
-		{ name: 'Excerpt | Short Description', value: data.product?.excerpt },
+		{ name: 'Excerpt | Short Description', value: data.product?.excerpt ?? '' },
 		{ name: 'Added On', value: formatEthiopianDate(new Date(data.product?.createdAt)) },
-		{ name: 'Added By', value: data.product?.createdBy }
+		{ name: 'Added By', value: data.product?.createdBy ?? '' }
 	]);
 
-	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = superForm(
-		data.form,
-		{
+	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = untrack(() =>
+		superForm(data.form, {
 			validators: zod4Client(edit),
 			resetForm: false,
 			dataType: 'json'
-		}
+		})
 	);
 
 	export const snapshot: Snapshot = { capture, restore };
@@ -68,18 +72,22 @@
 	class="w-full!"
 >
 	<div class="mt-4 flex w-full flex-row flex-wrap items-start justify-start gap-2 pl-4">
-		<Button onclick={() => (editForm = !editForm)}>
-			{#if !editForm}
-				<Pencil class="h-4 w-4" />
-				Edit
-			{:else}
-				<ArrowLeft class="h-4 w-4" />
+		{#if canEdit}
+			<Button onclick={() => (editForm = !editForm)}>
+				{#if !editForm}
+					<Pencil class="h-4 w-4" />
+					Edit
+				{:else}
+					<ArrowLeft class="h-4 w-4" />
 
-				Back
-			{/if}
-		</Button>
+					Back
+				{/if}
+			</Button>
+		{/if}
 
-		<Delete redirect="/dashboard/blog" />
+		{#if canDelete}
+			<Delete redirect="/dashboard/blog" />
+		{/if}
 	</div>
 
 	{#if editForm === false}
@@ -132,9 +140,8 @@
 					{errors}
 					type="text"
 					name="slug"
-					label="Event Slug"
-					placeholder="Enter Slug"
-					required
+					label="Blog Slug"
+					placeholder="Generated from the title if left blank"
 				/>
 
 				<InputComp
@@ -207,16 +214,18 @@
 		class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl transition-shadow hover:shadow-2xl"
 	>
 		<div class="p-3 sm:p-6">
-			<Button onclick={() => (editGallery = !editGallery)} class="mb-4">
-				{#if !editGallery}
-					<Pencil class="h-4 w-4" />
-					Edit
-				{:else}
-					<ArrowLeft class="h-4 w-4" />
+			{#if canEdit}
+				<Button onclick={() => (editGallery = !editGallery)} class="mb-4">
+					{#if !editGallery}
+						<Pencil class="h-4 w-4" />
+						Edit
+					{:else}
+						<ArrowLeft class="h-4 w-4" />
 
-					Back
-				{/if}
-			</Button>
+						Back
+					{/if}
+				</Button>
+			{/if}
 
 			{#if !editGallery}
 				<Gallery {images} title={data?.product?.title} />

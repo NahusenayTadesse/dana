@@ -25,8 +25,15 @@
 	import RequestBalance from './RequestBalance.svelte';
 	import OrderAdjustments from './OrderAdjustments.svelte';
 	import { formatETB } from '$lib/global.svelte';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
+
+	const canCreate = $derived(can(data.access, 'orders.create'));
+	const canEdit = $derived(can(data.access, 'orders.edit'));
+	const canDelete = $derived(can(data.access, 'orders.delete'));
+	const canRequestPayments = $derived(can(data.access, 'orders.payments'));
+	const canAdjust = $derived(can(data.access, 'orders.adjustments'));
 
 	const adjustmentsFor = (orderId: number) =>
 		data?.allAdjustments?.filter((a) => Number(a.orderId) === Number(orderId)) ?? [];
@@ -113,7 +120,7 @@
 			cell: ({ row }) =>
 				renderComponent(PaymentStatus, {
 					status: row.original.paymentStatus,
-					online: !!row.original.txnRef
+					online: row.original.paidOnline
 				})
 		},
 		{
@@ -147,7 +154,9 @@
 					productList: data?.productList,
 					variantList: data?.variantList,
 					paymentMethodList: data?.paymentMethodList,
-					data: data?.editForm
+					data: data?.editForm,
+					canEdit,
+					canDelete
 				})
 		},
 
@@ -155,11 +164,18 @@
 			accessorKey: 'balance',
 			header: 'Balance Payment',
 			sortable: false,
+			// Only where there is something a link could collect: a priced (offer)
+			// order that isn't cancelled, has a payment record and still owes money.
 			cell: ({ row }) =>
-				renderComponent(RequestBalance, {
-					orderId: row.original.id,
-					data: data?.requestBalanceForm
-				})
+				row.original.hasOffer &&
+				row.original.status !== 'cancelled' &&
+				row.original.paymentStatus != null &&
+				row.original.balanceDue > 0
+					? renderComponent(RequestBalance, {
+							orderId: row.original.id,
+							data: data?.requestBalanceForm
+						})
+					: '—'
 		},
 		{
 			accessorKey: 'adjustments',
@@ -171,7 +187,9 @@
 					adjustments: adjustmentsFor(row.original.id),
 					currentTotals: data?.adjustedTotalsByOrder?.[row.original.id] ?? null,
 					addData: data?.addAdjustmentForm,
-					decideData: data?.decideAdjustmentForm
+					decideData: data?.decideAdjustmentForm,
+					cancelled: row.original.status === 'cancelled',
+					canManage: canAdjust
 				})
 		},
 
@@ -182,6 +200,14 @@
 			cell: ({ row }) => row.original.txnRef ? renderComponent(Copy, { data: row.original.txnRef }) : 'No Token Found'
 		},
 	];
+
+	const visibleColumns = $derived(
+		columns.filter(
+			(c) =>
+				(c.accessorKey !== 'edit' || canEdit || canDelete) &&
+				(c.accessorKey !== 'balance' || canRequestPayments)
+		)
+	);
 </script>
 
 <svelte:head>
@@ -198,7 +224,7 @@
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 	<div class="flex flex-wrap items-center gap-2">
-		{#each filters as f}
+		{#each filters as f (f.v)}
 			<Button variant={data.activeStatus === f.v ? 'default' : 'outline'} href={mkHref({ status: f.v })}>
 				<f.Icon class="h-4 w-4" />
 				{f.label}
@@ -206,14 +232,16 @@
 		{/each}
 	</div>
 
-	<OrderForm
-		mode="add"
-		data={data?.addForm}
-		customerList={data?.customerList}
-		productList={data?.productList}
-		variantList={data?.variantList}
-		paymentMethodList={data?.paymentMethodList}
-	/>
+	{#if canCreate}
+		<OrderForm
+			mode="add"
+			data={data?.addForm}
+			customerList={data?.customerList}
+			productList={data?.productList}
+			variantList={data?.variantList}
+			paymentMethodList={data?.paymentMethodList}
+		/>
+	{/if}
 </div>
 
 <!-- Server-side search: customer, order id, token, payment status, total -->
@@ -249,7 +277,7 @@
 {/if}
 
 {#key data.allOrders}
-	<DataTable {columns} data={data?.allOrders} search={false} />
+	<DataTable columns={visibleColumns} data={data?.allOrders} search={false} />
 {/key}
 
 <!-- Pagination -->
@@ -284,7 +312,7 @@
 				<span class="px-1 text-sm text-muted-foreground">…</span>
 			{/if}
 
-			{#each pageWindow as p}
+			{#each pageWindow as p (p)}
 				<Button variant={p === data.page ? 'default' : 'outline'} size="icon" href={mkHref({ page: p })}>
 					{p}
 				</Button>

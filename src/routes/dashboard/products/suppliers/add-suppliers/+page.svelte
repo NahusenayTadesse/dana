@@ -1,4 +1,5 @@
 <script>
+	import { untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button/index';
 
 	let { data } = $props();
@@ -7,7 +8,7 @@
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { Plus } from '@lucide/svelte';
 
-	const { form, errors, enhance, delayed, message } = superForm(data.form, {});
+	const { form, errors, enhance, delayed, message } = untrack(() => superForm(data.form, {}));
 
 	import { toast } from 'svelte-sonner';
 	import FormCard from '$lib/formComponents/FormCard.svelte';

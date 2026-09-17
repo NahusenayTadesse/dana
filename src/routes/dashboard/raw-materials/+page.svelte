@@ -12,12 +12,17 @@
 	import Statuses from '$lib/components/Table/statuses.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index';
+	import OptionalPicker from '../production/optional-picker.svelte';
 	import { UNIT_ITEMS } from './units';
 	import Edit from './edit.svelte';
+	import { can } from '$lib/permissions';
 	import type { MaterialRow } from './types';
 
 	let { data } = $props();
 	let addOpen = $state(false);
+
+	const canCreate = $derived(can(data.access, 'raw_materials.create'));
+	const canEdit = $derived(can(data.access, 'raw_materials.edit'));
 
 	const { form, errors, enhance, delayed, message } = untrack(() =>
 		superForm(data.form, { dataType: 'json', id: 'material-add' })
@@ -36,14 +41,11 @@
 	const rows = $derived(data.allData as MaterialRow[]);
 	const low = $derived(rows.filter((r) => r.stockState === 'low').length);
 
-	const columns: ColumnDef<MaterialRow, unknown>[] = [
+	const baseColumns: ColumnDef<MaterialRow, unknown>[] = [
 		{ accessorKey: 'index', header: '#', cell: (info) => info.row.index + 1 },
-		{
-			accessorKey: 'name',
-			header: 'Material',
-			cell: ({ row }) =>
-				renderComponent(Edit, { row: row.original, data: data.editForm, suppliers: data.suppliers })
-		},
+		// Only the Edit column renders the edit dialog: two instances of one
+		// per-row superForm id would send the action result to the wrong one.
+		{ accessorKey: 'name', header: 'Material' },
 		{ accessorKey: 'supplierName', header: 'Supplier' },
 		{
 			accessorKey: 'quantityOnHand',
@@ -71,19 +73,23 @@
 			header: 'Status',
 			cell: ({ row }) =>
 				renderComponent(Statuses, { status: row.original.isActive ? 'active' : 'inactive' })
-		},
-		{
-			accessorKey: 'edit',
-			header: 'Edit',
-			cell: ({ row }) =>
-				renderComponent(Edit, {
-					row: row.original,
-					data: data.editForm,
-					suppliers: data.suppliers,
-					icon: true
-				})
 		}
 	];
+
+	const editColumn: ColumnDef<MaterialRow, unknown> = {
+		accessorKey: 'edit',
+		header: 'Edit',
+		cell: ({ row }) =>
+			renderComponent(Edit, {
+				row: row.original,
+				data: data.editForm,
+				suppliers: data.suppliers,
+				icon: true
+			})
+	};
+
+	// Only show the Edit column when this user's role may edit (the server refuses it anyway).
+	const columns = $derived(canEdit ? [...baseColumns, editColumn] : baseColumns);
 </script>
 
 <svelte:head>
@@ -96,69 +102,65 @@
 			<Layers class="h-5 w-5" /> Raw Materials
 		</h1>
 		<p class="max-w-[70ch] text-sm text-muted-foreground">
-			What goes into production — coil, zinc, paint. A material with a reorder level is flagged once
-			it drops to it.
+			What goes into production — coil, zinc, paint. On hand goes down as batches consume it and up
+			as purchase orders are received; use "Adjust on hand by" in the edit sheet after a stock count. A material
+			with a reorder level is flagged once it drops to it.
 		</p>
 		{#if low}
 			<Badge variant="destructive" class="mt-2">{low} at or below reorder level</Badge>
 		{/if}
 	</div>
 
-	<DialogComp bind:open={addOpen} title="Add Material" variant="default" IconComp={Plus} size="md">
-		<form action="?/add" method="post" use:enhance id="mat-add-form" class="flex flex-col gap-3">
-			<InputComp
-				{form}
-				{errors}
-				label="Material"
-				type="text"
-				name="name"
-				placeholder="Cold Rolled Coil"
-				required={true}
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="Supplier"
-				type="select"
-				name="supplierId"
-				items={data.suppliers}
-			/>
-			<InputComp {form} {errors} label="Unit" type="select" name="unit" items={UNIT_ITEMS} />
-			<InputComp
-				{form}
-				{errors}
-				label="Quantity on hand"
-				type="number"
-				name="quantityOnHand"
-				min="0"
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="Reorder level"
-				type="number"
-				name="reorderLevel"
-				min="0"
-				placeholder="Leave blank for no alert"
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="In use"
-				type="checkboxSingle"
-				name="isActive"
-				placeholder="Uncheck to retire a material you no longer buy"
-			/>
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="Add Material" variant="default" IconComp={Plus} size="md">
+			<form action="?/add" method="post" use:enhance id="mat-add-form" class="flex flex-col gap-3">
+				<InputComp
+					{form}
+					{errors}
+					label="Material"
+					type="text"
+					name="name"
+					placeholder="Cold Rolled Coil"
+					required={true}
+				/>
+				<OptionalPicker {form} {errors} label="Supplier" name="supplierId" items={data.suppliers} />
+				<InputComp {form} {errors} label="Unit" type="select" name="unit" items={UNIT_ITEMS} />
+				<InputComp
+					{form}
+					{errors}
+					label="Quantity on hand"
+					type="number"
+					name="quantityOnHand"
+					min="0"
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="Reorder level"
+					type="number"
+					name="reorderLevel"
+					min="0"
+					placeholder="Leave blank for no alert"
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="In use"
+					type="checkboxSingle"
+					name="isActive"
+					placeholder="Uncheck to retire a material you no longer buy"
+				/>
 
-			<Button type="submit" class="mt-2" form="mat-add-form">
-				{#if $delayed}
-					<LoadingBtn name="Adding" />
-				{:else}
-					<Plus /> Add material
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="mat-add-form">
+					{#if $delayed}
+						<LoadingBtn name="Adding" />
+					{:else}
+						<Plus /> Add material
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}

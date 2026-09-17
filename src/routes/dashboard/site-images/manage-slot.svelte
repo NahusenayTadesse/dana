@@ -67,13 +67,24 @@
 	});
 
 	// Server outcome -> toast, and close the sheet once something actually saved.
+	// One effect per form: `$updateMessage ?? $resetMessage` stopped reading the
+	// reset message once a save had produced one.
 	$effect(() => {
-		const msg = $updateMessage ?? $resetMessage;
-		if (!msg) return;
-		if (msg.type === 'error') {
-			toast.error(msg.text);
+		if (!$updateMessage) return;
+		if ($updateMessage.type === 'error') {
+			toast.error($updateMessage.text);
 		} else {
-			toast.success(msg.text);
+			toast.success($updateMessage.text);
+			untrack(() => (open = false));
+		}
+	});
+
+	$effect(() => {
+		if (!$resetMessage) return;
+		if ($resetMessage.type === 'error') {
+			toast.error($resetMessage.text);
+		} else {
+			toast.success($resetMessage.text);
 			untrack(() => (open = false));
 		}
 	});

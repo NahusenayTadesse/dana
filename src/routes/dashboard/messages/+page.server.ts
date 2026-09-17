@@ -1,83 +1,68 @@
 import { superValidate, message, fail } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
-import { deleteTestimonial, markRead } from './schema.js';
+import { deleteMessage, markRead } from './schema.js';
 import { db } from '$lib/server/db';
-import { contactMessages as paymentMethods } from '$lib/server/db/schema';
-import type { Actions } from './$types.js';
-import type { PageServerLoad } from './$types.js';
+import { contactMessages } from '$lib/server/db/schema';
+import type { Actions, PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async () => {
-	const readForm = await superValidate(zod4(markRead));
-	const deleteForm = await superValidate(zod4(deleteTestimonial));
+	// Distinct ids on the server too, so the two identical schemas never share one.
+	const readForm = await superValidate(zod4(markRead), { id: 'message-read' });
+	const deleteForm = await superValidate(zod4(deleteMessage), { id: 'message-delete' });
 
-	const allPaymentMethods = await db
+	const allMessages = await db
 		.select({
-			id: paymentMethods.id,
-			name: paymentMethods.name,
-			email: paymentMethods.email,
-			phone: paymentMethods.phone,
-			subject: paymentMethods.subject,
-			isRead: paymentMethods.seen,
-			message: paymentMethods.message,
-			address: paymentMethods.address,
-			submittedAt: paymentMethods.createdAt
+			id: contactMessages.id,
+			name: contactMessages.name,
+			email: contactMessages.email,
+			phone: contactMessages.phone,
+			subject: contactMessages.subject,
+			isRead: contactMessages.seen,
+			message: contactMessages.message,
+			address: contactMessages.address,
+			submittedAt: contactMessages.createdAt
 		})
-		.from(paymentMethods);
+		.from(contactMessages)
+		.orderBy(desc(contactMessages.createdAt));
 
 	return {
 		readForm,
 		deleteForm,
-		allPaymentMethods
+		allMessages
 	};
 };
 
 export const actions: Actions = {
-	read: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(deleteTestimonial));
+	read: async ({ request }) => {
+		const form = await superValidate(request, zod4(markRead));
 
 		if (!form.valid) {
 			return fail(400, { form });
 		}
 
-		const { id } = form.data;
-
 		try {
-			await db.update(paymentMethods).set({ seen: true }).where(eq(paymentMethods.id, id));
+			await db.update(contactMessages).set({ seen: true }).where(eq(contactMessages.id, form.data.id));
 			return message(form, { type: 'success', text: 'Message Successfully Marked as Read' });
-		} catch (err: any) {
-			return message(
-				form,
-				{
-					type: 'error',
-					text: 'Error while marking message as read.'
-				},
-				{ status: 500 }
-			);
+		} catch (err) {
+			console.error('Mark message read failed:', err);
+			return message(form, { type: 'error', text: 'Error while marking message as read.' }, { status: 500 });
 		}
 	},
-	delete: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(deleteTestimonial));
+	delete: async ({ request }) => {
+		const form = await superValidate(request, zod4(deleteMessage));
 
 		if (!form.valid) {
 			return fail(400, { form });
 		}
 
-		const { id } = form.data;
-
 		try {
-			await db.delete(paymentMethods).where(eq(paymentMethods.id, id));
+			await db.delete(contactMessages).where(eq(contactMessages.id, form.data.id));
 			return message(form, { type: 'success', text: 'Message Successfully Deleted' });
-		} catch (err: any) {
-			return message(
-				form,
-				{
-					type: 'error',
-					text: 'Error while deleting message.'
-				},
-				{ status: 500 }
-			);
+		} catch (err) {
+			console.error('Delete message failed:', err);
+			return message(form, { type: 'error', text: 'Error while deleting message.' }, { status: 500 });
 		}
 	}
 };

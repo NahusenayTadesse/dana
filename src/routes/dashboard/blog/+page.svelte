@@ -7,6 +7,7 @@
 
 	import { Frown, Plus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { can } from '$lib/permissions';
 </script>
 
 <svelte:head>
@@ -19,7 +20,9 @@
 			<Frown class="h-12 w-16  animate-bounce" />
 			Blog List is Empty
 		</p>
-		<Button href="/dashboard/blog/add-blog"><Plus />Add New Blog</Button>
+		{#if can(data.access, 'blog.create')}
+			<Button href="/dashboard/blog/add-blog"><Plus />Add New Blog</Button>
+		{/if}
 	</div>
 {:else}
 	<h2 class="my-4 text-2xl">No of Blogs: {data.eventList?.length}</h2>

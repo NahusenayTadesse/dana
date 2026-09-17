@@ -28,17 +28,17 @@
 		<DropdownMenu.Separator />
 
 		<DropdownMenu.Item
-			><a href="/dashboard/user/{booker}" class={dropdownClass}>
+			><a href="/dashboard/admin-panel/users/{booker}" class={dropdownClass}>
 				<ExternalLink /> Check out Changer's Staff Profile</a
 			></DropdownMenu.Item
 		>
 		<DropdownMenu.Item
-			><a href="/dashboard/files/{recieptLink}" class={dropdownClass}><Eye /> View Reciept</a
+			><a href="/files/{recieptLink}" class={dropdownClass}><Eye /> View Reciept</a
 			></DropdownMenu.Item
 		>
 		<DropdownMenu.Item
-			><a href="/dashboard/files/{recieptLink}" download="" class={dropdownClass}
-				><Download /> View Reciept</a
+			><a href="/files/{recieptLink}" download="" class={dropdownClass}
+				><Download /> Download Reciept</a
 			></DropdownMenu.Item
 		>
 	</DropdownMenu.Content>

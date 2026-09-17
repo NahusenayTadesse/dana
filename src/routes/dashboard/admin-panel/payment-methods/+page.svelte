@@ -1,13 +1,26 @@
 <script>
+	import { untrack } from 'svelte';
 	import { renderComponent } from '$lib/components/ui/data-table/index.js';
 	import DataTable from '$lib/components/Table/data-table.svelte';
 	import DataTableLinks from '$lib/components/Table/data-table-links.svelte';
 	import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
+	import Statuses from '$lib/components/Table/statuses.svelte';
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
-	import Empty from '$lib/components/Empty.svelte';
 	import { Button } from '$lib/components/ui/button/index';
 	import Edit from './edit.svelte';
-	export const columns = [
+	import { superForm } from 'sveltekit-superforms/client';
+	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
+	import { Plus } from '@lucide/svelte';
+	import { toast } from 'svelte-sonner';
+	import { can } from '$lib/permissions';
+
+	let { data } = $props();
+
+	const canCreate = $derived(can(data.access, 'payment_methods.create'));
+	const canEdit = $derived(can(data.access, 'payment_methods.edit'));
+
+	const columns = $derived([
 		{
 			id: 'index',
 			header: '#',
@@ -26,15 +39,30 @@
 				}),
 			sortable: true,
 			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
+				// Without payment_methods.edit the name is plain text, not an edit dialog.
+				if (!canEdit) return row.original.name;
+				// The only edit dialog for the row — rendering a second one (the old
+				// icon column) gave the row two forms with one id.
 				return renderComponent(Edit, {
 					id: row.original.id,
 					name: row.original.name,
+					isActive: row.original.isActive,
 					action: '?/edit',
 					data: data.editForm,
 					icon: false
 				});
 			}
+		},
+		{
+			accessorKey: 'isActive',
+			header: ({ column }) =>
+				renderComponent(DataTableSort, {
+					name: 'Status',
+					onclick: column.getToggleSortingHandler()
+				}),
+			sortable: true,
+			cell: ({ row }) =>
+				renderComponent(Statuses, { status: row.original.isActive ? 'active' : 'inactive' })
 		},
 
 		{
@@ -46,40 +74,18 @@
 				}),
 			sortable: true,
 			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
+				if (!row.original.createdById) return '—';
 				return renderComponent(DataTableLinks, {
 					id: row.original.createdById,
 					name: row.original.createdBy,
-					link: '/dashboard/users'
-				});
-			}
-		},
-
-		{
-			accessorKey: '',
-			header: 'Edit',
-			sortable: true,
-			cell: ({ row }) => {
-				// You can pass whatever you need from `row.original` to the component
-				return renderComponent(Edit, {
-					id: row.original.id,
-					name: row.original.name,
-					action: '?/edit',
-					data: data.editForm,
-					icon: true
+					link: '/dashboard/admin-panel/users'
 				});
 			}
 		}
-	];
-	let { data } = $props();
-	import { superForm } from 'sveltekit-superforms/client';
-	import InputComp from '$lib/formComponents/InputComp.svelte';
-	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import { Plus } from '@lucide/svelte';
+	]);
 
-	const { form, errors, enhance, delayed, message } = superForm(data.form, {});
+	const { form, errors, enhance, delayed, message } = untrack(() => superForm(data.form, {}));
 
-	import { toast } from 'svelte-sonner';
 	$effect(() => {
 		if ($message) {
 			if ($message.type === 'error') {
@@ -95,19 +101,21 @@
 	<title>Payment Methods</title>
 </svelte:head>
 
-<DialogComp title="+ Add New Payment Method" variant="default">
-	<form action="?/add" use:enhance id="main" class="flex flex-col gap-4" method="post">
-		<InputComp {form} {errors} label="name" type="text" name="name" required={true} />
+{#if canCreate}
+	<DialogComp title="+ Add New Payment Method" variant="default">
+		<form action="?/add" use:enhance id="main" class="flex flex-col gap-4" method="post">
+			<InputComp {form} {errors} label="name" type="text" name="name" required={true} />
 
-		<Button type="submit" form="main">
-			{#if $delayed}
-				<LoadingBtn name="Adding Payment Method" />
-			{:else}
-				<Plus /> Add Payment Method
-			{/if}
-		</Button>
-	</form>
-</DialogComp>
+			<Button type="submit" form="main">
+				{#if $delayed}
+					<LoadingBtn name="Adding Payment Method" />
+				{:else}
+					<Plus /> Add Payment Method
+				{/if}
+			</Button>
+		</form>
+	</DialogComp>
+{/if}
 {#key data?.allPaymentMethods}
 	<DataTable {columns} data={data?.allPaymentMethods} search={true} fileName="Payment Methods" />
 {/key}

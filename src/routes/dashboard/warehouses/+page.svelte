@@ -12,10 +12,14 @@
 	import Statuses from '$lib/components/Table/statuses.svelte';
 	import { Button } from '$lib/components/ui/button/index';
 	import Edit from './edit.svelte';
+	import { can } from '$lib/permissions';
 	import type { WarehouseRow } from './types';
 
 	let { data } = $props();
 	let addOpen = $state(false);
+
+	const canCreate = $derived(can(data.access, 'warehouses.create'));
+	const canEdit = $derived(can(data.access, 'warehouses.edit'));
 
 	const { form, errors, enhance, delayed, message } = untrack(() =>
 		superForm(data.form, { dataType: 'json', id: 'warehouse-add' })
@@ -33,13 +37,11 @@
 
 	const rows = $derived(data.allData as WarehouseRow[]);
 
-	const columns: ColumnDef<WarehouseRow, unknown>[] = [
+	const baseColumns: ColumnDef<WarehouseRow, unknown>[] = [
 		{ accessorKey: 'index', header: '#', cell: (info) => info.row.index + 1 },
-		{
-			accessorKey: 'name',
-			header: 'Name',
-			cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm })
-		},
+		// Only the Edit column renders the edit dialog: two instances of one
+		// per-row superForm id would send the action result to the wrong one.
+		{ accessorKey: 'name', header: 'Name' },
 		{ accessorKey: 'location', header: 'Location' },
 		{
 			accessorKey: 'isDefault',
@@ -52,13 +54,17 @@
 			header: 'Status',
 			cell: ({ row }) =>
 				renderComponent(Statuses, { status: row.original.isActive ? 'active' : 'inactive' })
-		},
-		{
-			accessorKey: 'edit',
-			header: 'Edit',
-			cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm, icon: true })
 		}
 	];
+
+	const editColumn: ColumnDef<WarehouseRow, unknown> = {
+		accessorKey: 'edit',
+		header: 'Edit',
+		cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm, icon: true })
+	};
+
+	// Only show the Edit column when this user's role may edit (the server refuses it anyway).
+	const columns = $derived(canEdit ? [...baseColumns, editColumn] : baseColumns);
 </script>
 
 <svelte:head>
@@ -71,48 +77,51 @@
 			<Warehouse class="h-5 w-5" /> Warehouses
 		</h1>
 		<p class="max-w-[70ch] text-sm text-muted-foreground">
-			Where finished stock is held. One is marked default — that is where a production batch lands
-			unless you pick another.
+			Where finished stock is held. One is always marked default — that is where production batches
+			and received purchase orders land unless you pick another. To change it, mark another warehouse
+			as default.
 		</p>
 	</div>
 
-	<DialogComp bind:open={addOpen} title="Add Warehouse" variant="default" IconComp={Plus} size="md">
-		<form action="?/add" method="post" use:enhance id="wh-add-form" class="flex flex-col gap-3">
-			<InputComp {form} {errors} label="Name" type="text" name="name" required={true} />
-			<InputComp
-				{form}
-				{errors}
-				label="Location"
-				type="text"
-				name="location"
-				placeholder="Adama factory yard"
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="Default"
-				type="checkboxSingle"
-				name="isDefault"
-				placeholder="Where stock lands unless another is picked"
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="In use"
-				type="checkboxSingle"
-				name="isActive"
-				placeholder="Uncheck to retire it without losing its stock history"
-			/>
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="Add Warehouse" variant="default" IconComp={Plus} size="md">
+			<form action="?/add" method="post" use:enhance id="wh-add-form" class="flex flex-col gap-3">
+				<InputComp {form} {errors} label="Name" type="text" name="name" required={true} />
+				<InputComp
+					{form}
+					{errors}
+					label="Location"
+					type="text"
+					name="location"
+					placeholder="Adama factory yard"
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="Default"
+					type="checkboxSingle"
+					name="isDefault"
+					placeholder="Where stock lands unless another is picked"
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="In use"
+					type="checkboxSingle"
+					name="isActive"
+					placeholder="Uncheck to retire it without losing its stock history"
+				/>
 
-			<Button type="submit" class="mt-2" form="wh-add-form">
-				{#if $delayed}
-					<LoadingBtn name="Adding" />
-				{:else}
-					<Plus /> Add warehouse
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="wh-add-form">
+					{#if $delayed}
+						<LoadingBtn name="Adding" />
+					{:else}
+						<Plus /> Add warehouse
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}

@@ -14,7 +14,11 @@
 </svelte:head>
 
 <Sidebar.Provider>
-	<AppSidebar messageNumber={data?.messageNumber} ordersNumber={data?.ordersNumber} />
+	<AppSidebar
+		messageNumber={data?.messageNumber}
+		ordersNumber={data?.ordersNumber}
+		allowedRoutes={data?.allowedRoutes ?? []}
+	/>
 	<main class="w-full min-w-0 px-2">
 		<div
 			class="absolute top-2 left-2 z-10 flex w-[95%] flex-row

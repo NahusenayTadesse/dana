@@ -2,6 +2,7 @@ import { auth } from '$lib/server/auth';
 import type { Actions } from './$types';
 
 import { error, redirect } from '@sveltejs/kit';
+import { redirect as flashRedirect } from 'sveltekit-flash-message/server';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import {
@@ -12,7 +13,8 @@ import {
 	products,
 	discounts
 } from '$lib/server/db/schema';
-import { eq, sql, desc, sum } from 'drizzle-orm';
+import { and, eq, sql, desc, sum } from 'drizzle-orm';
+import { clampPercentage } from '$lib/server/pricing';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) return redirect(303, '/');
@@ -105,18 +107,51 @@ export const load: PageServerLoad = async ({ locals }) => {
 			{} as Record<number, any>
 		);
 
-		// 5. Available Offers / Discount Campaigns for the customer
-		const activeDiscounts = await db
+		// 5. Available Offers / Discount Campaigns for the customer.
+		// `discounts.amount` is a percentage, and one named discount is stored as
+		// one row per product — so group rows into campaigns (name + percentage)
+		// listing the products each applies to. Only live products are shown:
+		// an archived product can't be bought.
+		const discountRows = await db
 			.select({
 				id: discounts.id,
 				name: discounts.name,
 				description: discounts.description,
 				amount: discounts.amount,
-				productName: products.name
+				productName: products.name,
+				productSlug: products.slug
 			})
 			.from(discounts)
-			.leftJoin(products, eq(discounts.productId, products.id))
-			.limit(3);
+			.innerJoin(products, eq(discounts.productId, products.id))
+			.where(and(eq(discounts.isActive, true), eq(products.isActive, true)))
+			.orderBy(desc(discounts.createdAt))
+			.limit(100);
+
+		const campaigns = new Map<
+			string,
+			{
+				id: number;
+				name: string;
+				description: string | null;
+				percentage: number;
+				products: { name: string; slug: string }[];
+			}
+		>();
+		for (const row of discountRows) {
+			const percentage = clampPercentage(row.amount);
+			if (percentage <= 0) continue;
+			const key = `${row.name}|${percentage}`;
+			const campaign = campaigns.get(key) ?? {
+				id: row.id,
+				name: row.name,
+				description: row.description,
+				percentage,
+				products: []
+			};
+			campaign.products.push({ name: row.productName, slug: row.productSlug });
+			campaigns.set(key, campaign);
+		}
+		const activeDiscounts = [...campaigns.values()].slice(0, 3);
 
 		return {
 			customer,
@@ -145,6 +180,8 @@ export const actions: Actions = {
 		await auth.api.signOut({
 			headers: event.request.headers
 		});
-		redirect('/login', { type: 'success', message: 'Logout Successful' }, event.cookies);
+		// The flash-message redirect takes (location, message, cookies); kit's own
+		// redirect() read '/login' as a status code and threw.
+		flashRedirect('/login', { type: 'success', message: 'Logout Successful' }, event.cookies);
 	}
 };

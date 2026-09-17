@@ -24,13 +24,16 @@
 		variantLabel,
 		rates = [],
 		upsertData,
-		deleteData
+		deleteData,
+		canEdit = true
 	}: {
 		variantId: number;
 		variantLabel: string;
 		rates?: Rate[];
 		upsertData: SuperValidated<Infer<typeof upsertVariantPrice>>;
 		deleteData: SuperValidated<Infer<typeof deleteVariantPrice>>;
+		/** products.edit — add/update/delete rates; without it the price book is read-only. */
+		canEdit?: boolean;
 	} = $props();
 
 	const basisItems = [
@@ -97,69 +100,73 @@
 									{formatETB(Number(rate.price))}{rate.priceIncludesVat ? ' (incl. VAT)' : ''}
 								</p>
 							</div>
-							<form method="post" action="?/deleteVariantPrice" use:deleteEnhance>
-								<input type="hidden" name="id" bind:value={$deleteForm.id} />
-								<Button
-									type="submit"
-									variant="destructive"
-									size="sm"
-									onclick={() => ($deleteForm.id = rate.id)}
-								>
-									<Trash2 class="h-4 w-4" />
-								</Button>
-							</form>
+							{#if canEdit}
+								<form method="post" action="?/deleteVariantPrice" use:deleteEnhance>
+									<input type="hidden" name="id" bind:value={$deleteForm.id} />
+									<Button
+										type="submit"
+										variant="destructive"
+										size="sm"
+										onclick={() => ($deleteForm.id = rate.id)}
+									>
+										<Trash2 class="h-4 w-4" />
+									</Button>
+								</form>
+							{/if}
 						</div>
 					{/each}
 				</div>
 			{/if}
 		</div>
 
-		<div class="flex flex-col gap-3">
-			<h3 class="text-sm font-medium text-muted-foreground">Add / Update a Rate</h3>
-			<form
-				method="post"
-				action="?/upsertVariantPrice"
-				use:upsertEnhance
-				class="flex flex-col gap-3"
-			>
-				<input type="hidden" name="variantId" bind:value={$upsertForm.variantId} />
+		{#if canEdit}
+			<div class="flex flex-col gap-3">
+				<h3 class="text-sm font-medium text-muted-foreground">Add / Update a Rate</h3>
+				<form
+					method="post"
+					action="?/upsertVariantPrice"
+					use:upsertEnhance
+					class="flex flex-col gap-3"
+				>
+					<input type="hidden" name="variantId" bind:value={$upsertForm.variantId} />
 
-				<InputComp
-					form={upsertForm}
-					errors={upsertErrors}
-					type="select"
-					name="basis"
-					label="Basis"
-					placeholder="Select what this rate is priced by"
-					items={basisItems}
-				/>
+					<InputComp
+						form={upsertForm}
+						errors={upsertErrors}
+						type="select"
+						name="basis"
+						label="Basis"
+						placeholder="Select what this rate is priced by"
+						items={basisItems}
+					/>
 
-				<InputComp
-					form={upsertForm}
-					errors={upsertErrors}
-					type="number"
-					name="price"
-					label="Rate (ETB)"
-					placeholder="0.00"
-				/>
+					<InputComp
+						form={upsertForm}
+						errors={upsertErrors}
+						type="number"
+						name="price"
+						label="Rate (ETB)"
+						placeholder="0.00"
+					/>
 
-				<InputComp
-					form={upsertForm}
-					errors={upsertErrors}
-					type="checkboxSingle"
-					name="priceIncludesVat"
-					label=""
-					placeholder="Price includes VAT"
-				/>
+					<InputComp
+						form={upsertForm}
+						errors={upsertErrors}
+						type="checkboxSingle"
+						name="priceIncludesVat"
+						label=""
+						placeholder="Price includes VAT"
+					/>
 
-				<Button type="submit" size="lg" disabled={$upsertDelayed}>
-					{#if $upsertDelayed}
-						<LoadingBtn name="Saving Rate" />
-					{:else}
-						<Save class="mr-2 h-4 w-4" /> Save Rate
-					{/if}
-				</Button>
-			</form>
-		</div>
+					<Button type="submit" size="lg" disabled={$upsertDelayed}>
+						{#if $upsertDelayed}
+							<LoadingBtn name="Saving Rate" />
+						{:else}
+							<Save class="mr-2 h-4 w-4" /> Save Rate
+						{/if}
+					</Button>
+				</form>
+			</div>
+		{/if}
 	</div>
 </DialogComp>

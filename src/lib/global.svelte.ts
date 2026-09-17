@@ -57,25 +57,48 @@ export function extractUsername(email: string) {
 }
 
 export function getCurrentMonthRange(): string {
-	const today = new SvelteDate();
+	// Today's date in the business timezone, not the server's or the browser's —
+	// otherwise the default report range starts or ends on the wrong day for
+	// three hours around midnight.
+	const todayStr = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'Africa/Addis_Ababa',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(new Date());
 
-	const year = today.getFullYear();
-	const month = String(today.getMonth() + 1).padStart(2, '0');
-	const day = String(today.getDate()).padStart(2, '0');
-
-	const firstOfMonth = `${year}-${month}-01`;
-	const todayStr = `${year}-${month}-${day}`;
+	const firstOfMonth = `${todayStr.slice(0, 7)}-01`;
 
 	return `${firstOfMonth}-${todayStr}`;
 }
 
-export const currentMonthFilter = (dateField: MySqlColumn, start?: string, end?: string) => {
-	// If start/end are passed, return BETWEEN condition
-	if (start && end) {
-		const endOfDay = new SvelteDate(end);
-		endOfDay.setHours(23, 59, 59, 999);
+const isoDate = (value: string) => {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+	const [y, m, d] = value.split('-').map(Number);
+	const date = new Date(Date.UTC(y, m - 1, d));
+	return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+};
 
-		return sql`${dateField} BETWEEN ${start} AND ${endOfDay}`;
+/**
+ * Parse a `YYYY-MM-DD-YYYY-MM-DD` route param. Returns null for anything else
+ * (a malformed or impossible date, or a start after the end) so the load can
+ * 404 instead of querying with `Invalid Date`.
+ */
+export function parseDateRange(range: string | undefined): { start: string; end: string } | null {
+	const match = /^(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})$/.exec(range ?? '');
+	if (!match) return null;
+	const [, start, end] = match;
+	if (!isoDate(start) || !isoDate(end) || start > end) return null;
+	return { start, end };
+}
+
+export const currentMonthFilter = (dateField: MySqlColumn, start?: string, end?: string) => {
+	// If start/end are passed, filter whole calendar days. Both bounds stay plain
+	// `YYYY-MM-DD` strings compared in the database: the end used to go through
+	// `new Date('YYYY-MM-DD')` (UTC midnight) and then a local setHours, which
+	// dropped the last day on servers behind UTC.
+	if (start && end) {
+		return sql`${dateField} >= ${start} AND ${dateField} < DATE_ADD(${end}, INTERVAL 1 DAY)`;
 	}
 
 	// Otherwise fallback to current-month logic

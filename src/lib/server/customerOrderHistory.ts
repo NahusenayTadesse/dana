@@ -8,6 +8,7 @@ import {
 	priceOffers
 } from '$lib/server/db/schema';
 import { eq, and, or, like, sql, inArray, desc, type SQL } from 'drizzle-orm';
+import { priceLine, type PricingBasis } from '$lib/server/pricing';
 
 // Shared between the customer-facing "my orders" page and the dashboard's
 // per-customer history page — same filters (status/search/page), same shape,
@@ -54,6 +55,46 @@ const itemSpec = (item: {
 		.filter(Boolean)
 		.join(' · ');
 
+// One line's units of its price basis — the SQL twin of pricing.ts unitsFor(),
+// so the searchable per-order total agrees with the per-line totals below.
+// `price × quantity` counted a per-metre or per-area rate as if per piece, and
+// dropped lines with no piece count.
+const lineUnitsSql = sql`CASE ${orderItems.priceBasis}
+	WHEN 'length' THEN COALESCE(${orderItems.length}, 0) * COALESCE(${orderItems.quantity}, 1)
+	WHEN 'width' THEN COALESCE(${orderItems.width}, 0) * COALESCE(${orderItems.quantity}, 1)
+	WHEN 'thickness' THEN COALESCE(${orderItems.thickness}, 0) * COALESCE(${orderItems.quantity}, 1)
+	WHEN 'weight' THEN COALESCE(${orderItems.weight}, 0) * COALESCE(${orderItems.quantity}, 1)
+	WHEN 'area' THEN COALESCE(${orderItems.width}, 0) * COALESCE(${orderItems.length}, 0) * COALESCE(${orderItems.quantity}, 1)
+	ELSE COALESCE(${orderItems.quantity}, 1)
+END`;
+
+function lineTotal(item: {
+	quantity: number | null;
+	length: string | null;
+	width: string | null;
+	thickness: string | null;
+	weight: string | null;
+	priceBasis: string;
+	price: string | null;
+	priceIncludesVat: boolean;
+}): number {
+	const unitPrice = Number(item.price ?? 0);
+	const { units } = priceLine(
+		{
+			quantity: item.quantity,
+			length: item.length != null ? Number(item.length) : null,
+			width: item.width != null ? Number(item.width) : null,
+			thickness: item.thickness != null ? Number(item.thickness) : null,
+			weight: item.weight != null ? Number(item.weight) : null,
+			basis: item.priceBasis as PricingBasis,
+			unitPrice,
+			priceIncludesVat: item.priceIncludesVat
+		},
+		0
+	);
+	return Math.round((units * unitPrice + Number.EPSILON) * 100) / 100;
+}
+
 export async function fetchCustomerOrderHistory(filters: OrderHistoryFilters) {
 	const perPage = filters.perPage ?? 10;
 	const requestedPage = Math.max(1, filters.page ?? 1);
@@ -63,7 +104,7 @@ export async function fetchCustomerOrderHistory(filters: OrderHistoryFilters) {
 	const itemTotals = db
 		.select({
 			orderId: orderItems.orderId,
-			total: sql<number>`SUM(${orderItems.quantity} * ${orderItems.price})`.as('total')
+			total: sql<number>`ROUND(SUM(${lineUnitsSql} * COALESCE(${orderItems.price}, 0)), 2)`.as('total')
 		})
 		.from(orderItems)
 		.groupBy(orderItems.orderId)
@@ -106,7 +147,9 @@ export async function fetchCustomerOrderHistory(filters: OrderHistoryFilters) {
 			createdAt: orders.createdAt,
 			paymentStatus: transactions.paymentStatus,
 			txnRef: transactions.txnRef,
-			amountPaid: transactions.amount,
+			// Collected money is `amountPaid`; `amount` is only the checkout attempt
+			// currently in flight.
+			amountPaid: transactions.amountPaid,
 			total: sql<number>`COALESCE(${itemTotals.total}, 0)`.mapWith(Number)
 		})
 		.from(orders)
@@ -135,7 +178,10 @@ export async function fetchCustomerOrderHistory(filters: OrderHistoryFilters) {
 					width: orderItems.width,
 					widthUnit: orderItems.widthUnit,
 					length: orderItems.length,
-					lengthUnit: orderItems.lengthUnit
+					lengthUnit: orderItems.lengthUnit,
+					weight: orderItems.weight,
+					priceBasis: orderItems.priceBasis,
+					priceIncludesVat: orderItems.priceIncludesVat
 				})
 				.from(orderItems)
 				.leftJoin(products, eq(products.id, orderItems.productId))
@@ -151,7 +197,8 @@ export async function fetchCustomerOrderHistory(filters: OrderHistoryFilters) {
 		quantity: item.quantity ?? 0,
 		amount: item.amount,
 		price: item.price ?? '0',
-		total: Number(item.price ?? 0) * Number(item.quantity ?? 0),
+		// Priced on the line's own basis, at the rate as quoted.
+		total: item.price == null ? 0 : lineTotal(item),
 		spec: itemSpec(item)
 	}));
 

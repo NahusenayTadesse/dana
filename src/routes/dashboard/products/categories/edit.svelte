@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import { SquarePen, Save } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -7,6 +8,9 @@
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
 	import Errors from '$lib/formComponents/Errors.svelte';
+	import { toast } from 'svelte-sonner';
+	import InputComp from '$lib/formComponents/InputComp.svelte';
+	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 
 	let {
 		data,
@@ -14,65 +18,48 @@
 		id,
 		name,
 		description,
-
-		icon = false,
 		status = true
 	}: {
 		data: SuperValidated<Edit>;
-		action: string;
+		action?: string;
 		id: number;
 		name: string;
-		icon: boolean;
-		description: string;
-		status: boolean;
+		description: string | null;
+		status?: boolean;
 	} = $props();
 
-	const { form, errors, enhance, delayed, message, allErrors } = superForm(data, {
-		resetForm: false
+	let open = $state(false);
+
+	// One instance per row, each with its own id — a shared id sends every
+	// action result to the first row's form.
+	const { form, errors, enhance, delayed, message, allErrors } = untrack(() =>
+		superForm(data, { resetForm: false, id: `category-${id}` })
+	);
+
+	untrack(() => {
+		$form.id = id;
+		$form.name = name;
+		$form.description = description ?? '';
+		$form.status = status;
 	});
 
-	$form.id = id;
-	$form.name = name;
-
-	$form.description = description;
-	$form.status = status;
-
-	import { toast } from 'svelte-sonner';
-	import InputComp from '$lib/formComponents/InputComp.svelte';
-	import DialogComp from '$lib/formComponents/DialogComp.svelte';
 	$effect(() => {
-		if ($message) {
-			if ($message.type === 'error') {
-				toast.error($message.text);
-			} else {
-				toast.success($message.text);
-			}
+		if (!$message) return;
+		if ($message.type === 'error') {
+			toast.error($message.text);
+		} else {
+			toast.success($message.text);
+			open = false;
 		}
 	});
 </script>
 
-<!-- <Tooltip.Provider>
-	<Tooltip.Root>
-		<Tooltip.Trigger class="{buttonVariants({ variant: 'ghost' })} justify-self-start p-0!">
-			<Dialog.Root bind:open>
-				<Dialog.Trigger class="flex w-auto flex-row items-center justify-center gap-2 border-0">
-					{#if icon}
-						<SquarePen /> Edit
-					{:else}
-						{name}
-					{/if}
-				</Dialog.Trigger>
-				<Dialog.Content class="w-full bg-white">
-					<Dialog.Header>
-						<Dialog.Title class="text-center text-4xl">Edit {name}</Dialog.Title>
-					</Dialog.Header> -->
-
-<DialogComp title={icon ? 'Edit' : name} IconComp={icon ? SquarePen : undefined} variant="ghost">
+<DialogComp bind:open title="Edit" IconComp={SquarePen} variant="ghost">
 	<form
 		{action}
 		use:enhance
 		method="post"
-		id="edit"
+		id="category-edit-{id}"
 		class="flex w-full flex-col gap-4 p-4"
 		enctype="multipart/form-data"
 	>
@@ -86,7 +73,7 @@
 			label="Description"
 			type="textarea"
 			name="description"
-			placeholder="Enter Department Description"
+			placeholder="Enter Category Description"
 			required={true}
 			rows={10}
 		/>
@@ -102,7 +89,7 @@
 			]}
 		/>
 
-		<Button type="submit" class="mt-4" form="edit">
+		<Button type="submit" class="mt-4" form="category-edit-{id}">
 			{#if $delayed}
 				<LoadingBtn name="Saving Changes" />
 			{:else}
@@ -113,11 +100,3 @@
 		</Button>
 	</form>
 </DialogComp>
-<!-- </Dialog.Content>
-			</Dialog.Root>
-		</Tooltip.Trigger>
-		<Tooltip.Content>
-			<p>Edit {name}</p>
-		</Tooltip.Content>
-	</Tooltip.Root>
-</Tooltip.Provider> -->

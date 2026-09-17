@@ -12,12 +12,14 @@ type Item = { value: number; name: string };
 export function lineColumns(ctx: {
 	updateLineForm: any;
 	orderId: number;
+	/** Approved, rejected, cancelled or paid-towards orders can't be edited — no Edit column. */
+	locked?: boolean;
 	productList?: Item[];
 	variantList?: (Item & { productId: number })[];
 	ratesByVariant?: Record<number, any[]>;
 	colorList?: Item[];
 }) {
-	return [
+	const columns = [
 		{
 			accessorKey: 'index',
 			header: '#',
@@ -64,7 +66,13 @@ export function lineColumns(ctx: {
 			header: 'VAT',
 			sortable: true,
 			cell: ({ row }: any) => (row.original.priceIncludesVat ? 'Included' : 'Excluded')
-		},
+		}
+	];
+
+	if (ctx.locked) return columns;
+
+	return [
+		...columns,
 		{
 			accessorKey: 'actions',
 			header: 'Edit',

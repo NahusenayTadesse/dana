@@ -68,6 +68,35 @@ export const load: PageServerLoad = async () => {
 	};
 };
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Rewrite sort_order as 0..n-1 in `ids` order. Add, move and remove all go
+ * through this inside their transaction, so a deletion can't leave gaps or
+ * duplicate positions that put the next add or move in the wrong place. Only
+ * rows whose position actually changes are written.
+ */
+async function renumber(tx: Tx, ids: number[], current: Map<number, number>, userId?: string) {
+	for (const [index, id] of ids.entries()) {
+		if (current.get(id) === index) continue;
+		await tx
+			.update(faqItems)
+			.set({ sortOrder: index, updatedBy: userId })
+			.where(eq(faqItems.id, id));
+	}
+}
+
+async function orderedIds(tx: Tx) {
+	const rows = await tx
+		.select({ id: faqItems.id, sortOrder: faqItems.sortOrder })
+		.from(faqItems)
+		.orderBy(asc(faqItems.sortOrder), asc(faqItems.id));
+	return {
+		ids: rows.map((row) => row.id),
+		current: new Map(rows.map((row) => [row.id, row.sortOrder]))
+	};
+}
+
 const failed = (form: any, text: string, status: 400 | 500 = 500) =>
 	message(form, { type: 'error', text }, { status });
 
@@ -78,16 +107,20 @@ export const actions: Actions = {
 
 		try {
 			await ensureSeeded(locals?.user?.id);
-			const rows = await ordered();
-			await db.insert(faqItems).values({
-				sortOrder: rows.length,
-				icon: form.data.icon,
-				questionEn: form.data.questionEn,
-				questionAm: form.data.questionAm || null,
-				answerEn: form.data.answerEn,
-				answerAm: form.data.answerAm || null,
-				isActive: form.data.isActive,
-				createdBy: locals?.user?.id
+			await db.transaction(async (tx) => {
+				const { ids, current } = await orderedIds(tx);
+				await renumber(tx, ids, current, locals?.user?.id);
+				// Positions are now exactly 0..n-1, so n is the end of the list.
+				await tx.insert(faqItems).values({
+					sortOrder: ids.length,
+					icon: form.data.icon,
+					questionEn: form.data.questionEn,
+					questionAm: form.data.questionAm || null,
+					answerEn: form.data.answerEn,
+					answerAm: form.data.answerAm || null,
+					isActive: form.data.isActive,
+					createdBy: locals?.user?.id
+				});
 			});
 			return message(form, { type: 'success', text: 'Question added' });
 		} catch (err) {
@@ -142,7 +175,11 @@ export const actions: Actions = {
 			const id = form.data.id < 0 ? rows[-form.data.id - 1]?.id : form.data.id;
 			if (!id) return failed(form, 'That question no longer exists.', 400);
 
-			await db.delete(faqItems).where(eq(faqItems.id, id));
+			await db.transaction(async (tx) => {
+				await tx.delete(faqItems).where(eq(faqItems.id, id));
+				const { ids, current } = await orderedIds(tx);
+				await renumber(tx, ids, current, locals?.user?.id);
+			});
 			return message(form, { type: 'success', text: 'Question removed' });
 		} catch (err) {
 			console.error('faq delete failed', err);
@@ -156,28 +193,28 @@ export const actions: Actions = {
 
 		try {
 			await ensureSeeded(locals?.user?.id);
-			const rows = await ordered();
-			const index =
-				form.data.id < 0 ? -form.data.id - 1 : rows.findIndex((row) => row.id === form.data.id);
-			const target = form.data.direction === 'up' ? index - 1 : index + 1;
 
-			if (index < 0 || target < 0 || target >= rows.length) {
+			const moved = await db.transaction(async (tx) => {
+				const { ids, current } = await orderedIds(tx);
+				// A negative id is a bundled question's list position (seeded above).
+				const index = form.data.id < 0 ? -form.data.id - 1 : ids.indexOf(form.data.id);
+				const target = form.data.direction === 'up' ? index - 1 : index + 1;
+
+				if (index < 0 || index >= ids.length || target < 0 || target >= ids.length) {
+					return false;
+				}
+
+				// Swap in list order, then write every position as 0..n-1. Assigning
+				// the two list indexes directly collided with other rows' sort_order
+				// whenever earlier deletes had left gaps.
+				[ids[index], ids[target]] = [ids[target], ids[index]];
+				await renumber(tx, ids, current, locals?.user?.id);
+				return true;
+			});
+
+			if (!moved) {
 				return message(form, { type: 'success', text: 'Already at the end' });
 			}
-
-			// Swap the two rows' positions. Written as an explicit pair rather than
-			// a re-number of the whole list so a concurrent edit elsewhere in the
-			// list is not silently overwritten.
-			await db.transaction(async (tx) => {
-				await tx
-					.update(faqItems)
-					.set({ sortOrder: target, updatedBy: locals?.user?.id })
-					.where(eq(faqItems.id, rows[index].id));
-				await tx
-					.update(faqItems)
-					.set({ sortOrder: index, updatedBy: locals?.user?.id })
-					.where(eq(faqItems.id, rows[target].id));
-			});
 
 			return message(form, { type: 'success', text: 'Order updated' });
 		} catch (err) {

@@ -33,7 +33,6 @@
 
 	untrack(() => {
 		$form.id = row.id;
-		$form.purchaseOrderId = row.purchaseOrderId;
 		$form.rawMaterialId = row.rawMaterialId;
 		$form.variantId = row.variantId;
 		$form.quantity = row.quantity;

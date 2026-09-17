@@ -9,6 +9,8 @@ import type { ColumnDef } from '@tanstack/table-core';
 import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 import Statuses from '$lib/components/Table/statuses.svelte';
 import BigText from '$lib/components/Table/bigText.svelte';
+import Discount from './discount.svelte';
+import DiscountName from './discountName.svelte';
 
 export const columns = [
 	{
@@ -114,10 +116,8 @@ export const columns = [
 				onclick: column.getToggleSortingHandler()
 			}),
 		sortable: true,
-		cell: (info) => {
-			// You can pass whatever you need from `row.original` to the component
-			return info.getValue() + ' Units Left';
-		}
+		// products.quantity is the synced total of the variants' warehouse stock.
+		cell: (info) => `${info.getValue() ?? 0} Units Left`
 	},
 	{
 		accessorKey: 'reorderLevel',
@@ -127,9 +127,7 @@ export const columns = [
 				onclick: column.getToggleSortingHandler()
 			}),
 		sortable: true,
-		cell: (info) => {
-			return info.getValue() + ' Units';
-		}
+		cell: (info) => (info.getValue() == null ? '—' : `${info.getValue()} Units`)
 	},
 
 	{
@@ -206,7 +204,7 @@ export const columns = [
 		cell: (info) => info.getValue() ?? '—'
 	},
 	{
-		accessorKey: 'prices',
+		accessorKey: 'priceList',
 		header: ({ column }) =>
 			renderComponent(DataTableSort, {
 				name: 'Price',
@@ -222,6 +220,25 @@ export const columns = [
 		}
 	},
 
+	{
+		accessorKey: 'discount',
+		header: ({ column }) =>
+			renderComponent(DataTableSort, {
+				name: 'Discount',
+				onclick: column.getToggleSortingHandler()
+			}),
+		sortable: true,
+		cell: ({ row }) => renderComponent(Discount, { discount: row.original.discount })
+	},
+	{
+		accessorKey: 'discountName',
+		header: 'Discount Name',
+		cell: ({ row }) =>
+			renderComponent(DiscountName, {
+				discountName: row.original.discountName ?? undefined,
+				discountDescription: row.original.discountDescription ?? undefined
+			})
+	},
 	{
 		accessorKey: 'category',
 		header: ({ column }) =>
@@ -306,15 +323,14 @@ export const columns = [
 				onclick: column.getToggleSortingHandler()
 			}),
 		sortable: true,
+		// Same synced total as the Quantity column; a product with no reorder
+		// level set is "low" within 5 units of empty.
+		accessorFn: (row) => row.quantity,
 		cell: ({ row }) => {
-			// You can pass whatever you need from `row.original` to the component
+			const quantity = row.original.quantity ?? 0;
+			const reorderLevel = row.original.reorderLevel ?? 0;
 			return renderComponent(Statuses, {
-				status:
-					row.original.quantity <= 0
-						? 'out'
-						: row.original.quantity <= row.original.reorderLevel + 5
-							? 'low'
-							: 'live'
+				status: quantity <= 0 ? 'out' : quantity <= reorderLevel + 5 ? 'low' : 'live'
 			});
 		}
 	},

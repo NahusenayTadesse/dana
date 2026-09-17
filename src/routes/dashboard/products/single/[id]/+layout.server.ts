@@ -13,15 +13,17 @@ import {
 	productVariants,
 	productImages,
 	tags,
-	productTags,
-	categoriesProducts
+	productTags
 } from '$lib/server/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, asc } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import { parseIdParam } from '$lib/server/params';
 
 export const load: LayoutServerLoad = async ({ params }) => {
-	const { id } = params;
-	const productId = Number(id);
+	// Covers the /ranges and /damaged children too: `Number('abc')` is NaN,
+	// which mysql2 sends unquoted and MySQL rejects (a 500).
+	const productId = parseIdParam(params.id);
 
 	const adjustForm = await superValidate(zod4(adjust));
 	const damagedForm = await superValidate(zod4(damaged));
@@ -38,7 +40,8 @@ export const load: LayoutServerLoad = async ({ params }) => {
 
 	const allTags = await db
 		.select({ value: tags.id, name: tags.name })
-		.from(tags);
+		.from(tags)
+		.orderBy(asc(tags.name));
 
 	const supplierList = await db
 		.select({ value: suppliers.id, name: suppliers.name })
@@ -48,7 +51,8 @@ export const load: LayoutServerLoad = async ({ params }) => {
 	const result = await db
 		.select({ url: productImages.imageUrl })
 		.from(productImages)
-		.where(eq(productImages.productId, productId));
+		.where(eq(productImages.productId, productId))
+		.orderBy(asc(productImages.id));
 
 	const images = result.map((img) => img.url);
 
@@ -64,7 +68,11 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			)`,
 			brand: products.brand,
 			description: products.description,
+			// Synced total of the variants' warehouse stock ($lib/server/stock).
 			quantity: products.quantity,
+			isActive: products.isActive,
+			categoryId: products.categoryId,
+			category: productCategories.name,
 			reorderLevel: products.reorderLevel,
 			commission: products.commissionAmount,
 			supplier: suppliers.name,
@@ -98,10 +106,13 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		})
 		.from(products)
 		.leftJoin(suppliers, eq(suppliers.id, products.supplierId))
+		.leftJoin(productCategories, eq(productCategories.id, products.categoryId))
 		.leftJoin(user, eq(products.createdBy, user.id))
 		.where(eq(products.id, productId))
 		.then((rows) => rows[0]);
 
+	// A valid-but-missing id used to render an empty, editable form.
+	if (!product) error(404, 'Product not found.');
 
 
 	const categories = await db
@@ -123,20 +134,16 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			and(eq(productTags.tagId, tags.id), eq(productTags.productId, productId))
 		);
 
+	// products.categoryId is the product's one category — the same column the
+	// shop filter, related products and /buy read.
 	const categorized = await db
-		.selectDistinct({
+		.select({
 			value: productCategories.id,
 			name: productCategories.name,
 			description: productCategories.description
 		})
 		.from(productCategories)
-		.innerJoin(
-			categoriesProducts,
-			and(
-				eq(categoriesProducts.categoryId, productCategories.id),
-				eq(categoriesProducts.productId, productId)
-			)
-		);
+		.where(eq(productCategories.id, product.categoryId));
 
 	// Prefill the product edit form server-side, keyed to the `edit` schema.
 	// `image` is deliberately left out — a file input can't be prefilled, and the
@@ -144,14 +151,13 @@ export const load: LayoutServerLoad = async ({ params }) => {
 	// `errors: false` so an incomplete existing row doesn't render as red on open.
 	const form = await superValidate(
 		{
-			productName: product?.name ?? '',
-			brand: product?.brand ?? '',
-			category: categorized.map((c) => c.value),
+			productName: product.name,
+			brand: product.brand ?? '',
+			categoryId: product.categoryId,
 			tag: tagged.map((t) => t.value),
-			commission: Number(product?.commission ?? 0),
-			description: product?.description ?? '',
-			quantity: product?.quantity ?? 0,
-			supplier: product?.supplierId ?? undefined,
+			commission: Number(product.commission ?? 0),
+			description: product.description ?? '',
+			supplier: product.supplierId ?? null,
 			reorderLevel: product?.reorderLevel ?? 0,
 			soldBy: product?.soldBy ?? 'quantity',
 			thickness: product?.thickness ?? '',

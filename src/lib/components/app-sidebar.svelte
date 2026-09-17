@@ -35,9 +35,21 @@
 	import NavMain from './NavMain.svelte';
 	import { siteImage } from '$lib/siteImages.svelte';
 
-	let { messageNumber, ordersNumber, ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
+	let {
+		messageNumber,
+		ordersNumber,
+		allowedRoutes = [],
+		...restProps
+	}: ComponentProps<typeof Sidebar.Root> & {
+		messageNumber?: number;
+		ordersNumber?: number;
+		/** Dashboard pages the user may open (from the layout's permission check). */
+		allowedRoutes?: string[];
+	} = $props();
 
-	const navigation = [
+	// Derived so the Quotes/Orders/Messages badges follow the layout data when it
+	// is invalidated, instead of keeping the counts from the first render.
+	const fullNavigation = $derived([
 		{
 			section: null,
 			items: [
@@ -65,7 +77,7 @@
 						{ title: 'All Products', url: '/dashboard/products' },
 						{ title: 'Add Product', url: '/dashboard/products/add-products' },
 						{ title: 'Suppliers', url: '/dashboard/products/suppliers' },
-						{ title: 'Add Supplier', url: '/dashboard/products/add-suppliers' }
+						{ title: 'Add Supplier', url: '/dashboard/products/suppliers/add-suppliers' }
 					]
 				},
 				{
@@ -145,7 +157,24 @@
 				{ title: 'Help', url: '/dashboard/help', icon: LifeBuoy }
 			]
 		}
-	];
+	]);
+
+	// Only what the user's permissions let them open. A group whose own page is
+	// off-limits still shows if one of its sub-pages is allowed, linking there.
+	const navigation = $derived.by(() => {
+		const allowed = new Set(allowedRoutes);
+		return fullNavigation
+			.map((section) => ({
+				...section,
+				items: section.items.flatMap((item) => {
+					const subItems = 'items' in item && item.items ? item.items.filter((sub) => allowed.has(sub.url)) : undefined;
+					if (!allowed.has(item.url) && !subItems?.length) return [];
+					const url = allowed.has(item.url) ? item.url : subItems![0].url;
+					return [{ ...item, url, ...(subItems ? { items: subItems } : {}) }];
+				})
+			}))
+			.filter((section) => section.items.length > 0);
+	});
 
 	const sidebar = useSidebar();
 	function closeSidebar() {

@@ -1,42 +1,32 @@
 import { z } from 'zod/v4';
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 5MB limit
-const ACCEPTED_FILE_TYPES = [
-	'image/jpeg', // Common for both platforms
-	'image/png', // Common for both platforms (and screenshots)
-	'image/webp', // Common modern format (often Android screenshots/exports)
-	'image/heic', // High Efficiency Image File (iOS default)
-	'image/heif', // High Efficiency Image File (related to HEIC)
-	'application/pdf' // Document format, kept from original
-];
+import { imageFile } from '$lib/uploadTypes';
 
-export const paymentMethod = z.object({
-	name: z.string('Name of Payment Method is required').min(2).max(50),
-	position: z.string().optional(),
-	testimonial: z.string(),
-	avatar: z
-		.instanceof(File)
-		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
-		.refine((file) => ACCEPTED_FILE_TYPES.includes(file.type), 'Invalid file type.')
+// Avatars render as <img>, so only images the uploader accepts are allowed —
+// no HEIC/HEIF (rejected by the uploader) and no PDF (a broken image).
+export const addTestimonial = z.object({
+	name: z.string('Name is required').trim().min(2).max(50),
+	position: z.string().trim().max(255).optional(),
+	testimonial: z.string('Testimonial is required').trim().min(2, 'Testimonial is required'),
+	avatar: imageFile(),
+	// Added by staff, so it goes live straight away unless unticked.
+	isApproved: z.boolean().default(true)
 });
 
-export const editPaymentMethod = z.object({
-	id: z.coerce.number(),
-	name: z.string('Name of Payment Method is required').min(2).max(50),
-	position: z.string().optional(),
-	testimonial: z.string(),
+export const editTestimonial = z.object({
+	id: z.coerce.number().int().positive(),
+	name: z.string('Name is required').trim().min(2).max(50),
+	position: z.string().trim().max(255).optional(),
+	testimonial: z.string('Testimonial is required').trim().min(2, 'Testimonial is required'),
 	// Optional on edit: a required file meant correcting a typo in the text
 	// failed validation unless the avatar was uploaded again.
-	avatar: z
-		.instanceof(File)
-		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
-		.refine((file) => ACCEPTED_FILE_TYPES.includes(file.type), 'Invalid file type.')
-		.optional()
+	avatar: imageFile().optional(),
+	isApproved: z.boolean().default(true)
 });
 
-export type EditPaymentMethod = z.infer<typeof editPaymentMethod>;
+export type EditTestimonial = z.infer<typeof editTestimonial>;
 
 export const deleteTestimonial = z.object({
-	id: z.coerce.number()
+	id: z.coerce.number().int().positive()
 });
 
 export type DeleteTestimonial = z.infer<typeof deleteTestimonial>;

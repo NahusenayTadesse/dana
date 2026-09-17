@@ -17,6 +17,8 @@
 	 * - Option rows wrap so long names stay fully readable in the list.
 	 * - String-coerced matching everywhere (check icon included).
 	 * - Optional `disabled` + `placeholder` props.
+	 * - Opt-in `clearable`: adds a "None" row that sets the value back to
+	 *   null, so an optional picker can be unset after something was picked.
 	 */
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
@@ -41,16 +43,20 @@
 		disabled = false,
 		placeholder,
 		searchPlaceholder,
-		emptyText
+		emptyText,
+		clearable = false,
+		noneLabel = 'None'
 	}: {
 		items?: Item[];
 		name?: string;
-		value?: string | number | undefined;
+		value?: string | number | null | undefined;
 		required?: boolean;
 		disabled?: boolean;
 		placeholder?: string;
 		searchPlaceholder?: string;
 		emptyText?: string;
+		clearable?: boolean;
+		noneLabel?: string;
 	} = $props();
 
 	let open = $state(false);
@@ -69,6 +75,12 @@
 	// navigating the rest of the form.
 	function select(item: Item) {
 		value = item.value;
+		open = false;
+		tick().then(() => triggerRef?.focus());
+	}
+
+	function clear() {
+		value = null;
 		open = false;
 		tick().then(() => triggerRef?.focus());
 	}
@@ -114,6 +126,17 @@
 					{emptyText ?? m.common_no_field_found({ field: prettyName })}
 				</Command.Empty>
 				<Command.Group>
+					{#if clearable}
+						<Command.Item
+							value="__none__"
+							keywords={[noneLabel]}
+							onSelect={clear}
+							class={cn(selectItem, 'items-start gap-2 py-2 text-muted-foreground')}
+						>
+							<CheckIcon class={cn('mt-0.5 size-4 shrink-0', selected && 'text-transparent')} />
+							<span class="min-w-0 flex-1 leading-snug">{noneLabel}</span>
+						</Command.Item>
+					{/if}
 					{#each items as item (item.value)}
 						<Command.Item
 							value={item.name}

@@ -37,12 +37,19 @@
 		performanceFeatures: string | null;
 		advantages: string | null;
 		applications: string | null;
+		/** Active product discount, as a percentage — variant prices are already reduced by it. */
+		discountPercentage?: number | null;
+		discountName?: string | null;
 	};
 
 	type Variant = {
 		variantId: number;
 		sku: string | null;
+		/** What the customer pays — already discounted when a product discount applies. */
 		price: string | number | null;
+		/** Catalog price before the discount (only differs when one applies). */
+		listPrice?: string | number | null;
+		discountPercentage?: number | null;
 		quantity: number;
 		imageUrl: string | null;
 		colorId: number | null;
@@ -324,6 +331,14 @@
 		selectedVariant?.price != null ? Number(selectedVariant.price) : null
 	);
 
+	/** The pre-discount price, when a discount actually lowers it; otherwise null. */
+	function listPriceOf(v: Variant | null | undefined): number | null {
+		if (!v || v.price == null || v.listPrice == null || !v.discountPercentage) return null;
+		const list = Number(v.listPrice);
+		return Number.isFinite(list) && list > Number(v.price) ? list : null;
+	}
+	const selectedListPrice = $derived(listPriceOf(selectedVariant));
+
 	// Counted against the exact combination configured right now, not the
 	// variant as a whole: the same variant can sit in the cart at several
 	// lengths, and "5 already in your cart" would be a lie about a length the
@@ -417,7 +432,7 @@
 				thicknessUnit: selectedVariant.thicknessUnit,
 				length: selectedVariant.lengthValue != null ? Number(selectedVariant.lengthValue) : null,
 				lengthUnit: selectedVariant.lengthUnit ?? null,
-				isCustomLength: selectedVariant.isCustomLength,
+				isCustomLength: selectedVariant.isCustomLength ?? undefined,
 				specLabel: variantLabel(selectedVariant),
 				imageUrl: selectedVariant.imageUrl
 			},
@@ -646,6 +661,22 @@
 								—
 							{/if}
 						</div>
+						{#if !isQuoteOnly && selectedListPrice !== null}
+							<div class="mt-1 flex items-center gap-2 text-sm">
+								<span class="text-slate-500 line-through dark:text-slate-400"
+									>{selectedListPrice.toLocaleString()} ETB</span
+								>
+								<span
+									class="rounded bg-emerald-600 px-1.5 py-0.5 font-mono text-xs font-bold text-white"
+									title={product.discountName ?? undefined}
+									>-{selectedVariant?.discountPercentage}%</span
+								>
+							</div>
+						{:else if product.discountPercentage}
+							<div class="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+								-{product.discountPercentage}%{product.discountName ? ` · ${product.discountName}` : ''}
+							</div>
+						{/if}
 					</div>
 					<span class="max-w-[24ch] text-right text-xs text-slate-500 dark:text-slate-400"
 						>{m.product_detail_volume_discounts()}</span
@@ -1206,6 +1237,14 @@
 									{v.price !== null
 										? `${Number(v.price).toLocaleString()} ETB`
 										: m.product_detail_quote_only()}
+									{#if listPriceOf(v) !== null}
+										<span class="ml-1 text-xs font-normal text-slate-500 line-through dark:text-slate-400"
+											>{listPriceOf(v)?.toLocaleString()} ETB</span
+										>
+										<span class="ml-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+											>-{v.discountPercentage}%</span
+										>
+									{/if}
 								</td>
 								<td class="px-4 py-3">
 									<span
@@ -1242,7 +1281,7 @@
 														thicknessUnit: v.thicknessUnit,
 														length: v.lengthValue != null ? Number(v.lengthValue) : null,
 														lengthUnit: v.lengthUnit ?? null,
-														isCustomLength: v.isCustomLength,
+														isCustomLength: v.isCustomLength ?? undefined,
 														specLabel: variantLabel(v),
 														imageUrl: v.imageUrl
 													},

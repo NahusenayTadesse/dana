@@ -24,7 +24,7 @@
 		<DropdownMenu.Separator />
 
 		<DropdownMenu.Item
-			><a href="/dashboard/users/{id}" target="_blank" class={dropdownClass}
+			><a href="/dashboard/admin-panel/users/{id}" target="_blank" class={dropdownClass}
 				><ExternalLink /> View {name}'s Details</a
 			></DropdownMenu.Item
 		>

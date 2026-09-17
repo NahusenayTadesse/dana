@@ -1,59 +1,49 @@
 import { z } from 'zod/v4';
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ACCEPTED_FILE_TYPES = [
-	'image/jpeg',
-	'image/png',
-	'image/webp',
-	'image/heic',
-	'image/heif',
-	'application/pdf'
-];
+import { imageOrPdfFile } from '$lib/uploadTypes';
 
 const emptyToNull = (v: unknown) => (v === '' || v === undefined ? null : v);
 
 const orderLine = z.object({
 	productId: z.coerce.number().int().positive('Select a product.'),
 	variantId: z.coerce.number().int().positive('Select a variant.'),
-	quantity: z.coerce.number().int().positive('Quantity must be at least 1.')
+	quantity: z.coerce.number().int().positive('Quantity must be at least 1.').max(1_000_000)
 });
 
-const receipt = z
-	.instanceof(File)
-	.refine((f) => f.size <= MAX_FILE_SIZE, 'Max file size is 10MB.')
-	.refine((f) => f.size === 0 || ACCEPTED_FILE_TYPES.includes(f.type), 'Invalid file type.')
-	.optional()
-	.nullable();
+// Same MIME allowlist as the uploader — HEIC/HEIF used to pass here and then
+// throw inside the action.
+const receipt = imageOrPdfFile().optional().nullable();
 
 const base = {
 	customer: z.coerce.number().int().positive('Select a customer.'),
 	status: z.enum(['pending', 'delivered', 'cancelled']).default('pending'),
-	items: z.array(orderLine).min(1, 'Add at least one product.'),
 	paymentMethod: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()),
-	reciept: receipt,
-	// Set by the client when the order was already settled by the gateway.
-	// The server re-verifies against the DB — this only relaxes validation.
-	gatewayPaid: z.boolean().default(false)
+	reciept: receipt
 };
 
-// Delivered orders need a payment method UNLESS the gateway already settled it.
-const requirePaymentWhenDelivered = (
-	val: { status: string; paymentMethod: number | null; gatewayPaid?: boolean },
-	ctx: z.RefinementCtx
-) => {
-	if (val.status === 'delivered' && !val.gatewayPaid && !val.paymentMethod) {
-		ctx.addIssue({
-			code: 'custom',
-			path: ['paymentMethod'],
-			message: 'Payment method is required for delivered orders.'
-		});
-	}
-};
+// A new order booked straight into `delivered` has collected nothing yet, so
+// the method is always required. On edit the server decides (it knows whether
+// the order is already fully paid) — a client-sent "already paid by gateway"
+// flag used to relax this without being checked.
+export const add = z
+	.object({ ...base, items: z.array(orderLine).min(1, 'Add at least one product.') })
+	.superRefine((val, ctx) => {
+		if (val.status === 'delivered' && !val.paymentMethod) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['paymentMethod'],
+				message: 'Payment method is required for delivered orders.'
+			});
+		}
+	});
 
-export const add = z.object(base).superRefine(requirePaymentWhenDelivered);
-export const edit = z
-	.object({ ...base, id: z.coerce.number().int().positive() })
-	.superRefine(requirePaymentWhenDelivered);
+// Items may be empty on edit: orders priced in the quote builder don't send
+// their lines (they can only be changed there). The server requires at least
+// one line for every other order.
+export const edit = z.object({
+	...base,
+	id: z.coerce.number().int().positive(),
+	items: z.array(orderLine).default([])
+});
 
 // Generates a fresh payment link for whatever's still owed on an order —
 // callable at any time (delivered or not), not just right after a quote.
@@ -66,7 +56,11 @@ export const requestBalance = z.object({
 export const addAdjustment = z.object({
 	orderId: z.coerce.number().int().positive(),
 	type: z.enum(['addition', 'deduction']),
-	amount: z.coerce.number().positive('Amount must be greater than 0.'),
+	// decimal(12,2) column
+	amount: z.coerce
+		.number()
+		.positive('Amount must be greater than 0.')
+		.max(9_999_999_999, 'Amount is too large.'),
 	reason: z.string().min(1, 'Reason is required.').max(255),
 	notes: z.string().max(2000).optional().nullable()
 });

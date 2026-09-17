@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { columns } from './columns';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
+
+	const canCreate = $derived(can(data.access, 'products.create'));
+	// Row selection only feeds the discount dialog.
+	const canDiscount = $derived(can(data.access, 'products.discounts'));
+	const visibleColumns = $derived(
+		canDiscount ? columns : columns.filter((column) => column.id !== 'select')
+	);
 
 	import DataTable from '$lib/components/Table/data-table.svelte';
 
@@ -16,12 +24,13 @@
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { schema } from './schema';
 	import { superForm } from 'sveltekit-superforms/client';
+	import { untrack } from 'svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
 
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 
 	const { form, errors, enhance, delayed, allErrors, capture, restore, message } = superForm(
-		data.form,
+		untrack(() => data.form),
 		{
 			taintedMessage: () => {
 				return new Promise((resolve) => {
@@ -29,7 +38,10 @@
 				});
 			},
 			validators: zod4Client(schema),
-			dataType: 'json'
+			dataType: 'json',
+			// A reset would put `ids` back to [] while the rows stay selected, and the
+			// next save would fail with "Select at least one product".
+			resetForm: false
 		}
 	);
 
@@ -49,12 +61,12 @@
 
 	let filteredList = $derived(data?.productList);
 
-	let selected = $state([]);
+	let selected = $state<{ id: number }[]>([]);
 
+	// With dataType 'json' only $form is posted, so the selection must be copied
+	// in — including when it shrinks back to nothing.
 	$effect(() => {
-		if (selected.length > 0) {
-			$form.ids = selected.map((id) => id.id);
-		}
+		$form.ids = selected.map((row) => row.id);
 	});
 </script>
 
@@ -68,10 +80,12 @@
 			<Frown class="h-12 w-16  animate-bounce" />
 			Products List is Empty
 		</p>
-		<Button href="/dashboard/products/add-products"><Plus />Add New Products</Button>
+		{#if canCreate}
+			<Button href="/dashboard/products/add-products"><Plus />Add New Products</Button>
+		{/if}
 	</div>
 {:else}
-	{#if selected.length}
+	{#if canDiscount && selected.length}
 		<p class="my-4 text-sm">Selected Products: {selected.length}</p>
 
 		<DialogComp title="Add Discount for Selected Products" variant="default" IconComp={Plus}>
@@ -86,7 +100,6 @@
 				<Errors allErrors={$allErrors} />
 				Selected Products: {$form.ids.length}
 
-				<InputComp name="ids" label="" type="hidden" {form} {errors} />
 				<InputComp name="name" label="Discount Name" type="text" {form} {errors} />
 				<InputComp
 					name="description"
@@ -97,7 +110,7 @@
 				/>
 				<InputComp
 					name="amount"
-					label="Discount Percentage"
+					label="Discount Percentage (0 removes the discount)"
 					type="number"
 					min="0"
 					max="100"
@@ -120,8 +133,8 @@
 		<FilterMenu
 			bind:filteredList
 			data={data?.productList}
-			filterKeys={['category', 'tag', 'prices', 'quantity', 'supplier']}
+			filterKeys={['category', 'tag', 'quantity', 'supplier']}
 		/>
-		<DataTable bind:selected data={filteredList} {columns} fileName="Product List" />
+		<DataTable bind:selected data={filteredList} columns={visibleColumns} fileName="Product List" />
 	</div>
 {/if}

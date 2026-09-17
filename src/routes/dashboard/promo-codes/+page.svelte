@@ -15,8 +15,12 @@
 	import Edit from './edit.svelte';
 	import PromoStatus from './promo-status.svelte';
 	import type { PromoRow } from './types';
+	import { can } from '$lib/permissions';
 
 	let { data } = $props();
+
+	const canCreate = $derived(can(data.access, 'promo_codes.create'));
+	const canEdit = $derived(can(data.access, 'promo_codes.edit'));
 
 	let addOpen = $state(false);
 
@@ -49,7 +53,10 @@
 					name: 'Code',
 					onclick: column.getToggleSortingHandler()
 				}),
-			cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm })
+			cell: ({ row }) =>
+				canEdit
+					? renderComponent(Edit, { row: row.original, data: data.editForm, key: 'code' })
+					: row.original.code
 		},
 		{
 			accessorKey: 'discountLabel',
@@ -74,9 +81,14 @@
 		{
 			accessorKey: 'edit',
 			header: 'Edit',
-			cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm, icon: true })
+			cell: ({ row }) =>
+				renderComponent(Edit, { row: row.original, data: data.editForm, icon: true, key: 'icon' })
 		}
 	];
+
+	const visibleColumns = $derived(
+		canEdit ? columns : columns.filter((c) => !('accessorKey' in c && c.accessorKey === 'edit'))
+	);
 </script>
 
 <svelte:head>
@@ -95,74 +107,76 @@
 		</p>
 	</div>
 
-	<DialogComp bind:open={addOpen} title="Add Promo Code" variant="default" IconComp={Plus} size="md">
-		<form action="?/add" method="post" use:enhance id="add-promo" class="flex flex-col gap-3">
-			<InputComp
-				{form}
-				{errors}
-				label="Code"
-				type="text"
-				name="code"
-				placeholder="NEWYEAR26"
-				required={true}
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="Discount (%)"
-				type="number"
-				name="discountPercentage"
-				min="0.01"
-				max="100"
-				required={true}
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="Reason"
-				type="text"
-				name="reason"
-				placeholder="New Year promo, reseller partner…"
-			/>
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="Add Promo Code" variant="default" IconComp={Plus} size="md">
+			<form action="?/add" method="post" use:enhance id="add-promo" class="flex flex-col gap-3">
+				<InputComp
+					{form}
+					{errors}
+					label="Code"
+					type="text"
+					name="code"
+					placeholder="NEWYEAR26"
+					required={true}
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="Discount (%)"
+					type="number"
+					name="discountPercentage"
+					min="0.01"
+					max="100"
+					required={true}
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="Reason"
+					type="text"
+					name="reason"
+					placeholder="New Year promo, reseller partner…"
+				/>
 
-			<DateField {form} {errors} label="Starts" name="startsAt" hint="Leave blank to start now" />
-			<DateField
-				{form}
-				{errors}
-				label="Ends"
-				name="expiresAt"
-				hint="Leave blank for no end date. The code works all through this day."
-			/>
+				<DateField {form} {errors} label="Starts" name="startsAt" hint="Leave blank to start now" />
+				<DateField
+					{form}
+					{errors}
+					label="Ends"
+					name="expiresAt"
+					hint="Leave blank for no end date. The code works all through this day."
+				/>
 
-			<InputComp
-				{form}
-				{errors}
-				label="Usage limit"
-				type="number"
-				name="maxUses"
-				min="1"
-				placeholder="Leave blank for unlimited"
-			/>
-			<InputComp
-				{form}
-				{errors}
-				label="Available"
-				type="checkboxSingle"
-				name="isActive"
-				placeholder="Sales staff can apply this code"
-			/>
+				<InputComp
+					{form}
+					{errors}
+					label="Usage limit"
+					type="number"
+					name="maxUses"
+					min="1"
+					placeholder="Leave blank for unlimited"
+				/>
+				<InputComp
+					{form}
+					{errors}
+					label="Available"
+					type="checkboxSingle"
+					name="isActive"
+					placeholder="Sales staff can apply this code"
+				/>
 
-			<Button type="submit" class="mt-2" form="add-promo">
-				{#if $delayed}
-					<LoadingBtn name="Adding code" />
-				{:else}
-					<Plus /> Add code
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="add-promo">
+					{#if $delayed}
+						<LoadingBtn name="Adding code" />
+					{:else}
+						<Plus /> Add code
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}
-	<DataTable {columns} data={data.allData} search={true} fileName="Promo Codes" />
+	<DataTable columns={visibleColumns} data={data.allData} search={true} fileName="Promo Codes" />
 {/key}

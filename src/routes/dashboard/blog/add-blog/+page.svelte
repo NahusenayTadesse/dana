@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { slugify } from '$lib/slug';
 	import type { Snapshot } from '@sveltejs/kit';
 
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 
-	import { Plus, X } from '@lucide/svelte';
+	import { Plus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { add as schema } from './schema';
@@ -14,22 +16,22 @@
 
 	let { data } = $props();
 
-	const { form, errors, enhance, delayed, allErrors, capture, restore, message } = superForm(
-		data.form,
-		{
+	const { form, errors, enhance, delayed, allErrors, capture, restore, message } = untrack(() =>
+		superForm(data.form, {
 			taintedMessage: () => {
 				return new Promise((resolve) => {
 					resolve(window.confirm('Do you want to leave?\nChanges you made may not be saved.'));
 				});
 			},
 			onChange(event) {
+				// Preview only — the server slugifies again and makes it unique.
 				if (event.paths.includes('title')) {
-					$form.slug = $form.title?.toLowerCase().replace(/\s+/g, '-');
+					$form.slug = slugify($form.title ?? '');
 				}
 			},
 
 			validators: zod4Client(schema)
-		}
+		})
 	);
 
 	export const snapshot: Snapshot = { capture, restore };
@@ -46,7 +48,7 @@
 		}
 	});
 
-	let images = $state([]);
+	let images = $state<string[]>([]);
 </script>
 
 <svelte:head>
@@ -79,8 +81,7 @@
 			type="text"
 			name="slug"
 			label="Blog Slug"
-			placeholder="Enter Blog Slug"
-			required
+			placeholder="Generated from the title if left blank"
 		/>
 
 		<InputComp

@@ -16,21 +16,15 @@
 
 	const { item }: { item: BlogItem } = $props();
 
-	const formattedDate = $derived(
-		item.date
-			? new Date(item.date).toLocaleDateString('en-US', {
-					month: 'short',
-					day: 'numeric',
-					year: 'numeric'
-				})
-			: null
-	);
+	// Encoded so a legacy slug containing `?`, `#` or `/` still reaches its post
+	// (new slugs are sanitised on save).
+	const href = $derived(`/blogs/${encodeURIComponent(item.slug)}`);
 </script>
 
 <Card
 	class="group shadow-lg-lg hover:shadow-lg-xl overflow-hidden border-0 bg-card transition-all duration-300 hover:-translate-y-1"
 >
-	<a href="/blogs/{item?.slug}" class="relative aspect-4/3 overflow-hidden">
+	<a {href} class="relative aspect-4/3 overflow-hidden">
 		<img
 			src="/files/{item?.featuredImage}"
 			alt={item.title}

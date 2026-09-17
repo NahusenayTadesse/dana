@@ -8,6 +8,24 @@ import { formatEthiopianDate } from '$lib/global.svelte';
 import BigText from '$lib/components/Table/bigText.svelte';
 import Statuses from '$lib/components/Table/statuses.svelte';
 
+/**
+ * Blog content is rich-text HTML, and BigText renders plain text — so the
+ * table showed raw `<p>` tags. Reduce it to readable text for the cell.
+ */
+function htmlToText(html: string | null | undefined): string {
+	return (html ?? '')
+		.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&amp;/g, '&')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
 export const columns = [
 	{
 		accessorKey: 'index',
@@ -24,7 +42,7 @@ export const columns = [
 			// You can pass whatever you need from `row.original` to the component
 			return renderComponent(ImageViewer, {
 				src: row.original.featuredImage,
-				alt: row.original.name
+				alt: row.original.title
 			});
 		}
 	},
@@ -75,8 +93,7 @@ export const columns = [
 		cell: ({ row }) => {
 			// You can pass whatever you need from `row.original` to the component
 			return renderComponent(BigText, {
-				text: row.original.content,
-				html: true
+				text: htmlToText(row.original.content)
 			});
 		}
 	}

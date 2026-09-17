@@ -1,14 +1,11 @@
 import { z } from 'zod/v4';
+import { imageFile } from '$lib/uploadTypes';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
-const ACCEPTED_FILE_TYPES = [
-	'image/jpeg', // Common for both platforms
-	'image/png', // Common for both platforms (and screenshots)
-	'image/webp', // Common modern format (often Android screenshots/exports)
-	'image/heic', // High Efficiency Image File (iOS default)
-	'image/heif', // High Efficiency Image File (related to HEIC)
-	'application/pdf' // Document format, kept from original
-];
+// Only the image types $lib/server/upload.ts will actually store. HEIC/HEIF and
+// PDF used to pass here and then made the upload throw (a 500 page).
+// An empty (0-byte) File from an untouched input counts as "no file".
+const noEmptyFile = (v: unknown) => (v instanceof File && v.size === 0 ? undefined : v);
+const optionalImage = z.preprocess(noEmptyFile, imageFile().optional().nullable());
 
 // Empty string / undefined -> null, so optional numeric fields don't
 // coerce "" (or null) into 0 and then fail downstream checks.
@@ -19,7 +16,9 @@ export const add = z.object({
 		.string()
 		.min(1, 'Product Name is required.')
 		.max(100, 'Name must be 100 characters or less.'),
-	slug: z.string().min(1, 'Slug is required.').max(120, 'Slug must be 120 characters or less.'),
+	// Normalised server-side with slugify() — "roof/tile" or "Why PPGI?" would
+	// otherwise produce a /shop/single/<slug> URL that 404s. Blank = from the name.
+	slug: z.string().max(120, 'Slug must be 120 characters or less.').default(''),
 	brand: z.string().max(100, 'Brand must be 100 characters or less.').optional().nullable(),
 
 	// Required FK. Coerce because the <select> may hand us a string, and guard
@@ -33,24 +32,11 @@ export const add = z.object({
 	),
 
 	// Images & text blocks
-	image: z
-		.instanceof(File)
-		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
-		.refine(
-			(file) => file.size === 0 || ACCEPTED_FILE_TYPES.includes(file.type),
-			'Invalid file type.'
-		)
-		.optional()
-		.nullable(),
-	gallery: z
-		.instanceof(File)
-		.refine((file) => file.size <= MAX_FILE_SIZE, `Max file size is 10MB.`)
-		.refine(
-			(file) => file.size === 0 || ACCEPTED_FILE_TYPES.includes(file.type),
-			'Invalid file type.'
-		)
-		.array()
-		.optional(),
+	image: optionalImage,
+	gallery: z.preprocess(
+		(v) => (Array.isArray(v) ? v.filter((f) => !(f instanceof File && f.size === 0)) : v),
+		imageFile().array().optional()
+	),
 	description: z
 		.string()
 		.max(255, { message: "Product description can't be more than 255 characters." })
@@ -58,17 +44,9 @@ export const add = z.object({
 		.nullable(),
 	overview: z.string().optional().nullable(),
 
-	// Retail / inventory fields
-	quantity: z
-		.preprocess(
-			(v) => (v === '' || v == null ? 0 : v),
-			z.coerce
-				.number()
-				.int({ message: 'Quantity can only be full numbers, no decimals.' })
-				.nonnegative({ message: 'Quantity cannot be negative.' })
-		)
-		.default(0),
-
+	// Retail fields. There is no quantity here: stock belongs to variants and
+	// warehouses (see $lib/server/stock) — a new product has none until a
+	// variant is added with an opening quantity.
 	// decimal(10,2) NOT NULL DEFAULT '0'. Kept as a string for precision, but
 	// normalise empty -> '0' and validate the shape so we never insert '' or junk.
 	commissionAmount: z

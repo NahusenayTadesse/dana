@@ -1,7 +1,8 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { db } from '$lib/server/db';
 import { paymentLinks } from '$lib/server/db/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
+import type { DbLike } from '$lib/server/stock';
 
 const TOKEN_BYTES = 32; // 256 bits — infeasible to guess/brute-force
 const EXPIRY_DAYS = 14;
@@ -55,13 +56,33 @@ export async function resolvePaymentLink(rawToken: string | undefined | null) {
  * rewrote usedAt on links consumed earlier, destroying the audit trail of when
  * each was actually used. The `isNull` guard preserves that history.
  *
- * settlePaymentAttempt() is the only caller; it gates on full settlement.
+ * Callers: settlePaymentAttempt() (gateway, gated on full settlement) and the
+ * manual collection recorded when staff mark an order delivered.
  */
-export async function markPaymentLinksUsed(orderId: number) {
-	await db
+export async function markPaymentLinksUsed(orderId: number, tx: DbLike = db) {
+	await tx
 		.update(paymentLinks)
 		.set({ usedAt: new Date() })
 		.where(and(eq(paymentLinks.orderId, orderId), isNull(paymentLinks.usedAt)));
+}
+
+/**
+ * Kill every live link for an order without marking it paid — for an order
+ * that was cancelled or whose offer was rejected. `usedAt` stays null (it reads
+ * as "paid at" everywhere), only the expiry moves to now.
+ */
+export async function expirePaymentLinks(orderId: number, tx: DbLike = db) {
+	const now = new Date();
+	await tx
+		.update(paymentLinks)
+		.set({ expiresAt: new Date(now.getTime() - 1000) })
+		.where(
+			and(
+				eq(paymentLinks.orderId, orderId),
+				isNull(paymentLinks.usedAt),
+				gt(paymentLinks.expiresAt, now)
+			)
+		);
 }
 
 /** Convenience: build the full URL to email/text to the customer */

@@ -10,11 +10,14 @@
 	let {
 		data,
 		orderId,
-		requestStatus
+		requestStatus,
+		canDecide = false
 	}: {
 		data: SuperValidated<schema>;
 		orderId: number;
 		requestStatus: string | null;
+		/** quotes.approve: show the Approve / Reject buttons. */
+		canDecide?: boolean;
 	} = $props();
 
 	const {
@@ -50,6 +53,8 @@
 	<span class="text-sm font-medium text-primary">Approved — in the build queue</span>
 {:else if requestStatus === 'rejected'}
 	<span class="text-sm font-medium text-destructive">Rejected</span>
+{:else if !canDecide}
+	<span class="text-sm font-medium text-muted-foreground">Awaiting approval</span>
 {:else}
 	<div class="flex items-center gap-2">
 		<form method="post" action="?/approveOrder" use:approveEnhance>

@@ -68,11 +68,21 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const outcome = await settlePaymentAttempt(txRef);
 
-		// Always 200 on a well-formed, authentic webhook we processed — a non-2xx
-		// makes Chapa retry, and "pending" here means we genuinely could not
-		// confirm it yet, which a retry legitimately should revisit.
+		// Chapa only retries on a non-2xx. A 202 here used to acknowledge a
+		// "could not confirm yet" outcome, so the one retry that would have
+		// settled the payment never came. Retryable outcomes (Chapa unreachable,
+		// not confirmed yet) get a 503; anything a retry can't change (unknown
+		// or stale reference, amount mismatch) is acknowledged with a 200 and
+		// logged by settlePaymentAttempt for staff to follow up.
 		if (outcome.status === 'pending') {
-			return json({ received: true, settled: false, reason: outcome.reason }, { status: 202 });
+			if (outcome.retryable) {
+				return json(
+					{ received: true, settled: false, reason: outcome.reason },
+					{ status: 503, headers: { 'Retry-After': '60' } }
+				);
+			}
+			console.warn(`Chapa webhook for ${txRef} not settled: ${outcome.reason}`);
+			return json({ received: true, settled: false, reason: outcome.reason });
 		}
 
 		return json({ received: true, settled: outcome.status === 'paid' });

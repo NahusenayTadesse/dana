@@ -6,10 +6,15 @@
 	import { superForm } from 'sveltekit-superforms';
 	import { CircleCheckBig } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { untrack } from 'svelte';
 
 	let { data, id }: { data: SuperValidated<schema>; id: number } = $props();
 
-	const { form, enhance, delayed, message } = superForm(data, { resetForm: false });
+	// Per-row id: Read and Delete schemas are identical, so without one they all
+	// shared an id and a "Mark as read" result retargeted another row's Delete.
+	const { form, enhance, delayed, message } = untrack(() =>
+		superForm(data, { id: `quote-read-${id}`, resetForm: false })
+	);
 
 	$effect(() => {
 		if ($message) {
@@ -17,7 +22,9 @@
 		}
 	});
 
-	$form.id = id;
+	untrack(() => {
+		$form.id = id;
+	});
 </script>
 
 <form method="post" action="?/read" use:enhance class="flex items-start">

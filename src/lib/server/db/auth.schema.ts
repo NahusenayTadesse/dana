@@ -8,7 +8,8 @@ import {
 	boolean,
 	index,
 	int,
-	datetime
+	datetime,
+	uniqueIndex
 } from 'drizzle-orm/mysql-core';
 import { sql } from 'drizzle-orm';
 
@@ -72,7 +73,9 @@ export const rolePermissions = mysqlTable('role_permissions', {
 		.notNull()
 		.references(() => permissions.id, { onDelete: 'cascade' }),
 	...secureFields
-});
+}, (table) => [
+	uniqueIndex('role_permissions_role_permission_unique').on(table.roleId, table.permissionId)
+]);
 
 export const specialPermissions = mysqlTable('special_permissions', {
 	id: int('id').autoincrement().primaryKey(),
@@ -83,7 +86,9 @@ export const specialPermissions = mysqlTable('special_permissions', {
 		.notNull()
 		.references(() => permissions.id, { onDelete: 'cascade' }),
 	...secureFields
-});
+}, (table) => [
+	uniqueIndex('special_permissions_user_permission_unique').on(table.userId, table.permissionId)
+]);
 
 export const rolesRelations = relations(roles, ({ many }) => ({
 	rolePermissions: many(rolePermissions)

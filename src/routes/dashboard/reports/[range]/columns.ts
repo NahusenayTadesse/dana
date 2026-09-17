@@ -50,7 +50,8 @@ export const columns = [
 
 				onclick: column.getToggleSortingHandler()
 			}),
-		sortable: true
+		sortable: true,
+		cell: (info) => info.getValue() ?? '—'
 	},
 
 	{
@@ -60,6 +61,19 @@ export const columns = [
 				name: 'Unit Price',
 				onclick: column.getToggleSortingHandler()
 			}),
+		sortable: true,
+		cell: (info) => (info.getValue() == null ? 'Not priced' : formatETB(Number(info.getValue())))
+	},
+
+	{
+		accessorKey: 'priceBasis',
+		header: 'Priced Per',
+		sortable: true
+	},
+
+	{
+		accessorKey: 'vat',
+		header: 'VAT in Price',
 		sortable: true
 	},
 
@@ -69,19 +83,19 @@ export const columns = [
 			renderComponent(DataTableSort, {
 				name: 'Line Total',
 				onclick: column.getToggleSortingHandler()
-			})
+			}),
+		cell: (info) => (info.getValue() == null ? '—' : formatETB(info.getValue()))
 	},
 
 	{
 		accessorKey: 'totalPaid',
 		header: ({ column }) =>
 			renderComponent(DataTableSort, {
-				name: 'Total Paid',
+				name: 'Order Paid',
 				onclick: column.getToggleSortingHandler()
 			}),
-		cell: (info) => {
-			return formatETB(info.getValue());
-		}
+		// Only the order's first line carries the amount, so it isn't counted twice.
+		cell: (info) => (info.getValue() == null ? '—' : formatETB(info.getValue()))
 	},
 
 	{
@@ -93,13 +107,15 @@ export const columns = [
 			}),
 		sortable: true,
 		cell: ({ row }) => {
-			// You can pass whatever you need from `row.original` to the component
-			return renderComponent(DataTableLinks, {
-				id: row.original.receipt,
-				name: row.original.receipt ? 'View Reciept' : 'No Receipt Found',
-				link: '/files',
-				target: '_blank'
-			});
+			// No receipt → plain text; a link here used to point at `/files/null`.
+			return row.original.receipt
+				? renderComponent(DataTableLinks, {
+						id: row.original.receipt,
+						name: 'View Receipt',
+						link: '/files',
+						target: '_blank'
+					})
+				: 'No Receipt Found';
 		}
 	}
 ];

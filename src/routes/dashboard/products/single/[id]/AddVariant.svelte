@@ -5,8 +5,9 @@
 
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
+	import { untrack } from 'svelte';
 
-	import type { AddVariant } from './schema';
+	import type { AddVariant } from './variant.schema';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import DialogComp from '$lib/formComponents/DialogComp.svelte';
@@ -27,7 +28,7 @@
 		lengthItems?: Item[];
 	} = $props();
 
-	const { form, errors, enhance, delayed, message } = superForm(data, {
+	const { form, errors, enhance, delayed, message } = superForm(untrack(() => data), {
 		dataType: 'json'
 	});
 
@@ -110,7 +111,7 @@
 					{errors}
 					type="number"
 					name="quantity"
-					label="Quantity"
+					label="Opening stock (default warehouse)"
 					placeholder="0"
 				/>
 				<InputComp

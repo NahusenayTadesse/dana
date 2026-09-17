@@ -1,5 +1,5 @@
 import { eq, and, or, like, sql, inArray, desc, type SQL } from 'drizzle-orm';
-import { superValidate, message, fail } from 'sveltekit-superforms';
+import { superValidate, message, fail, setError, type SuperValidated } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 
 import { db } from '$lib/server/db';
@@ -15,7 +15,8 @@ import {
 	widths,
 	thicknesses,
 	lengths,
-	orderAdjustments
+	orderAdjustments,
+	priceOffers
 } from '$lib/server/db/schema';
 
 // A spec string built from an order item's own requested dimensions — these
@@ -39,15 +40,33 @@ const itemSpec = (item: {
 	]
 		.filter(Boolean)
 		.join(' · ');
-import { saveUploadedFile } from '$lib/server/upload';
+import { saveUploadedFile, deleteUploadedFile, UploadError } from '$lib/server/upload';
 import { add, edit, requestBalance, addAdjustment, decideAdjustment } from './schema';
 import {
+	NotificationError,
 	sendBalancePaymentLink,
 	sendOrderAdjustmentNotice,
 	sendAdjustmentDecisionNotice,
 	sendOrderDeliveredNotice
 } from '$lib/server/notifications';
-import { getAdjustedOrderTotals } from '$lib/server/orderAdjustments';
+import { getAdjustedOrderTotals, type AdjustedTotals } from '$lib/server/orderAdjustments';
+import { getOrderTotal, getOrderTotals, getQuoteIdsForOrders } from '$lib/server/orders';
+import {
+	checkInFlightPayment,
+	recordManualCollection,
+	syncPaymentStatus
+} from '$lib/server/paymentSettlement';
+import { expirePaymentLinks } from '$lib/server/paymentLinks';
+import { resolveOrderLines, OrderLineError, type ResolvedLine } from '$lib/server/orderLines';
+import { priceLine, type PricingBasis } from '$lib/server/pricing';
+import {
+	deductStockForOrder,
+	restoreStockForOrder,
+	StockError,
+	type DbLike
+} from '$lib/server/stock';
+import { describeDbError, isRowReferenced } from '$lib/server/dbErrors';
+import { toPositiveInt } from '$lib/server/params';
 import type { Actions, PageServerLoad } from './$types';
 
 const STATUSES = ['pending', 'delivered', 'cancelled'] as const;
@@ -55,23 +74,63 @@ type Status = (typeof STATUSES)[number];
 
 const PER_PAGE = 20;
 
+/** Money comparisons need a cent of slack for decimal round-tripping. */
+const AMOUNT_TOLERANCE = 0.01;
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
 const spec = (value: string | number | null, unit: string | null) =>
 	value != null ? `${Number(value)}${unit === 'gauge' ? 'ga' : unit}` : null;
+
+/** A refusal whose message is safe to show staff (optionally on one field). */
+class ActionError extends Error {
+	constructor(
+		message: string,
+		readonly field?: 'paymentMethod' | 'amount',
+		readonly status = 400
+	) {
+		super(message);
+	}
+}
+
+function affectedRowsOf(result: unknown): number {
+	const header = Array.isArray(result) ? result[0] : result;
+	return (header as { affectedRows?: number } | undefined)?.affectedRows ?? 0;
+}
+
+/** Remove an upload that ended up unreferenced (rolled back, or replaced). */
+async function discardUpload(fileName: string | null) {
+	if (!fileName) return;
+	await deleteUploadedFile(fileName).catch((err) =>
+		console.error(`Could not remove orphaned upload ${fileName}:`, err)
+	);
+}
+
+/**
+ * Turn a thrown error into a form response. Known refusals (stock, uploads,
+ * our own checks) show their message; anything else is logged and described
+ * without the SQL text drizzle puts in `err.message`.
+ */
+function failure(form: SuperValidated<any>, err: unknown, fallback: string) {
+	if (err instanceof StockError) {
+		return message(form, { type: 'error', text: err.message }, { status: 409 });
+	}
+	if (err instanceof UploadError) {
+		setError(form, 'reciept', err.message);
+		return message(form, { type: 'error', text: err.message }, { status: 400 });
+	}
+	if (err instanceof ActionError) {
+		if (err.field) setError(form, err.field, err.message);
+		return message(form, { type: 'error', text: err.message }, { status: err.status as 400 });
+	}
+	console.error(fallback, err);
+	return message(form, { type: 'error', text: describeDbError(err, fallback) }, { status: 500 });
+}
 
 export const load: PageServerLoad = async ({ url }) => {
 	const raw = url.searchParams.get('status');
 	const status: Status | null = STATUSES.includes(raw as Status) ? (raw as Status) : null;
 	const q = (url.searchParams.get('q') ?? '').trim();
-
-	// Per-order total, summed in SQL so it's searchable / sortable.
-	const itemTotals = db
-		.select({
-			orderId: orderItems.orderId,
-			total: sql<number>`SUM(${orderItems.quantity} * ${orderItems.price})`.as('total')
-		})
-		.from(orderItems)
-		.groupBy(orderItems.orderId)
-		.as('item_totals');
 
 	// This page is the factory's build queue, not a negotiation inbox — only
 	// orders staff have actually confirmed show up here. Anything still being
@@ -89,8 +148,11 @@ export const load: PageServerLoad = async ({ url }) => {
 				like(transactions.paymentStatus, pattern),
 				like(orders.status, pattern),
 				sql`CAST(${orders.id} AS CHAR) LIKE ${pattern}`,
-				sql`CAST(COALESCE(${itemTotals.total}, 0) AS CHAR) LIKE ${pattern}`,
-				sql`CAST(${transactions.amount} AS CHAR) LIKE ${pattern}`
+				// Money actually collected, and any offer total quoted — the
+				// in-flight attempt (`transactions.amount`) isn't a figure
+				// staff would recognise.
+				sql`CAST(${transactions.amountPaid} AS CHAR) LIKE ${pattern}`,
+				sql`EXISTS (SELECT 1 FROM ${priceOffers} WHERE ${priceOffers.orderId} = ${orders.id} AND CAST(${priceOffers.total} AS CHAR) LIKE ${pattern})`
 			)
 		);
 	}
@@ -102,7 +164,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		.from(orders)
 		.leftJoin(customers, eq(orders.customerId, customers.id))
 		.leftJoin(transactions, eq(orders.transactionId, transactions.id))
-		.leftJoin(itemTotals, eq(orders.id, itemTotals.orderId))
 		.where(whereClause);
 
 	const totalPages = Math.max(1, Math.ceil(count / PER_PAGE));
@@ -110,7 +171,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const currentPage = Math.min(Math.max(1, requested), totalPages);
 	const offset = (currentPage - 1) * PER_PAGE;
 
-	const allOrders = await db
+	const orderRows = await db
 		.select({
 			id: orders.id,
 			name: customers.name,
@@ -122,23 +183,57 @@ export const load: PageServerLoad = async ({ url }) => {
 			paymentMethod: transactions.paymentMethodId,
 			recieptLink: transactions.recieptLink,
 			txnRef: transactions.txnRef, // gateway token
+			settledTxnRef: transactions.settledTxnRef,
+			amountPaid: transactions.amountPaid,
 			paymentStatus: transactions.paymentStatus,
 			status: orders.status,
 			createdAt: orders.createdAt,
 			deliveryAddress: orders.deliveryAddress,
-			deliveryDate: orders.deliveryDate,
-			total: sql<number>`COALESCE(${itemTotals.total}, 0)`.mapWith(Number)
+			deliveryDate: orders.deliveryDate
 		})
 		.from(orders)
 		.leftJoin(customers, eq(orders.customerId, customers.id))
 		.leftJoin(transactions, eq(orders.transactionId, transactions.id))
-		.leftJoin(itemTotals, eq(orders.id, itemTotals.orderId))
 		.where(whereClause)
 		.orderBy(desc(orders.id))
 		.limit(PER_PAGE)
 		.offset(offset);
 
-	const pageOrderIds = allOrders.map((o) => o.id);
+	const pageOrderIds = orderRows.map((o) => o.id);
+
+	// Totals for the whole page in a handful of queries (this used to run two
+	// queries per row). The total is what the customer is actually billed:
+	// the adjusted offer for quoted orders, the basis-aware lines with VAT for
+	// staff-created ones — not SUM(quantity * price).
+	const [totals, quoteIds] = await Promise.all([
+		getOrderTotals(pageOrderIds),
+		getQuoteIdsForOrders(pageOrderIds)
+	]);
+
+	const allOrders = orderRows.map((row) => {
+		const t = totals.get(row.id);
+		const total = t?.total ?? 0;
+		const amountPaid = Number(row.amountPaid ?? 0);
+		const hasOffer = t?.hasOffer ?? false;
+		const quoteId = quoteIds.get(row.id) ?? null;
+		return {
+			...row,
+			total,
+			amountPaid,
+			balanceDue: Math.max(0, round2(total - amountPaid)),
+			hasOffer,
+			quoteId,
+			// Lines of a quoted order carry specs, bases and staff-set prices the
+			// simple editor here can't represent — they're edited in the quote
+			// builder only.
+			linesLocked: hasOffer || quoteId != null,
+			hasUnpricedLines: t?.hasUnpricedLines ?? false,
+			// Actually settled through Chapa — a started-but-abandoned attempt
+			// also leaves a txnRef behind.
+			paidOnline: !!row.settledTxnRef
+		};
+	});
+
 	const rawItems = pageOrderIds.length
 		? await db
 				.select({
@@ -150,7 +245,9 @@ export const load: PageServerLoad = async ({ url }) => {
 					quantity: orderItems.quantity,
 					amount: orderItems.amount,
 					price: orderItems.price,
-					total: sql<number>`${orderItems.quantity} * ${orderItems.price}`.mapWith(Number),
+					priceBasis: orderItems.priceBasis,
+					priceIncludesVat: orderItems.priceIncludesVat,
+					weight: orderItems.weight,
 					// The customer's actual requested spec, captured directly on the
 					// line item — this is what the factory builds to, not the
 					// (optional) suggested catalog variant.
@@ -168,7 +265,30 @@ export const load: PageServerLoad = async ({ url }) => {
 				.where(inArray(orderItems.orderId, pageOrderIds))
 		: [];
 
-	const allItems = rawItems.map((item) => ({ ...item, spec: itemSpec(item) }));
+	const allItems = rawItems.map((item) => ({
+		...item,
+		spec: itemSpec(item),
+		// Rate × the units it is charged on (pieces, metres, m²…), as stated on
+		// the line — quantity × price was wrong for every non-piece basis.
+		total:
+			item.price == null
+				? 0
+				: round2(
+						priceLine(
+							{
+								quantity: item.quantity,
+								length: item.length == null ? null : Number(item.length),
+								width: item.width == null ? null : Number(item.width),
+								thickness: item.thickness == null ? null : Number(item.thickness),
+								weight: item.weight == null ? null : Number(item.weight),
+								basis: item.priceBasis as PricingBasis,
+								unitPrice: Number(item.price),
+								priceIncludesVat: false
+							},
+							0
+						).gross
+					)
+	}));
 
 	const allAdjustments = pageOrderIds.length
 		? await db
@@ -181,18 +301,21 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Current adjusted total per order (offer total + every approved
 	// adjustment so far) — lets the adjustment dialog show a live "new total"
 	// preview using the real VAT/withholding rates instead of guessing them.
-	const adjustedTotalsByOrder: Record<number, Awaited<ReturnType<typeof getAdjustedOrderTotals>>> = {};
-	await Promise.all(
-		pageOrderIds.map(async (id) => {
-			adjustedTotalsByOrder[id] = await getAdjustedOrderTotals(id);
-		})
-	);
+	const adjustedTotalsByOrder: Record<number, AdjustedTotals | null> = {};
+	for (const id of pageOrderIds) adjustedTotalsByOrder[id] = totals.get(id)?.adjusted ?? null;
 
 	const customerList = await db.select({ value: customers.id, name: customers.name }).from(customers);
-	const productList = await db.select({ value: products.id, name: products.name }).from(products);
+	// Archived products/variants can't be sold any more, so they aren't offered.
+	const productList = await db
+		.select({ value: products.id, name: products.name })
+		.from(products)
+		.where(eq(products.isActive, true));
+	// Only methods staff can still take payment with — same rule as the
+	// customer page.
 	const paymentMethodList = await db
 		.select({ value: paymentMethods.id, name: paymentMethods.name })
-		.from(paymentMethods);
+		.from(paymentMethods)
+		.where(eq(paymentMethods.isActive, true));
 
 	const variantRows = await db
 		.select({
@@ -212,7 +335,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		.leftJoin(colors, eq(productVariants.colorId, colors.id))
 		.leftJoin(widths, eq(productVariants.widthId, widths.id))
 		.leftJoin(thicknesses, eq(productVariants.thicknessId, thicknesses.id))
-		.leftJoin(lengths, eq(productVariants.lengthId, lengths.id));
+		.leftJoin(lengths, eq(productVariants.lengthId, lengths.id))
+		.where(eq(productVariants.isActive, true));
 
 	const variantList = variantRows.map((v) => {
 		const label =
@@ -252,208 +376,345 @@ export const load: PageServerLoad = async ({ url }) => {
 	};
 };
 
-async function resolveLines(items: { productId: number; variantId: number; quantity: number }[]) {
-	const rows = await db
-		.select({
-			id: productVariants.id,
-			productId: productVariants.productId,
-			price: productVariants.price,
-			sku: productVariants.sku
-		})
-		.from(productVariants)
-		.where(inArray(productVariants.id, items.map((i) => i.variantId)));
+type SubmittedLine = { productId: number; variantId: number; quantity: number };
 
-	const map = new Map(rows.map((r) => [r.id, r]));
-
-	for (const line of items) {
-		const v = map.get(line.variantId);
-		if (!v || v.productId !== line.productId) {
-			return { error: 'A selected variant does not match its product.' as const };
+/**
+ * Resolve staff-picked lines through the same catalog resolver checkout uses,
+ * so price, basis and VAT flag come from the price book (the old local copy
+ * stored the flat variant price as a per-piece, VAT-exclusive rate — and a
+ * quote-only variant as "0").
+ */
+async function resolveStaffLines(
+	items: SubmittedLine[],
+	tx: DbLike = db
+): Promise<{ lines: ResolvedLine[] } | { error: string }> {
+	let lines: ResolvedLine[];
+	try {
+		lines = await resolveOrderLines(
+			items.map((i) => ({ product: i.productId, variantId: i.variantId, quantity: i.quantity })),
+			tx
+		);
+	} catch (err) {
+		if (err instanceof OrderLineError) {
+			// Its messages are worded for a shopper's cart.
+			return {
+				error: 'A selected product or variant is inactive, or the variant does not belong to its product.'
+			};
 		}
+		throw err;
 	}
 
-	const total = items.reduce(
-		(sum, line) => sum + Number(map.get(line.variantId)?.price ?? 0) * line.quantity,
-		0
-	);
+	if (lines.some((l) => l.price == null)) {
+		return {
+			error:
+				'A selected variant has no catalog price. Give it a price on the product first, or sell it through a quote.'
+		};
+	}
+	return { lines };
+}
 
-	const values = (orderId: number, userId?: string) =>
-		items.map((line) => {
-			const v = map.get(line.variantId)!;
-			return {
-				orderId,
-				productId: line.productId,
-				variantId: line.variantId,
-				quantity: line.quantity,
-				price: v.price ?? '0',
-				amount: v.sku ?? `variant-${line.variantId}`,
-				createdBy: userId
-			};
-		});
+const lineValues = (orderId: number, lines: ResolvedLine[], userId?: string) =>
+	lines.map((l) => ({
+		orderId,
+		productId: l.productId,
+		variantId: l.variantId,
+		quantity: l.quantity,
+		amount: l.amount,
+		price: l.price,
+		priceBasis: l.priceBasis,
+		priceIncludesVat: l.priceIncludesVat,
+		colorId: l.colorId,
+		width: l.width,
+		widthUnit: l.widthUnit,
+		thickness: l.thickness,
+		thicknessUnit: l.thicknessUnit,
+		length: l.length,
+		lengthUnit: l.lengthUnit,
+		createdBy: userId
+	}));
 
-	return { total, values };
+/** Same product/variant/quantity lines, in any order. */
+function sameLines(
+	existing: { productId: number | null; variantId: number | null; quantity: number | null }[],
+	submitted: SubmittedLine[]
+) {
+	const key = (l: { productId: number | null; variantId: number | null; quantity: number | null }) =>
+		`${l.productId}:${l.variantId}:${l.quantity}`;
+	const a = existing.map(key).sort();
+	const b = submitted.map(key).sort();
+	return a.length === b.length && a.every((k, i) => k === b[i]);
+}
+
+/** Point a transaction at a new receipt; returns the file it replaced. */
+async function attachReceipt(tx: DbLike, transactionId: number, fileName: string) {
+	const previous = await tx
+		.select({ recieptLink: transactions.recieptLink })
+		.from(transactions)
+		.where(eq(transactions.id, transactionId))
+		.then((rows) => rows[0]);
+	await tx.update(transactions).set({ recieptLink: fileName }).where(eq(transactions.id, transactionId));
+	return previous?.recieptLink && previous.recieptLink !== fileName ? previous.recieptLink : null;
 }
 
 export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(add));
-		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' });
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
 
 		const { customer, status, items, paymentMethod, reciept } = form.data;
-		const resolved = await resolveLines(items);
-		if ('error' in resolved) return message(form, { type: 'error', text: resolved.error });
+		const userId = locals?.user?.id;
 
-		const recieptLink = reciept && reciept.size > 0 ? await saveUploadedFile(reciept) : null;
-
+		let uploaded: string | null = null;
 		let newOrderId: number | undefined;
 
 		try {
-			await db.transaction(async (tx) => {
-				let transactionId: number | null = null;
-				if (status === 'delivered') {
-					const [txn] = await tx
-						.insert(transactions)
-						.values({
-							amount: String(resolved.total),
-							paymentStatus: 'paid',
-							paymentMethodId: paymentMethod ?? null,
-							recieptLink,
-							createdBy: locals?.user?.id
-						})
-						.$returningId();
-					transactionId = txn.id;
-				}
+			const resolved = await resolveStaffLines(items);
+			if ('error' in resolved) {
+				setError(form, 'items._errors', resolved.error);
+				return message(form, { type: 'error', text: resolved.error }, { status: 400 });
+			}
 
+			// A receipt only means something for a delivered (paid) order.
+			if (status === 'delivered' && reciept && reciept.size > 0) {
+				uploaded = await saveUploadedFile(reciept);
+			}
+
+			await db.transaction(async (tx) => {
 				const [order] = await tx
 					.insert(orders)
 					.values({
 						customerId: customer,
 						status,
-						transactionId,
 						// Created directly by staff here, not via a customer quote
 						// negotiation — treat it as already confirmed so it shows up
 						// on this (now filtered-to-approved) page immediately.
 						requestStatus: 'approved',
-						createdBy: locals?.user?.id
+						createdBy: userId
 					})
 					.$returningId();
 
-				await tx.insert(orderItems).values(resolved.values(order.id, locals?.user?.id));
+				await tx.insert(orderItems).values(lineValues(order.id, resolved.lines, userId));
+
+				if (status === 'delivered') {
+					// Booked as delivered = the sale is complete: the full total
+					// (VAT included) was collected, and the goods left the warehouse.
+					const { total } = await getOrderTotal(order.id, tx);
+					await recordManualCollection(tx, {
+						orderId: order.id,
+						total,
+						paymentMethodId: paymentMethod,
+						recieptLink: uploaded,
+						userId
+					});
+					await deductStockForOrder(tx, order.id);
+				}
 				newOrderId = order.id;
 			});
-
-			// An order booked straight into `delivered` is a completed sale the
-			// customer was never told about — the delivered templates existed for
-			// this and had no caller. Fire-and-forget: the order is committed, and
-			// a mail failure must not report the sale as failed.
-			if (status === 'delivered' && newOrderId != null) {
-				sendOrderDeliveredNotice(newOrderId, resolved.total).catch((err) =>
-					console.error('Delivery notice failed:', err)
-				);
-			}
-
-			return message(form, { type: 'success', text: 'Order created successfully.' });
 		} catch (err) {
-			console.error('Create order failed:', err);
-			return message(form, { type: 'error', text: 'Could not create the order.' }, { status: 500 });
+			await discardUpload(uploaded);
+			return failure(form, err, 'Could not create the order.');
 		}
+
+		// An order booked straight into `delivered` is a completed sale the
+		// customer was never told about — the delivered templates existed for
+		// this and had no caller. Fire-and-forget: the order is committed, and
+		// a mail failure must not report the sale as failed.
+		if (status === 'delivered' && newOrderId != null) {
+			sendOrderDeliveredNotice(newOrderId).catch((err) => console.error('Delivery notice failed:', err));
+		}
+
+		return message(form, { type: 'success', text: 'Order created successfully.' });
 	},
 
 	edit: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(edit));
-		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' });
+		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
 
 		const { id, customer, status, items, paymentMethod, reciept } = form.data;
-		const resolved = await resolveLines(items);
-		if ('error' in resolved) return message(form, { type: 'error', text: resolved.error });
+		const userId = locals?.user?.id;
 
-		const recieptLink = reciept && reciept.size > 0 ? await saveUploadedFile(reciept) : null;
-
-		// Only the TRANSITION into `delivered` is worth announcing — staff edit a
-		// delivered order for all sorts of reasons (fixing a quantity, attaching a
-		// receipt) and each of those must not re-announce the delivery.
-		let justDelivered = false;
+		let current: { status: Status | null; requestStatus: string | null } | undefined;
+		let linesLocked = false;
+		let newLines: ResolvedLine[] | null = null;
 
 		try {
-			await db.transaction(async (tx) => {
-				const [ord] = await tx
-					.select({ transactionId: orders.transactionId, status: orders.status })
-					.from(orders)
-					.where(eq(orders.id, id));
-				let transactionId = ord?.transactionId ?? null;
-				justDelivered = status === 'delivered' && ord?.status !== 'delivered';
+			current = await db
+				.select({ status: orders.status, requestStatus: orders.requestStatus })
+				.from(orders)
+				.where(eq(orders.id, id))
+				.then((rows) => rows[0]);
+			if (!current || current.requestStatus !== 'approved') {
+				return message(form, { type: 'error', text: 'Order not found.' }, { status: 404 });
+			}
 
-				let existingTxn:
-					| { txnRef: string | null; paymentStatus: string | null; paymentMethodId: number | null }
-					| undefined;
-				if (transactionId) {
-					[existingTxn] = await tx
-						.select({
-							txnRef: transactions.txnRef,
-							paymentStatus: transactions.paymentStatus,
-							paymentMethodId: transactions.paymentMethodId
-						})
-						.from(transactions)
-						.where(eq(transactions.id, transactionId));
+			const [{ hasOffer }, quoteIds] = await Promise.all([getOrderTotal(id), getQuoteIdsForOrders([id])]);
+			linesLocked = hasOffer || quoteIds.has(id);
+
+			// Quoted orders: their lines hold specs, price bases and staff-set
+			// prices, and the offer the customer pays is computed from them.
+			// Re-saving them from this form replaced all of that with catalog
+			// prices. They are only ever changed in the quote builder, so any
+			// submitted items are ignored here.
+			if (!linesLocked) {
+				if (items.length === 0) {
+					setError(form, 'items._errors', 'Add at least one product.');
+					return message(form, { type: 'error', text: 'Add at least one product.' }, { status: 400 });
 				}
 
-				// The gateway is the source of truth: if it settled this order,
-				// never overwrite its token / status / method — only refresh amount.
-				const gatewaySettled = !!existingTxn?.txnRef && existingTxn?.paymentStatus === 'paid';
+				const existing = await db
+					.select({
+						productId: orderItems.productId,
+						variantId: orderItems.variantId,
+						quantity: orderItems.quantity
+					})
+					.from(orderItems)
+					.where(eq(orderItems.orderId, id));
 
-				if (status === 'delivered') {
-					if (transactionId) {
-						if (gatewaySettled) {
-							await tx
-								.update(transactions)
-								.set({ amount: String(resolved.total) })
-								.where(eq(transactions.id, transactionId));
-						} else {
-							await tx
-								.update(transactions)
-								.set({
-									amount: String(resolved.total),
-									paymentStatus: 'paid',
-									paymentMethodId: paymentMethod ?? existingTxn?.paymentMethodId ?? null,
-									...(recieptLink ? { recieptLink } : {})
-								})
-								.where(eq(transactions.id, transactionId));
-						}
-					} else {
-						const [txn] = await tx
-							.insert(transactions)
-							.values({
-								amount: String(resolved.total),
-								paymentStatus: 'paid',
-								paymentMethodId: paymentMethod ?? null,
-								recieptLink,
-								createdBy: locals?.user?.id
-							})
-							.$returningId();
-						transactionId = txn.id;
+				// Unchanged lines are left alone — re-resolving them on every save
+				// silently repriced the order to today's catalog.
+				if (!sameLines(existing, items)) {
+					if (current.status === 'delivered') {
+						const text =
+							"This order was delivered, so its items can't be changed — its stock and payment were recorded at delivery. Set it back to Pending first if the delivery really was different.";
+						setError(form, 'items._errors', text);
+						return message(form, { type: 'error', text }, { status: 400 });
 					}
+					const resolved = await resolveStaffLines(items);
+					if ('error' in resolved) {
+						setError(form, 'items._errors', resolved.error);
+						return message(form, { type: 'error', text: resolved.error }, { status: 400 });
+					}
+					newLines = resolved.lines;
+				}
+			}
+		} catch (err) {
+			return failure(form, err, 'Could not update the order.');
+		}
+
+		// Only the TRANSITION into `delivered` collects payment, moves stock and
+		// is announced — staff re-save delivered orders for all sorts of reasons
+		// (attaching a receipt) and none of those may repeat it.
+		const wasDelivered = current.status === 'delivered';
+		const delivering = status === 'delivered' && !wasDelivered;
+
+		if (delivering) {
+			try {
+				const refusal = await checkInFlightPayment(id);
+				if (refusal) return message(form, { type: 'error', text: refusal }, { status: 409 });
+			} catch (err) {
+				return failure(form, err, 'Could not check this order’s online payments. Please try again.');
+			}
+		}
+
+		let uploaded: string | null = null;
+		let receiptAttached = false;
+		let replacedReceipt: string | null = null;
+
+		try {
+			if (status === 'delivered' && reciept && reciept.size > 0) {
+				uploaded = await saveUploadedFile(reciept);
+			}
+
+			await db.transaction(async (tx) => {
+				const locked = await tx
+					.select({ status: orders.status, transactionId: orders.transactionId })
+					.from(orders)
+					.where(eq(orders.id, id))
+					.for('update')
+					.then((rows) => rows[0]);
+				if (!locked) throw new ActionError('Order not found.', undefined, 404);
+				if ((locked.status === 'delivered') !== wasDelivered) {
+					throw new ActionError(
+						'Someone else just changed this order. Reload the page and try again.',
+						undefined,
+						409
+					);
+				}
+
+				if (newLines) {
+					await tx.delete(orderItems).where(eq(orderItems.orderId, id));
+					await tx.insert(orderItems).values(lineValues(id, newLines, userId));
 				}
 
 				await tx
 					.update(orders)
-					.set({ customerId: customer, status, transactionId })
+					.set({ customerId: customer, status, updatedBy: userId })
 					.where(eq(orders.id, id));
 
-				await tx.delete(orderItems).where(eq(orderItems.orderId, id));
-				await tx.insert(orderItems).values(resolved.values(id, locals?.user?.id));
+				if (delivering) {
+					const totals = await getOrderTotal(id, tx);
+					if (!totals.hasOffer && totals.hasUnpricedLines) {
+						throw new ActionError(
+							'Some items on this order have no price. Price the order in the quote builder before marking it delivered.'
+						);
+					}
+
+					const collected = locked.transactionId
+						? await tx
+								.select({ amountPaid: transactions.amountPaid })
+								.from(transactions)
+								.where(eq(transactions.id, locked.transactionId))
+								.then((rows) => Number(rows[0]?.amountPaid ?? 0))
+						: 0;
+
+					if (collected + AMOUNT_TOLERANCE < totals.total) {
+						// Delivered without full payment means the rest was collected
+						// on delivery: record it as money received (the true total,
+						// VAT and adjustments included), not just a "paid" label that
+						// left the pay page still charging the balance.
+						if (!paymentMethod) {
+							throw new ActionError(
+								'Choose how the remaining balance was paid before marking this order delivered.',
+								'paymentMethod'
+							);
+						}
+						({ replacedReceipt } = await recordManualCollection(tx, {
+							orderId: id,
+							total: totals.total,
+							paymentMethodId: paymentMethod,
+							recieptLink: uploaded,
+							userId
+						}));
+						receiptAttached = uploaded != null;
+					} else {
+						// Already fully paid (e.g. online) — the gateway's record stands.
+						await syncPaymentStatus(tx, id);
+						if (uploaded && locked.transactionId) {
+							replacedReceipt = await attachReceipt(tx, locked.transactionId, uploaded);
+							receiptAttached = true;
+						}
+					}
+
+					// A StockError here rolls back the whole save, payment included.
+					await deductStockForOrder(tx, id);
+				} else if (status === 'delivered') {
+					if (uploaded && locked.transactionId) {
+						replacedReceipt = await attachReceipt(tx, locked.transactionId, uploaded);
+						receiptAttached = true;
+					}
+				} else {
+					// Leaving delivered puts the goods back; a no-op for orders
+					// whose stock was never taken out.
+					await restoreStockForOrder(tx, id);
+					if (status === 'cancelled') {
+						// Nothing more to collect on a cancelled order.
+						await expirePaymentLinks(id, tx);
+					}
+				}
 			});
-
-			if (justDelivered) {
-				sendOrderDeliveredNotice(id, resolved.total).catch((err) =>
-					console.error('Delivery notice failed:', err)
-				);
-			}
-
-			return message(form, { type: 'success', text: 'Order updated successfully.' });
 		} catch (err) {
-			console.error('Update order failed:', err);
-			return message(form, { type: 'error', text: 'Could not update the order.' }, { status: 500 });
+			await discardUpload(uploaded);
+			return failure(form, err, 'Could not update the order.');
 		}
+
+		await discardUpload(replacedReceipt);
+		if (!receiptAttached) await discardUpload(uploaded);
+
+		if (delivering) {
+			sendOrderDeliveredNotice(id).catch((err) => console.error('Delivery notice failed:', err));
+		}
+
+		return message(form, { type: 'success', text: 'Order updated successfully.' });
 	},
 
 	// Fresh payment link for whatever's still owed — usable any time (after
@@ -467,11 +728,14 @@ export const actions: Actions = {
 			await sendBalancePaymentLink(form.data.orderId, url.origin);
 			return message(form, { type: 'success', text: 'Balance payment link sent to the customer.' });
 		} catch (err) {
+			if (err instanceof NotificationError) {
+				return message(form, { type: 'error', text: err.message }, { status: 400 });
+			}
 			console.error('Request balance payment failed:', err);
 			return message(
 				form,
-				{ type: 'error', text: err instanceof Error ? err.message : 'Could not send the balance payment link.' },
-				{ status: 400 }
+				{ type: 'error', text: 'Could not send the balance payment link. Please try again.' },
+				{ status: 500 }
 			);
 		}
 	},
@@ -488,48 +752,81 @@ export const actions: Actions = {
 		const { orderId, type, amount, reason, notes } = form.data;
 
 		try {
-			await db.insert(orderAdjustments).values({
-				orderId,
-				type,
-				amount: String(amount),
-				reason,
-				notes: notes ?? null,
-				causedBy: 'company',
-				status: 'approved',
-				approvedBy: locals?.user?.id,
-				approvedAt: new Date(),
-				createdBy: locals?.user?.id
-			});
+			await db.transaction(async (tx) => {
+				const order = await tx
+					.select({ status: orders.status, requestStatus: orders.requestStatus })
+					.from(orders)
+					.where(eq(orders.id, orderId))
+					.for('update')
+					.then((rows) => rows[0]);
+				if (!order || order.requestStatus !== 'approved') {
+					throw new ActionError('Order not found.', undefined, 404);
+				}
+				if (order.status === 'cancelled') {
+					throw new ActionError(`Order #${orderId} is cancelled — adjustments can't be applied to it.`);
+				}
 
-			// The adjustment is committed, so a mail failure must not fail the
-			// action — but it must not be hidden either. "Adjustment applied."
-			// on its own told staff the customer had been informed when the
-			// notification (and, for an addition, the payment link they are now
-			// waiting on) never left the building.
-			let notifyFailed = false;
+				// Adjustments move an offer's total. A staff-created order has no
+				// offer, so an adjustment used to be stored, change nothing, and
+				// report success (or email a link that could never be paid).
+				const adjusted = await getAdjustedOrderTotals(orderId, tx);
+				if (!adjusted) {
+					throw new ActionError(
+						'This order has no price offer, so an adjustment would not change what the customer owes. Edit the order’s items instead.'
+					);
+				}
+				if (type === 'deduction' && amount > adjusted.priceExcludingVat + AMOUNT_TOLERANCE / 2) {
+					throw new ActionError(
+						`A deduction can't be larger than the order's price before VAT (ETB ${adjusted.priceExcludingVat.toLocaleString()}).`,
+						'amount'
+					);
+				}
 
-			await sendOrderAdjustmentNotice(orderId, { type, amount, reason, causedBy: 'company' }).catch((err) => {
-				notifyFailed = true;
-				console.error('Adjustment notice failed:', err);
-			});
-
-			if (type === 'addition') {
-				await sendBalancePaymentLink(orderId, url.origin).catch((err) => {
-					notifyFailed = true;
-					console.error('Adjustment balance link failed:', err);
+				await tx.insert(orderAdjustments).values({
+					orderId,
+					type,
+					amount: String(amount),
+					reason,
+					notes: notes ?? null,
+					causedBy: 'company',
+					status: 'approved',
+					approvedBy: locals?.user?.id,
+					approvedAt: new Date(),
+					createdBy: locals?.user?.id
 				});
-			}
 
-			return message(form, {
-				type: notifyFailed ? 'error' : 'success',
-				text: notifyFailed
-					? 'Adjustment applied, but the customer could not be notified. Check the order and resend the balance link.'
-					: 'Adjustment applied.'
+				// A paid order with an addition owes money again (and vice versa).
+				await syncPaymentStatus(tx, orderId);
 			});
 		} catch (err) {
-			console.error('Add adjustment failed:', err);
-			return message(form, { type: 'error', text: 'Could not apply the adjustment.' }, { status: 500 });
+			return failure(form, err, 'Could not apply the adjustment.');
 		}
+
+		// The adjustment is committed, so a mail failure must not fail the
+		// action — but it must not be hidden either. "Adjustment applied."
+		// on its own told staff the customer had been informed when the
+		// notification (and, for an addition, the payment link they are now
+		// waiting on) never left the building.
+		const problems: string[] = [];
+		const noteProblem = (label: string) => (err: unknown) => {
+			console.error(label, err);
+			problems.push(err instanceof NotificationError ? err.message : 'the customer could not be notified');
+		};
+
+		await sendOrderAdjustmentNotice(orderId, { type, amount, reason, causedBy: 'company' }).catch(
+			noteProblem('Adjustment notice failed:')
+		);
+
+		if (type === 'addition') {
+			await sendBalancePaymentLink(orderId, url.origin).catch(noteProblem('Adjustment balance link failed:'));
+		}
+
+		return message(form, {
+			type: problems.length ? 'error' : 'success',
+			text: problems.length
+				? `Adjustment applied, but ${problems.join('; ')}. Check the order and resend the balance link if needed.`
+				: 'Adjustment applied.'
+		});
 	},
 
 	// Approve/reject a customer-submitted adjustment request (requested from
@@ -542,81 +839,186 @@ export const actions: Actions = {
 		if (!form.valid) return message(form, { type: 'error', text: 'Please check the form.' }, { status: 400 });
 
 		const { adjustmentId, approve, note } = form.data;
+		let adjustment: typeof orderAdjustments.$inferSelect | undefined;
 
 		try {
-			const adjustment = await db
-				.select()
-				.from(orderAdjustments)
-				.where(eq(orderAdjustments.id, adjustmentId))
-				.then((rows) => rows[0]);
+			await db.transaction(async (tx) => {
+				adjustment = await tx
+					.select()
+					.from(orderAdjustments)
+					.where(eq(orderAdjustments.id, adjustmentId))
+					.for('update')
+					.then((rows) => rows[0]);
 
-			if (!adjustment) return message(form, { type: 'error', text: 'Adjustment not found.' }, { status: 404 });
-			if (adjustment.status !== 'pending') {
-				return message(form, { type: 'error', text: 'This request has already been decided.' }, { status: 400 });
-			}
-
-			await db
-				.update(orderAdjustments)
-				.set({
-					status: approve ? 'approved' : 'rejected',
-					approvedBy: locals?.user?.id,
-					approvedAt: new Date(),
-					notes: note ? `${adjustment.notes ?? ''}\n\nStaff note: ${note}`.trim() : adjustment.notes
-				})
-				.where(eq(orderAdjustments.id, adjustmentId));
-
-			// Same reasoning as addAdjustment: the decision is recorded either
-			// way, but staff must not read "Adjustment approved." as "and the
-			// customer knows".
-			let notifyFailed = false;
-
-			await sendAdjustmentDecisionNotice(adjustment.orderId, approve, note).catch((err) => {
-				notifyFailed = true;
-				console.error('Adjustment decision notice failed:', err);
-			});
-
-			if (approve) {
-				await sendOrderAdjustmentNotice(adjustment.orderId, {
-					type: adjustment.type,
-					amount: Number(adjustment.amount),
-					reason: adjustment.reason,
-					causedBy: adjustment.causedBy
-				}).catch((err) => {
-					notifyFailed = true;
-					console.error('Adjustment notice failed:', err);
-				});
-
-				if (adjustment.type === 'addition') {
-					await sendBalancePaymentLink(adjustment.orderId, url.origin).catch((err) => {
-						notifyFailed = true;
-						console.error('Adjustment balance link failed:', err);
-					});
+				if (!adjustment) throw new ActionError('Adjustment not found.', undefined, 404);
+				if (adjustment.status !== 'pending') {
+					throw new ActionError('This request has already been decided.', undefined, 409);
 				}
-			}
 
-			const decision = approve ? 'Adjustment approved.' : 'Adjustment rejected.';
-			return message(form, {
-				type: notifyFailed ? 'error' : 'success',
-				text: notifyFailed ? `${decision} The customer could not be notified — please follow up.` : decision
+				if (approve) {
+					const order = await tx
+						.select({ status: orders.status })
+						.from(orders)
+						.where(eq(orders.id, adjustment.orderId))
+						.for('update')
+						.then((rows) => rows[0]);
+					if (!order || order.status === 'cancelled') {
+						throw new ActionError('This order is cancelled — the request can only be rejected.');
+					}
+					const adjusted = await getAdjustedOrderTotals(adjustment.orderId, tx);
+					if (!adjusted) {
+						throw new ActionError(
+							'This order has no price offer, so the adjustment would not change anything. Reject it and correct the order instead.'
+						);
+					}
+					if (
+						adjustment.type === 'deduction' &&
+						Number(adjustment.amount) > adjusted.priceExcludingVat + AMOUNT_TOLERANCE / 2
+					) {
+						throw new ActionError(
+							`This deduction is larger than the order's price before VAT (ETB ${adjusted.priceExcludingVat.toLocaleString()}) and can't be approved.`
+						);
+					}
+				}
+
+				// Conditional on still-pending: two staff deciding at once (or
+				// approve + reject) must not both apply and both notify.
+				const result = await tx
+					.update(orderAdjustments)
+					.set({
+						status: approve ? 'approved' : 'rejected',
+						approvedBy: locals?.user?.id,
+						approvedAt: new Date(),
+						notes: note ? `${adjustment.notes ?? ''}\n\nStaff note: ${note}`.trim() : adjustment.notes
+					})
+					.where(and(eq(orderAdjustments.id, adjustmentId), eq(orderAdjustments.status, 'pending')));
+				if (affectedRowsOf(result) === 0) {
+					throw new ActionError('This request has already been decided.', undefined, 409);
+				}
+
+				if (approve) await syncPaymentStatus(tx, adjustment.orderId);
 			});
 		} catch (err) {
-			console.error('Decide adjustment failed:', err);
-			return message(form, { type: 'error', text: 'Could not process the decision.' }, { status: 500 });
+			return failure(form, err, 'Could not process the decision.');
 		}
+
+		const decided = adjustment!;
+
+		// Same reasoning as addAdjustment: the decision is recorded either
+		// way, but staff must not read "Adjustment approved." as "and the
+		// customer knows".
+		const problems: string[] = [];
+		const noteProblem = (label: string) => (err: unknown) => {
+			console.error(label, err);
+			problems.push(err instanceof NotificationError ? err.message : 'the customer could not be notified');
+		};
+
+		await sendAdjustmentDecisionNotice(decided.orderId, approve, note).catch(
+			noteProblem('Adjustment decision notice failed:')
+		);
+
+		if (approve) {
+			await sendOrderAdjustmentNotice(decided.orderId, {
+				type: decided.type,
+				amount: Number(decided.amount),
+				reason: decided.reason,
+				causedBy: decided.causedBy
+			}).catch(noteProblem('Adjustment notice failed:'));
+
+			if (decided.type === 'addition') {
+				await sendBalancePaymentLink(decided.orderId, url.origin).catch(
+					noteProblem('Adjustment balance link failed:')
+				);
+			}
+		}
+
+		const decision = approve ? 'Adjustment approved.' : 'Adjustment rejected.';
+		return message(form, {
+			type: problems.length ? 'error' : 'success',
+			text: problems.length ? `${decision} But ${problems.join('; ')} — please follow up.` : decision
+		});
 	},
 
 	delete: async ({ request }) => {
 		const data = await request.formData();
-		const id = Number(data.get('id'));
-		if (!id) return fail(400, { deleted: false });
+		const id = toPositiveInt(data.get('id'));
+		if (!id) return fail(400, { deleted: false, message: 'Invalid order.' });
+
+		let receiptToRemove: string | null = null;
 
 		try {
-			await db.delete(orderItems).where(eq(orderItems.orderId, id));
-			await db.delete(orders).where(eq(orders.id, id));
-			return { deleted: true };
+			// A customer mid-checkout on Chapa would pay for an order that no
+			// longer exists.
+			const refusal = await checkInFlightPayment(id);
+			if (refusal) return fail(409, { deleted: false, message: refusal });
+
+			await db.transaction(async (tx) => {
+				const order = await tx
+					.select({ transactionId: orders.transactionId })
+					.from(orders)
+					.where(eq(orders.id, id))
+					.for('update')
+					.then((rows) => rows[0]);
+				if (!order) throw new ActionError('Order not found.', undefined, 404);
+
+				const txn = order.transactionId
+					? await tx
+							.select({
+								amountPaid: transactions.amountPaid,
+								paymentStatus: transactions.paymentStatus,
+								recieptLink: transactions.recieptLink
+							})
+							.from(transactions)
+							.where(eq(transactions.id, order.transactionId))
+							.for('update')
+							.then((rows) => rows[0])
+					: undefined;
+
+				// Deleting a paid order erases the only record of money received.
+				if (
+					txn &&
+					(Number(txn.amountPaid) > 0 ||
+						txn.paymentStatus === 'paid' ||
+						txn.paymentStatus === 'partially_paid')
+				) {
+					throw new ActionError(
+						"Payments have been recorded on this order, so it can't be deleted. Set it to Cancelled instead.",
+						undefined,
+						409
+					);
+				}
+
+				// Goods that left the warehouse for this order go back.
+				await restoreStockForOrder(tx, id);
+
+				// Offers, payment links and adjustments cascade with the order.
+				await tx.delete(orderItems).where(eq(orderItems.orderId, id));
+				await tx.delete(orders).where(eq(orders.id, id));
+
+				// Its (unpaid) payment record would otherwise be orphaned. The
+				// savepoint lets a still-referenced one simply stay.
+				if (order.transactionId) {
+					const transactionId = order.transactionId;
+					const removed = await tx
+						.transaction(async (sp) => {
+							await sp.delete(transactions).where(eq(transactions.id, transactionId));
+							return true;
+						})
+						.catch((err) => {
+							if (isRowReferenced(err)) return false;
+							throw err;
+						});
+					if (removed) receiptToRemove = txn?.recieptLink ?? null;
+				}
+			});
 		} catch (err) {
+			if (err instanceof ActionError) return fail(err.status, { deleted: false, message: err.message });
+			if (err instanceof StockError) return fail(409, { deleted: false, message: err.message });
 			console.error('Delete order failed:', err);
-			return fail(500, { deleted: false });
+			return fail(500, { deleted: false, message: describeDbError(err, 'Could not delete the order.') });
 		}
+
+		await discardUpload(receiptToRemove);
+		return { deleted: true, message: `Order #${id} deleted.` };
 	}
 };

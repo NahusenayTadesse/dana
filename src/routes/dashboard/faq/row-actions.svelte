@@ -38,11 +38,19 @@
 
 	let confirming = $state(false);
 
+	// Separate effects: `$moveMessage ?? $delMessage` stopped reading the delete
+	// message once a move had produced one.
 	$effect(() => {
-		const msg = $moveMessage ?? $delMessage;
-		if (!msg) return;
-		if (msg.type === 'error') toast.error(msg.text);
-		else toast.success(msg.text);
+		if (!$moveMessage) return;
+		if ($moveMessage.type === 'error') toast.error($moveMessage.text);
+		else toast.success($moveMessage.text);
+	});
+
+	$effect(() => {
+		if (!$delMessage) return;
+		if ($delMessage.type === 'error') toast.error($delMessage.text);
+		else toast.success($delMessage.text);
+		confirming = false;
 	});
 </script>
 

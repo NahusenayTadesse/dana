@@ -46,12 +46,15 @@
 		data,
 		screen,
 		title,
-		intro
+		intro,
+		canEdit = true
 	}: {
 		data: any;
 		screen: SettingScreen;
 		title: string;
 		intro: string;
+		/** False shows the values read-only, without Save or Restore originals. */
+		canEdit?: boolean;
 	} = $props();
 
 	const {
@@ -60,17 +63,44 @@
 		enhance,
 		delayed,
 		message: saveMessage,
-		allErrors
+		allErrors,
+		reset: resetSaveForm
 	} = untrack(() => superForm(data.form, { resetForm: false, id: `settings-${screen}` }));
 
 	const {
 		enhance: resetEnhance,
 		delayed: resetDelayed,
 		message: resetMessage
-	} = untrack(() => superForm(data.resetForm, { resetForm: false, id: `settings-${screen}-reset` }));
+	} = untrack(() =>
+		superForm(data.resetForm, {
+			resetForm: false,
+			id: `settings-${screen}-reset`,
+			// The reset action's result lands in `page.form`, and superforms only
+			// rebinds the save form from page data when `page.form` is empty — so
+			// the inputs kept the custom text after "Restore originals", and the
+			// next Save wrote it all back. Every field is at its default now, so
+			// put exactly that into the save form (and make it the new baseline).
+			onUpdated({ form: resetResult }) {
+				if (!resetResult.valid || resetResult.message?.type !== 'success') return;
+				const defaults = Object.fromEntries(
+					data.fields.map((field: SettingFieldView) => [field.key, field.default])
+				);
+				resetSaveForm({ newState: defaults });
+			}
+		})
+	);
+
+	// One effect per message: `$saveMessage ?? $resetMessage` stopped reading
+	// the reset message at all once a save message existed.
+	$effect(() => {
+		const msg = $saveMessage;
+		if (!msg) return;
+		if (msg.type === 'error') toast.error(msg.text);
+		else toast.success(msg.text);
+	});
 
 	$effect(() => {
-		const msg = $saveMessage ?? $resetMessage;
+		const msg = $resetMessage;
 		if (!msg) return;
 		if (msg.type === 'error') toast.error(msg.text);
 		else toast.success(msg.text);
@@ -148,67 +178,74 @@
 		</div>
 	</div>
 
-	<form action="?/reset" method="post" use:resetEnhance id="reset-{screen}">
-		<input type="hidden" name="confirm" value="true" />
-		<Button type="submit" variant="outline" form="reset-{screen}" disabled={changedCount === 0}>
-			{#if $resetDelayed}
-				<LoadingBtn name="Restoring" />
-			{:else}
-				<RotateCcw class="h-4 w-4" /> Restore originals
-			{/if}
-		</Button>
-	</form>
+	{#if canEdit}
+		<form action="?/reset" method="post" use:resetEnhance id="reset-{screen}">
+			<input type="hidden" name="confirm" value="true" />
+			<Button type="submit" variant="outline" form="reset-{screen}" disabled={changedCount === 0}>
+				{#if $resetDelayed}
+					<LoadingBtn name="Restoring" />
+				{:else}
+					<RotateCcw class="h-4 w-4" /> Restore originals
+				{/if}
+			</Button>
+		</form>
+	{/if}
 </div>
 
 <form action="?/save" method="post" use:enhance id="save-{screen}" class="flex flex-col gap-5">
 	<Errors allErrors={$allErrors} />
 
-	{#each byGroup as section (section.group)}
-		<Card>
-			<CardHeader>
-				<CardTitle class="flex items-center gap-2 text-base">
-					<section.Icon class="h-4 w-4" />
-					{section.group}
-				</CardTitle>
-				<CardDescription>{section.note}</CardDescription>
-			</CardHeader>
-			<CardContent class="grid gap-4 md:grid-cols-2">
-				{#each section.fields as field (field.key)}
-					<div class={field.multiline ? 'flex flex-col md:col-span-2' : 'flex flex-col'}>
-						<InputComp
-							{form}
-							{errors}
-							label={field.label}
-							type={field.multiline ? 'textarea' : 'text'}
-							rows={2}
-							name={field.key}
-							placeholder={field.placeholder}
-						/>
-						<p class="px-1 text-xs text-muted-foreground">
-							{field.description}
-							{#if customised.has(field.key)}
-								<span class="text-foreground">
-									{#if field.default.length > 60}
-										Changed from the original.
-									{:else}
-										Changed from “{field.default || 'blank'}”.
-									{/if}
-								</span>
-							{/if}
-						</p>
-					</div>
-				{/each}
-			</CardContent>
-		</Card>
-	{/each}
+	<!-- A disabled fieldset makes every input inside it read-only for viewers. -->
+	<fieldset disabled={!canEdit} class="flex min-w-0 flex-col gap-5">
+		{#each byGroup as section (section.group)}
+			<Card>
+				<CardHeader>
+					<CardTitle class="flex items-center gap-2 text-base">
+						<section.Icon class="h-4 w-4" />
+						{section.group}
+					</CardTitle>
+					<CardDescription>{section.note}</CardDescription>
+				</CardHeader>
+				<CardContent class="grid gap-4 md:grid-cols-2">
+					{#each section.fields as field (field.key)}
+						<div class={field.multiline ? 'flex flex-col md:col-span-2' : 'flex flex-col'}>
+							<InputComp
+								{form}
+								{errors}
+								label={field.label}
+								type={field.multiline ? 'textarea' : 'text'}
+								rows={2}
+								name={field.key}
+								placeholder={field.placeholder}
+							/>
+							<p class="px-1 text-xs text-muted-foreground">
+								{field.description}
+								{#if customised.has(field.key)}
+									<span class="text-foreground">
+										{#if field.default.length > 60}
+											Changed from the original.
+										{:else}
+											Changed from “{field.default || 'blank'}”.
+										{/if}
+									</span>
+								{/if}
+							</p>
+						</div>
+					{/each}
+				</CardContent>
+			</Card>
+		{/each}
+	</fieldset>
 
-	<div class="flex justify-end">
-		<Button type="submit" form="save-{screen}">
-			{#if $delayed}
-				<LoadingBtn name="Saving" />
-			{:else}
-				<Save class="h-4 w-4" /> Save changes
-			{/if}
-		</Button>
-	</div>
+	{#if canEdit}
+		<div class="flex justify-end">
+			<Button type="submit" form="save-{screen}">
+				{#if $delayed}
+					<LoadingBtn name="Saving" />
+				{:else}
+					<Save class="h-4 w-4" /> Save changes
+				{/if}
+			</Button>
+		</div>
+	{/if}
 </form>

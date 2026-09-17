@@ -1,27 +1,34 @@
 import { db } from '$lib/server/db';
-import { getRoleName } from '$lib/server/adminGuard';
+import { getAccess, hasDashboardAccess } from '$lib/server/permissions';
+import { checkRoute, landingPageFor, ROUTE_RULES } from '$lib/server/permissionRules';
 import { error, redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import type { Access } from '$lib/permissions';
 
 import { orders, contactMessages } from '$lib/server/db/schema';
 import { eq, count } from 'drizzle-orm';
 
-export const load: LayoutServerLoad = async ({ locals, depends }) => {
+export const load: LayoutServerLoad = async ({ locals, depends, route }) => {
 	if (!locals.user) {
-		// `redirect`/`error` THROW. These were `return`ed, which happens to work
-		// because SvelteKit inspects returned errors, but it reads as a guard
-		// that doesn't guard — and one stray refactor away from being one.
 		redirect(302, '/login');
 	}
 
-	// The role is queried here rather than read from `parent()`. The entire
-	// admin boundary used to rest on a roleName computed in the ROOT layout,
-	// which meant any change to that unrelated query silently widened access to
-	// the whole dashboard.
-	const roleName = await getRoleName(locals.user.id);
+	// hooks.server.ts resolves access for every /dashboard request; resolve it
+	// here too in case this load ever runs without that hook.
+	const access = locals.access ?? (await getAccess(locals.user.id));
 
-	if (roleName !== 'Admin') {
+	if (!hasDashboardAccess(access)) {
 		error(404, 'Not Allowed');
+	}
+
+	if (locals.denied) {
+		// Someone who can't see the home page (e.g. warehouse staff) is sent to
+		// the first page they can open instead of an error.
+		if (route.id === '/dashboard') {
+			const landing = landingPageFor(access);
+			if (landing && landing !== '/dashboard') redirect(302, landing);
+		}
+		error(403, locals.denied);
 	}
 
 	depends('app:messages');
@@ -39,9 +46,19 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 		.where(eq(contactMessages.seen, false))
 		.then((rows) => rows[0]?.count ?? 0);
 
+	const clientAccess: Access = { superAdmin: access.superAdmin, permissions: access.permissions };
+
+	// Static dashboard pages this user may open — the sidebar and page search
+	// show only these, using the same rules hooks enforce.
+	const allowedRoutes = Object.keys(ROUTE_RULES).filter(
+		(routeId) => !routeId.includes('[') && checkRoute(routeId, undefined, access).allowed
+	);
+
 	return {
 		name,
 		ordersNumber,
-		messageNumber
+		messageNumber,
+		access: clientAccess,
+		allowedRoutes
 	};
 };

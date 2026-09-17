@@ -7,6 +7,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { superForm } from 'sveltekit-superforms/client';
+	import { untrack } from 'svelte';
 
 	import { add as schema } from './schema';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
@@ -17,7 +18,7 @@
 	let { data } = $props();
 
 	const { form, errors, enhance, delayed, allErrors, capture, restore, message } = superForm(
-		data.form,
+		untrack(() => data.form),
 		{
 			taintedMessage: () => {
 				return new Promise((resolve) => {
@@ -91,9 +92,8 @@
 				{errors}
 				type="text"
 				name="slug"
-				label="Slug"
-				placeholder="product-url-slug"
-				required
+				label="Slug (optional)"
+				placeholder="Leave blank to build it from the name"
 			/>
 		</div>
 
@@ -162,17 +162,11 @@
 		<hr class="border-muted" />
 		<h3 class="text-sm font-medium text-muted-foreground">Retail & Inventory</h3>
 
-		<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-			<InputComp
-				{form}
-				{errors}
-				type="number"
-				name="quantity"
-				label="Quantity"
-				placeholder="0"
-				required
-			/>
-
+		<p class="text-sm text-muted-foreground">
+			Stock is tracked per variant and warehouse — add variants (with an opening quantity) after
+			saving the product.
+		</p>
+		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 			<InputComp
 				{form}
 				{errors}

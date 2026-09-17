@@ -1,6 +1,7 @@
 <script lang="ts">
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import DateField from '../promo-codes/date-field.svelte';
+	import OptionalPicker from './optional-picker.svelte';
 
 	// The add sheet and the edit sheet ask for exactly the same nine things, so
 	// they share this rather than keeping two copies in step by hand.
@@ -42,7 +43,7 @@
 	min="0"
 	required={true}
 />
-<InputComp {form} {errors} label="Raw material used" type="select" name="rawMaterialId" items={materials} />
+<OptionalPicker {form} {errors} label="Raw material used" name="rawMaterialId" items={materials} />
 <InputComp
 	{form}
 	{errors}
@@ -50,7 +51,7 @@
 	type="number"
 	name="rawMaterialConsumed"
 	min="0"
-	placeholder="In the material's own unit"
+	placeholder="In the material's own unit — taken off its on-hand"
 />
 <InputComp
 	{form}
@@ -61,12 +62,8 @@
 	min="0"
 	placeholder="Offcuts and waste, same unit as consumed"
 />
-<InputComp {form} {errors} label="Produced by" type="select" name="producedBy" items={people} />
-<InputComp
-	{form}
-	{errors}
-	label="Stock landed in"
-	type="select"
-	name="warehouseId"
-	items={warehouses}
-/>
+<OptionalPicker {form} {errors} label="Produced by" name="producedBy" items={people} />
+<OptionalPicker {form} {errors} label="Stock landed in" name="warehouseId" items={warehouses} />
+<p class="px-1 text-xs text-muted-foreground">
+	The pieces are added to this warehouse's stock — the default warehouse when left empty.
+</p>

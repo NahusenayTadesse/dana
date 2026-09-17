@@ -12,10 +12,15 @@
 	import { Button } from '$lib/components/ui/button/index';
 	import Edit from './edit.svelte';
 	import Remove from './remove.svelte';
+	import { can } from '$lib/permissions';
 	import type { StockRow } from './types';
 
 	let { data } = $props();
 	let addOpen = $state(false);
+
+	const canCreate = $derived(can(data.access, 'stock.create'));
+	const canEdit = $derived(can(data.access, 'stock.edit'));
+	const canDelete = $derived(can(data.access, 'stock.delete'));
 
 	const { form, errors, enhance, delayed, message } = untrack(() =>
 		superForm(data.form, { dataType: 'json', id: 'stock-add' })
@@ -34,39 +39,40 @@
 	const rows = $derived(data.allData as StockRow[]);
 	const totalPieces = $derived(rows.reduce((sum, r) => sum + r.quantity, 0));
 
-	const columns: ColumnDef<StockRow, unknown>[] = [
+	const baseColumns: ColumnDef<StockRow, unknown>[] = [
 		{ accessorKey: 'index', header: '#', cell: (info) => info.row.index + 1 },
-		{
-			accessorKey: 'variantName',
-			header: 'Product',
-			cell: ({ row }) =>
-				renderComponent(Edit, {
-					row: row.original,
-					data: data.editForm,
-					variants: data.variants,
-					warehouses: data.warehouses
-				})
-		},
+		// Only the Edit column renders the edit dialog: two instances of one
+		// per-row superForm id would send the action result to the wrong one.
+		{ accessorKey: 'variantName', header: 'Product' },
 		{ accessorKey: 'warehouseName', header: 'Warehouse' },
-		{ accessorKey: 'quantity', header: 'Quantity' },
-		{
-			accessorKey: 'edit',
-			header: 'Edit',
-			cell: ({ row }) =>
-				renderComponent(Edit, {
-					row: row.original,
-					data: data.editForm,
-					variants: data.variants,
-					warehouses: data.warehouses,
-					icon: true
-				})
-		},
-		{
-			accessorKey: 'remove',
-			header: 'Remove',
-			cell: ({ row }) => renderComponent(Remove, { row: row.original, data: data.deleteForm })
-		}
+		{ accessorKey: 'quantity', header: 'Quantity' }
 	];
+
+	const editColumn: ColumnDef<StockRow, unknown> = {
+		accessorKey: 'edit',
+		header: 'Edit',
+		cell: ({ row }) =>
+			renderComponent(Edit, {
+				row: row.original,
+				data: data.editForm,
+				variants: data.variants,
+				warehouses: data.warehouses,
+				icon: true
+			})
+	};
+
+	const removeColumn: ColumnDef<StockRow, unknown> = {
+		accessorKey: 'remove',
+		header: 'Remove',
+		cell: ({ row }) => renderComponent(Remove, { row: row.original, data: data.deleteForm })
+	};
+
+	// Only show the actions this user's role may run (the server refuses the rest).
+	const columns = $derived([
+		...baseColumns,
+		...(canEdit ? [editColumn] : []),
+		...(canDelete ? [removeColumn] : [])
+	]);
 </script>
 
 <svelte:head>
@@ -84,32 +90,34 @@
 		</p>
 	</div>
 
-	<DialogComp bind:open={addOpen} title="Record Stock" variant="default" IconComp={Plus} size="lg">
-		<form action="?/add" method="post" use:enhance id="stock-add-form" class="flex flex-col gap-3">
-			<InputComp {form} {errors} label="Product" type="combo" name="variantId" items={data.variants} />
-			<InputComp
-				{form}
-				{errors}
-				label="Warehouse"
-				type="select"
-				name="warehouseId"
-				items={data.warehouses}
-			/>
-			<InputComp {form} {errors} label="Quantity" type="number" name="quantity" min="0" />
-			<p class="px-1 text-xs text-muted-foreground">
-				If this product already has a count in that warehouse, this replaces it rather than adding a
-				second line.
-			</p>
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="Record Stock" variant="default" IconComp={Plus} size="lg">
+			<form action="?/add" method="post" use:enhance id="stock-add-form" class="flex flex-col gap-3">
+				<InputComp {form} {errors} label="Product" type="combo" name="variantId" items={data.variants} />
+				<InputComp
+					{form}
+					{errors}
+					label="Warehouse"
+					type="select"
+					name="warehouseId"
+					items={data.warehouses}
+				/>
+				<InputComp {form} {errors} label="Quantity" type="number" name="quantity" min="0" />
+				<p class="px-1 text-xs text-muted-foreground">
+					If this product already has a count in that warehouse, this replaces it rather than adding a
+					second line.
+				</p>
 
-			<Button type="submit" class="mt-2" form="stock-add-form">
-				{#if $delayed}
-					<LoadingBtn name="Recording" />
-				{:else}
-					<Plus /> Record stock
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="stock-add-form">
+					{#if $delayed}
+						<LoadingBtn name="Recording" />
+					{:else}
+						<Plus /> Record stock
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}

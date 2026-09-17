@@ -9,8 +9,10 @@ import {
 	blogGallery as productImages
 } from '$lib/server/db/schema';
 import type { Actions, PageServerLoad } from './$types';
-import { redirect, setFlash } from 'sveltekit-flash-message/server';
-import { eq } from 'drizzle-orm';
+import { redirect } from 'sveltekit-flash-message/server';
+import { saveUploadedFile, deleteUploadedFile, UploadError } from '$lib/server/upload';
+import { describeDbError } from '$lib/server/dbErrors';
+import { uniqueBlogSlug } from '../blogSlug.server';
 
 export const load: PageServerLoad = async () => {
 	const form = await superValidate(zod4(add));
@@ -28,108 +30,83 @@ export const load: PageServerLoad = async () => {
 	};
 };
 
-import { saveUploadedFile } from '$lib/server/upload.js';
-
 export const actions: Actions = {
 	addBlog: async ({ request, cookies, locals }) => {
 		const form = await superValidate(request, zod4(add));
-		console.log(form);
 
 		if (!form.valid) {
-			// Stay on the same page and set a flash message
-			setFlash({ type: 'error', message: 'Please check your form data.' }, cookies);
-			return message(form, { type: 'error', text: 'Please check your form data.' });
+			return message(
+				form,
+				{ type: 'error', text: 'Please check your form data.' },
+				{ status: 400 }
+			);
 		}
 
 		const { title, category, slug, image, gallery, content, excerpt } = form.data;
 
-		const result = await db.transaction(async (tx) => {
-			// 1. Upload images first (usually done before the DB transaction starts
-			// to avoid keeping a DB connection open during slow network I/O)
+		// Every file written during this request, so a failure can remove them.
+		const uploaded: string[] = [];
+		let newBlogId: number;
+
+		try {
+			// Uploads happen before the transaction so slow disk I/O doesn't hold
+			// a DB connection open. Sequential, so `uploaded` always knows about
+			// every file that made it to disk.
 			const featuredImage = await saveUploadedFile(image);
-			const galleryImages = gallery ? await uploadGallery(gallery) : [];
+			uploaded.push(featuredImage);
 
-			let newSlug: string;
-
-			const existingSlug = await tx
-				.select({ slug: inventory.slug })
-				.from(inventory)
-				.where(eq(inventory.slug, slug))
-				.limit(1);
-
-			if (existingSlug.length > 0) {
-				newSlug = slug + '-1';
-			} else {
-				newSlug = slug;
+			const galleryImages: string[] = [];
+			for (const file of gallery ?? []) {
+				if (!file?.size) continue;
+				const name = await saveUploadedFile(file);
+				uploaded.push(name);
+				galleryImages.push(name);
 			}
 
-			// 2. Insert the main product
-			const [product] = await tx
-				.insert(inventory)
-				.values({
-					title,
-					slug: newSlug,
-					categoryId: category,
-					gallery,
-					content,
-					excerpt,
-					featuredImage,
-					createdBy: locals?.user?.id
-				})
-				.$returningId();
+			const finalSlug = await uniqueBlogSlug(slug ?? '', title);
 
-			const newProductId = product.id;
+			newBlogId = await db.transaction(async (tx) => {
+				const [post] = await tx
+					.insert(inventory)
+					.values({
+						title,
+						slug: finalSlug,
+						categoryId: category,
+						content,
+						excerpt,
+						featuredImage,
+						createdBy: locals?.user?.id
+					})
+					.$returningId();
 
-			// 3. Prepare and insert the gallery images
-			if (galleryImages.length > 0) {
-				const imageRecords = galleryImages.map((url) => ({
-					blogId: newProductId,
-					imageUrl: url
-				}));
+				if (galleryImages.length > 0) {
+					await tx
+						.insert(productImages)
+						.values(galleryImages.map((imageUrl) => ({ blogId: post.id, imageUrl })));
+				}
 
-				await tx.insert(productImages).values(imageRecords);
+				return post.id;
+			});
+		} catch (err) {
+			// Nothing references these files any more.
+			await Promise.all(uploaded.map((name) => deleteUploadedFile(name).catch(() => {})));
+
+			if (err instanceof UploadError) {
+				return message(form, { type: 'error', text: err.message }, { status: 400 });
 			}
-
-			// Return the ID or the full object if needed
-			return newProductId;
-		});
-
-		if (!result) {
+			console.error('blog add failed', err);
 			return message(
 				form,
-				{
-					type: 'error',
-					text: 'An error occurred while adding the event.'
-				},
+				{ type: 'error', text: describeDbError(err, 'Could not add the blog post.') },
 				{ status: 500 }
 			);
-		} else {
-			message(form, { type: 'success', text: 'New Blog Successfully Added' });
-			redirect(
-				`/dashboard/blog/single/${result}`,
-				{ type: 'success', message: 'New Blog Successfully Added' },
-				cookies
-			);
 		}
-	}
-};
 
-const uploadGallery = async (gallery: File[] | undefined) => {
-	try {
-		// 1. Map each file to the upload promise
-		const uploadPromises = gallery.map(async (file) => {
-			const address = await saveUploadedFile(file);
-			return address; // This is the string returned by your function
-		});
-
-		// 2. Wait for all uploads to complete and store results in an array
-		const uploadedAddresses: string[] = await Promise.all(uploadPromises);
-
-		console.log('All files uploaded:', uploadedAddresses);
-
-		return uploadedAddresses;
-	} catch (error) {
-		console.error('Error uploading gallery:', error);
-		throw error;
+		// Outside the try: redirect() throws, and must not be caught as a failure.
+		redirect(
+			`/dashboard/blog/single/${newBlogId}`,
+			{ type: 'success', message: 'New Blog Successfully Added' },
+			cookies
+		);
 	}
 };

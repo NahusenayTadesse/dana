@@ -1,65 +1,36 @@
 <script>
 	import { page } from '$app/state';
 	import Button from '$lib/components/ui/button/button.svelte';
-	// import DialogComp from "$lib/formComponents/DialogComp.svelte";
-	// import AddCustomer from "$lib/forms/AddCustomer.svelte";
 	import { Plus, Sheet } from '@lucide/svelte';
 	let { children } = $props();
+
+	const tabs = [
+		{ href: '/dashboard/products', label: 'Products', icon: Sheet },
+		{ href: '/dashboard/products/add-products', label: 'Add Products', icon: Plus },
+		{ href: '/dashboard/products/colors', label: 'Colors', icon: Sheet },
+		{ href: '/dashboard/products/widths', label: 'Widths', icon: Sheet },
+		{ href: '/dashboard/products/thickness', label: 'Thickness', icon: Sheet },
+		{ href: '/dashboard/products/lengths', label: 'Lengths', icon: Sheet },
+		{ href: '/dashboard/products/categories', label: 'Categories', icon: Sheet },
+		{ href: '/dashboard/products/tags', label: 'Tags', icon: Sheet },
+		{ href: '/dashboard/products/suppliers', label: 'Suppliers', icon: Sheet },
+		{ href: '/dashboard/products/suppliers/add-suppliers', label: 'Add Suppliers', icon: Plus }
+	];
+
+	// Only tabs for pages the user's permissions let them open.
+	const visibleTabs = $derived.by(() => {
+		const allowed = new Set(page.data.allowedRoutes ?? []);
+		return tabs.filter((tab) => allowed.has(tab.href));
+	});
 </script>
 
-<div class="mb-8 flex flex-row items-center justify-start gap-2">
-	<Button
-		href="/dashboard/products"
-		variant={page.url.pathname === '/dashboard/products' ? 'default' : 'outline'}
-		><Sheet /> Products</Button
-	>
-	<Button
-		href="/dashboard/products/add-products"
-		variant={page.url.pathname === '/dashboard/products/add-products' ? 'default' : 'outline'}
-		><Plus /> Add Products</Button
-	>
-	<Button
-		href="/dashboard/products/colors"
-		variant={page.url.pathname === '/dashboard/products/colors' ? 'default' : 'outline'}
-		><Sheet /> Colors</Button
-	>
-		<Button
-		href="/dashboard/products/widths"
-		variant={page.url.pathname === '/dashboard/products/widths' ? 'default' : 'outline'}
-		><Sheet /> Widths</Button
-	>
-		<Button
-		href="/dashboard/products/thickness"
-		variant={page.url.pathname === '/dashboard/products/thickness' ? 'default' : 'outline'}
-		><Sheet /> Thickness</Button
-	>
-			<Button
-		href="/dashboard/products/lengths"
-		variant={page.url.pathname === '/dashboard/products/lengths' ? 'default' : 'outline'}
-		><Sheet /> Lengths</Button
-	>
-
-	<Button
-		href="/dashboard/products/categories"
-		variant={page.url.pathname === '/dashboard/products/categories' ? 'default' : 'outline'}
-		><Sheet /> Categories</Button
-	>
-	<Button
-		href="/dashboard/products/tags"
-		variant={page.url.pathname === '/dashboard/products/tags' ? 'default' : 'outline'}
-		><Sheet /> Tags</Button
-	>
-	<Button
-		href="/dashboard/products/suppliers"
-		variant={page.url.pathname === '/dashboard/products/suppliers' ? 'default' : 'outline'}
-		><Sheet /> Suppliers</Button
-	>
-	<Button
-		href="/dashboard/products/suppliers/add-suppliers"
-		variant={page.url.pathname === '/dashboard/products/suppliers/add-suppliers'
-			? 'default'
-			: 'outline'}><Plus /> Add Suppliers</Button
-	>
+<div class="mb-8 flex flex-row flex-wrap items-center justify-start gap-2">
+	{#each visibleTabs as tab (tab.href)}
+		<Button href={tab.href} variant={page.url.pathname === tab.href ? 'default' : 'outline'}>
+			<tab.icon />
+			{tab.label}
+		</Button>
+	{/each}
 </div>
 
 {@render children?.()}

@@ -28,7 +28,11 @@ import {
 } from '$lib/server/email';
 import { alertsRecipient } from '$lib/server/notifications';
 import type { PageServerLoad, Actions } from './$types';
-import { saveUploadedFile } from '$lib/server/upload';
+import { saveUploadedFile, deleteUploadedFile, UploadError } from '$lib/server/upload';
+import { isDuplicateEntry } from '$lib/server/dbErrors';
+
+/** A problem the visitor can fix; its message is safe to show them. */
+class QuoteFormError extends Error {}
 
 export const load: PageServerLoad = async ({ url }) => {
 	const productId = Number(url.searchParams.get('productId')) || undefined;
@@ -132,6 +136,13 @@ export const actions: Actions = {
 		let resolvedEmail: string | undefined;
 		let resolvedPhone: string | undefined;
 		let newQuoteId: number | undefined;
+		// Files saved inside the transaction — removed again if it rolls back.
+		const savedFiles: string[] = [];
+		const saveDocs = async (file: File) => {
+			const stored = await saveUploadedFile(file);
+			savedFiles.push(stored);
+			return stored;
+		};
 
 		try {
 			await db.transaction(async (tx) => {
@@ -149,46 +160,79 @@ export const actions: Actions = {
 						.then((rows) => rows[0]);
 
 					if (!customer) {
-						// Signed in, but no customers row was ever created for this
-						// user — so `customerInfo` stayed undefined and both the
-						// order and the quote request were written with a NULL
-						// customerId. That is the state the dashboard can price but
-						// never send: sendQuotePaymentLink reads the address off the
-						// customer row, and /pay/[token] refuses to render without
-						// one. Create the profile instead. (Checkout already does
-						// this; the quote form was the remaining way in.)
+						// Signed in, but no customers row is linked to this user — so
+						// `customerInfo` stayed undefined and both the order and the
+						// quote request were written with a NULL customerId. That is the
+						// state the dashboard can price but never send:
+						// sendQuotePaymentLink reads the address off the customer row,
+						// and /pay/[token] refuses to render without one.
 						if (!locals.user.email) {
-							throw new Error(
+							throw new QuoteFormError(
 								'Your account has no email on file. Add one in Account → Settings, then submit again.'
 							);
 						}
 
-						const resolvedDocs = docs ? await saveUploadedFile(docs) : null;
+						// A guest quote made before signing up already created a
+						// customers row with this email. Inserting another one hit the
+						// unique email index and failed the whole request, so link that
+						// row to the account instead.
+						const byEmail = await tx
+							.select({
+								value: customers.id,
+								email: customers.email,
+								name: customers.name,
+								phone: customers.phone,
+								userId: customers.userId
+							})
+							.from(customers)
+							.where(eq(customers.email, locals.user.email))
+							.limit(1)
+							.then((rows) => rows[0]);
 
-						const [inserted] = await tx
-							.insert(customers)
-							.values({
+						if (byEmail) {
+							if (byEmail.userId && byEmail.userId !== locals.user.id) {
+								throw new QuoteFormError(
+									'Your email is already linked to another account. Please contact us so we can sort it out.'
+								);
+							}
+							await tx
+								.update(customers)
+								.set({ userId: locals.user.id, phone: byEmail.phone ?? phone ?? null })
+								.where(eq(customers.id, byEmail.value));
+							customerInfo = {
+								value: byEmail.value,
+								email: byEmail.email,
+								name: byEmail.name,
+								phone: byEmail.phone ?? phone ?? null
+							};
+						} else {
+							const resolvedDocs = docs ? await saveDocs(docs) : null;
+
+							const [inserted] = await tx
+								.insert(customers)
+								.values({
+									name: name ?? locals.user.name ?? locals.user.email,
+									email: locals.user.email,
+									phone,
+									tinNo,
+									docs: resolvedDocs,
+									userId: locals.user.id
+								})
+								.$returningId();
+
+							customerInfo = {
+								value: inserted.id,
 								name: name ?? locals.user.name ?? locals.user.email,
 								email: locals.user.email,
-								phone,
-								tinNo,
-								docs: resolvedDocs,
-								userId: locals.user.id
-							})
-							.$returningId();
-
-						customerInfo = {
-							value: inserted.id,
-							name: name ?? locals.user.name ?? locals.user.email,
-							email: locals.user.email,
-							phone: phone ?? null
-						};
+								phone: phone ?? null
+							};
+						}
 					} else {
 						customerInfo = customer;
 					}
 				} else {
 					if (!email) {
-						throw new Error('Email is required to submit a quote request.');
+						throw new QuoteFormError('Email is required to submit a quote request.');
 					}
 
 					const doesCustomerExist = await tx
@@ -207,10 +251,10 @@ export const actions: Actions = {
 						customerInfo = doesCustomerExist;
 					} else {
 						if (!name) {
-							throw new Error('Name is required to submit a quote request.');
+							throw new QuoteFormError('Name is required to submit a quote request.');
 						}
 
-						const imageUrl = docs ? await saveUploadedFile(docs) : null;
+						const imageUrl = docs ? await saveDocs(docs) : null;
 
 						const newCustomer = await tx
 							.insert(customers)
@@ -227,10 +271,10 @@ export const actions: Actions = {
 				resolvedPhone = customerInfo?.phone ?? phone;
 
 				if (!resolvedName) {
-					throw new Error('Missing name for quote request — please update your profile.');
+					throw new QuoteFormError('Missing name for quote request — please update your profile.');
 				}
 				if (!resolvedPhone) {
-					throw new Error('Missing phone number for quote request — please update your profile.');
+					throw new QuoteFormError('Missing phone number for quote request — please update your profile.');
 				}
 
 				// Every quote is for a whole order now, not a single product row —
@@ -272,17 +316,18 @@ export const actions: Actions = {
 				newQuoteId = inserted[0]?.id;
 			});
 		} catch (err) {
-			console.error('FULL ERROR', err);
-			return message(
-				form,
-				{
-					type: 'error',
-					text:
-						'Error submitting your request: ' +
-						(err instanceof Error ? err.message : String(err))
-				},
-				{ status: 500 }
-			);
+			console.error('Quote request failed:', err);
+			await Promise.all(savedFiles.map((file) => deleteUploadedFile(file).catch(() => {})));
+
+			// Only messages written for the visitor are shown — a database error's
+			// message is the raw SQL statement with their submitted details in it.
+			const known = err instanceof QuoteFormError || err instanceof UploadError;
+			const text = known
+				? err.message
+				: isDuplicateEntry(err)
+					? 'We already have a customer record with these details. Please sign in, or contact us.'
+					: 'Something went wrong submitting your request. Please try again.';
+			return message(form, { type: 'error', text: `Error submitting your request: ${text}` }, { status: known ? 400 : 500 });
 		}
 
 		// --- resolve a human-readable item label for the notification emails ---

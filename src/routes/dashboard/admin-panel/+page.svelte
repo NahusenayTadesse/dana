@@ -1,16 +1,21 @@
 <script>
 	import AdminNavCard from '$lib/components/AdminCard.svelte';
 
-	let userManagement = [
-		{ name: 'Payment Methods', href: '/dashboard/admin-panel/payment-methods' },
-		{ name: 'Users', href: '/dashboard/admin-panel/users' },
-		{ name: 'Roles', href: '/dashboard/admin-panel/roles' }
-	];
+	let { data } = $props();
+
+	// Only the sections this user may open.
+	const userManagement = $derived(
+		[
+			{ name: 'Payment Methods', href: '/dashboard/admin-panel/payment-methods' },
+			{ name: 'Users', href: '/dashboard/admin-panel/users' },
+			{ name: 'Roles', href: '/dashboard/admin-panel/roles' }
+		].filter((item) => data.allowedRoutes.includes(item.href))
+	);
 </script>
 
-<svele:head>
+<svelte:head>
 	<title>Admin Panel</title>
-</svele:head>
+</svelte:head>
 
 <div class="min-h-dvh w-full text-foreground transition-colors duration-300">
 	<!-- Header -->

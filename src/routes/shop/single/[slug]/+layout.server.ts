@@ -9,10 +9,16 @@ import {
 	thicknesses,
 	lengths
 } from '$lib/server/db/schema';
-import { eq, and, ne, inArray } from 'drizzle-orm';
+import { eq, and, ne, inArray, asc } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { fetchVariantRowsForProducts, assembleProductCard } from '$lib/server/product-listing';
+import {
+	fetchVariantRowsForProducts,
+	assembleProductCard,
+	fetchProductDiscounts,
+	discountedPrice,
+	sellablePrice
+} from '$lib/server/product-listing';
 
 // The hardware/trim products a customer typically needs alongside any sheet,
 // tile, or coil purchase — shown as "Accessories" on every product page
@@ -57,23 +63,28 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		})
 		.from(products)
 		.leftJoin(productCategories, eq(productCategories.id, products.categoryId))
-		.where(eq(products.slug, slug))
+		// Archived products (deleted while history still refers to them) are
+		// gone from the storefront — including by direct link.
+		.where(and(eq(products.slug, slug), eq(products.isActive, true)))
 		.then((rows) => rows[0]);
 
 	if (!product) {
 		error(404, 'Product not found');
 	}
 
+	const discount = (await fetchProductDiscounts([product.id])).get(product.id);
+
 	// 2. Gallery images bound to this product (separate from per-variant images)
 	const imageRows = await db
 		.select({ url: productImages.imageUrl })
 		.from(productImages)
-		.where(eq(productImages.productId, product.id));
+		.where(eq(productImages.productId, product.id))
+		.orderBy(asc(productImages.id));
 	const images = imageRows.map((img) => img.url);
 
 	// 3. Full variant matrix — every color/width/thickness/length combo, with its
 	// own price (nullable = quote-only), stock, sku, and image.
-	const variants = await db
+	const variantRows = await db
 		.select({
 			variantId: productVariants.id,
 			sku: productVariants.sku,
@@ -99,6 +110,18 @@ export const load: LayoutServerLoad = async ({ params }) => {
 		.leftJoin(thicknesses, eq(thicknesses.id, productVariants.thicknessId))
 		.leftJoin(lengths, eq(lengths.id, productVariants.lengthId))
 		.where(and(eq(productVariants.productId, product.id), eq(productVariants.isActive, true)));
+
+	// `price` is what the customer pays (discounted, matching checkout);
+	// `listPrice` keeps the catalog figure for the struck-through display.
+	const variants = variantRows.map((v) => {
+		const listPrice = sellablePrice(v.price);
+		return {
+			...v,
+			listPrice,
+			price: discountedPrice(v.price, discount),
+			discountPercentage: discount && listPrice != null ? discount.percentage : null
+		};
+	});
 
 	// 4. Related cross-sell products from the same category
 	const relatedProducts = await db
@@ -153,7 +176,11 @@ export const load: LayoutServerLoad = async ({ params }) => {
 	const accessories = accessoryProducts.map((p) => assembleProductCard(p, accessoryVariantRows));
 
 	return {
-		product,
+		product: {
+			...product,
+			discountPercentage: discount?.percentage ?? null,
+			discountName: discount?.name ?? null
+		},
 		images,
 		variants,
 		relatedProducts,

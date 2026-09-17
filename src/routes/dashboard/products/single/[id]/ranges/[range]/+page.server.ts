@@ -3,18 +3,15 @@ import { db } from '$lib/server/db';
 import { transactions, user, productAdjustments } from '$lib/server/db/schema';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
-import { currentMonthFilter } from '$lib/global.svelte';
+import { currentMonthFilter, parseDateRange } from '$lib/global.svelte';
+import { parseIdParam } from '$lib/server/params';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const id = Number(params.id);
-	if (!Number.isInteger(id)) error(404, 'Not found.');
-	const { range } = params as { range: string };
-
-	const [y1, m1, d1, y2, m2, d2] = range.split('-');
-
-	const start = `${y1}-${m1}-${d1}`;
-	const end = `${y2}-${m2}-${d2}`;
+	const id = parseIdParam(params.id);
+	const range = parseDateRange(params.range);
+	if (!range) error(404, 'Not found');
+	const { start, end } = range;
 
 	const allTransactions = await db
 		.select({

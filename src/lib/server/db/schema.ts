@@ -9,7 +9,8 @@ import {
 	timestamp,
 	uniqueIndex,
 	index,
-	date
+	date,
+	datetime
 } from 'drizzle-orm/mysql-core';
 import { secureFields, user } from './auth.schema';
 
@@ -37,7 +38,7 @@ export const blogGallery = mysqlTable('blog_gallery', {
 	id: int('id').primaryKey().autoincrement(),
 	blogId: int('blog_id')
 		.notNull()
-		.references(() => blog.id),
+		.references(() => blog.id, { onDelete: 'cascade' }),
 	imageUrl: varchar('image_url', { length: 255 })
 });
 
@@ -274,7 +275,9 @@ export const discounts = mysqlTable('discounts', {
 	id: int('id').primaryKey().autoincrement(),
 	amount: decimal('amount', { precision: 10, scale: 2 }),
 	productId: int('product_id').references(() => products.id, { onDelete: 'cascade' }),
-	name: varchar('name', { length: 50 }).notNull().unique(),
+	// Not unique: one named discount ("Summer sale") is applied to many products,
+	// one row per product.
+	name: varchar('name', { length: 50 }).notNull(),
 	description: varchar('description', { length: 255 }),
 	...secureFields
 });
@@ -349,6 +352,11 @@ export const orders = mysqlTable('orders', {
 	deliveryDate: date('delivery_date'),
 	freightCost: decimal('freight_cost', { precision: 12, scale: 2 }),
 	freightPaidBy: mysqlEnum('freight_paid_by', ['company', 'customer']).default('customer'),
+
+	// Set when delivery took the order's stock out of the warehouses, cleared
+	// when a cancellation puts it back. The claim on this column is what makes
+	// re-saving a delivered order deduct stock only once (see $lib/server/stock).
+	stockDeductedAt: datetime('stock_deducted_at'),
 
 	...secureFields
 });
@@ -534,7 +542,10 @@ export const stockLevels = mysqlTable('stock_levels', {
 		.notNull()
 		.references(() => warehouses.id, { onDelete: 'cascade' }),
 	quantity: int('quantity').notNull().default(0)
-});
+}, (table) => [
+	// One row per variant per warehouse — stock movements upsert against this.
+	uniqueIndex('stock_levels_variant_warehouse_unique').on(table.variantId, table.warehouseId)
+]);
  
 export const staff = mysqlTable('staff', {
 	id: int('id').primaryKey().autoincrement(),
@@ -582,6 +593,8 @@ export const purchaseOrders = mysqlTable('purchase_orders', {
 		.default('draft'),
 	expectedDate: date('expected_date'),
 	receivedDate: date('received_date'),
+	// Set once the PO's lines have been added to stock; guards against receiving twice.
+	stockReceivedAt: datetime('stock_received_at'),
 	raisedBy: int('raised_by').references(() => staff.id),
 	notes: text('notes'),
 	...secureFields

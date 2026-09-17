@@ -8,6 +8,7 @@
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
+	import OptionalPicker from '../production/optional-picker.svelte';
 	import { UNIT_ITEMS } from './units';
 	import type { EditMaterial } from './schema';
 	import type { MaterialRow } from './types';
@@ -35,7 +36,7 @@
 		$form.name = row.name;
 		$form.supplierId = row.supplierId;
 		$form.unit = row.unit;
-		$form.quantityOnHand = row.quantityOnHand;
+		$form.adjustBy = null;
 		$form.reorderLevel = row.reorderLevel;
 		$form.isActive = row.isActive;
 	});
@@ -61,9 +62,19 @@
 	<form action="?/edit" method="post" use:enhance id="mat-edit-{row.id}" class="flex flex-col gap-3">
 		<Errors allErrors={$allErrors} />
 		<InputComp {form} {errors} label="Material" type="text" name="name" required={true} />
-		<InputComp {form} {errors} label="Supplier" type="select" name="supplierId" items={suppliers} />
+		<OptionalPicker {form} {errors} label="Supplier" name="supplierId" items={suppliers} />
 		<InputComp {form} {errors} label="Unit" type="select" name="unit" items={UNIT_ITEMS} />
-		<InputComp {form} {errors} label="Quantity on hand" type="number" name="quantityOnHand" min="0" />
+		<p class="px-1 text-sm">
+			On hand: <span class="font-semibold">{row.quantityOnHand} {row.unit}</span>
+		</p>
+		<InputComp
+			{form}
+			{errors}
+			label="Adjust on hand by"
+			type="number"
+			name="adjustBy"
+			placeholder="e.g. 2.5 to add, -1 to take away (after a stock count)"
+		/>
 		<InputComp
 			{form}
 			{errors}

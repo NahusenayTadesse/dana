@@ -8,16 +8,19 @@ import {
 	products as inventory,
 	lengths,
 	productCategories,
+	categoriesProducts,
 	productImages,
 	productSuppliers as suppliers,
     thicknesses,
     widths
 } from '$lib/server/db/schema';
-import type { Actions } from './$types';
-import type { PageServerLoad } from './$types.js';
-import { redirect, setFlash } from 'sveltekit-flash-message/server';
+import type { Actions, PageServerLoad } from './$types';
+import { redirect } from 'sveltekit-flash-message/server';
 import { eq } from 'drizzle-orm';
-import { saveUploadedFile } from '$lib/server/upload.js';
+import { randomUUID } from 'node:crypto';
+import { saveUploadedFile, deleteUploadedFile, UploadError } from '$lib/server/upload';
+import { isDuplicateEntry, isMissingReference, describeDbError } from '$lib/server/dbErrors';
+import { slugify } from '$lib/slug';
 
 export const load: PageServerLoad = async () => {
 	const allCategories = await db
@@ -67,7 +70,7 @@ export const load: PageServerLoad = async () => {
     const colorList = await db.select({
          value: colors.id,
          name: colors.name
-    }).from(colors);
+    }).from(colors).where(eq(colors.isActive, true));
 
 	const form = await superValidate(zod4(add));
 
@@ -87,8 +90,7 @@ export const actions: Actions = {
 		const form = await superValidate(request, zod4(add));
 
 		if (!form.valid) {
-			setFlash({ type: 'error', message: 'Please check your form data.' }, cookies);
-			return message(form, { type: 'error', text: 'Please check your form data.' });
+			return message(form, { type: 'error', text: 'Please check your form data.' }, { status: 400 });
 		}
 
 		const {
@@ -98,7 +100,6 @@ export const actions: Actions = {
 			categoryId,
 			description,
 			overview,
-			quantity,
 			commissionAmount,
 			supplierId,
 			reorderLevel,
@@ -122,24 +123,40 @@ export const actions: Actions = {
 			gallery
 		} = form.data;
 
-		// Process uploads outside the transaction to keep DB locks short.
-		// Guard against empty (0-byte) File objects that empty inputs can produce.
-		const featuredImage = image && image.size > 0 ? await saveUploadedFile(image) : null;
-		const galleryImages = await uploadGallery(gallery);
+		// A URL-safe slug, whatever was typed. slugify() returns '' for a name with
+		// no Latin letters or digits (e.g. Amharic), so fall back to a random one.
+		const finalSlug =
+			slugify(slug ?? '') || slugify(name) || `product-${randomUUID().slice(0, 8)}`;
 
+		// Files written so far — removed again if anything below fails, so a
+		// rejected product doesn't leave uploads on disk with nothing pointing at them.
+		const uploaded: string[] = [];
 		let newProductId: number;
 		try {
+			// Uploads stay outside the transaction to keep DB locks short, but
+			// inside the try so a rejected file is a message, not a 500 page.
+			// Empty (0-byte) File objects are already dropped by the schema.
+			const featuredImage = image ? await saveUploadedFile(image) : null;
+			if (featuredImage) uploaded.push(featuredImage);
+			for (const file of gallery ?? []) {
+				uploaded.push(await saveUploadedFile(file));
+			}
+			const galleryImages = uploaded.filter((f) => f !== featuredImage);
+
 			newProductId = await db.transaction(async (tx) => {
 				const [product] = await tx
 					.insert(inventory)
 					.values({
 						name,
-						slug,
+						slug: finalSlug,
 						brand: brand ?? null,
+						// products.categoryId is the product's category everywhere
+						// (shop filter, related products, /buy, admin list).
 						categoryId,
 						description: description ?? null,
 						overview: overview ?? null,
-						quantity,
+						// quantity is left at its default 0: stock is the synced total
+						// of the variants' warehouse rows ($lib/server/stock).
 						commissionAmount,
 						supplierId: supplierId ?? null,
 						reorderLevel: reorderLevel ?? null,
@@ -165,6 +182,14 @@ export const actions: Actions = {
 					})
 					.$returningId();
 
+				// Mirror of products.categoryId, kept for anything still reading
+				// the join table — edit keeps it in sync the same way.
+				await tx.insert(categoriesProducts).values({
+					productId: product.id,
+					categoryId,
+					createdBy: locals?.user?.id
+				});
+
 				if (galleryImages.length > 0) {
 					await tx.insert(productImages).values(
 						galleryImages.map((url) => ({
@@ -178,21 +203,41 @@ export const actions: Actions = {
 			});
 		} catch (e: unknown) {
 			console.error('Add product failed:', e);
+			await Promise.all(
+				uploaded.map((file) =>
+					deleteUploadedFile(file).catch((cleanupErr) =>
+						console.error('Failed to clean up upload:', cleanupErr)
+					)
+				)
+			);
 
+			if (e instanceof UploadError) {
+				return message(form, { type: 'error', text: e.message }, { status: 400 });
+			}
 			// Friendly message for the most common cause: the unique slug clashing.
-			const err = e as { code?: string; message?: string };
-			const duplicate =
-				err?.code === 'ER_DUP_ENTRY' || /duplicate entry/i.test(err?.message ?? '');
+			// (Drizzle wraps the MySQL error, so check the cause chain, not err.code.)
+			if (isDuplicateEntry(e)) {
+				return message(
+					form,
+					{
+						type: 'error',
+						text: `A product with the slug "${finalSlug}" already exists — choose a different slug.`
+					},
+					{ status: 409 }
+				);
+			}
+			if (isMissingReference(e)) {
+				return message(
+					form,
+					{ type: 'error', text: 'The selected category or supplier no longer exists. Reload and try again.' },
+					{ status: 400 }
+				);
+			}
 
 			return message(
 				form,
-				{
-					type: 'error',
-					text: duplicate
-						? 'A product with that slug already exists — choose a different slug.'
-						: 'An error occurred while adding the product.'
-				},
-				{ status: duplicate ? 409 : 500 }
+				{ type: 'error', text: describeDbError(e, 'An error occurred while adding the product.') },
+				{ status: 500 }
 			);
 		}
 
@@ -202,17 +247,5 @@ export const actions: Actions = {
 			{ type: 'success', message: 'New Product Successfully Added' },
 			cookies
 		);
-	}
-};
-
-const uploadGallery = async (gallery: File[] | undefined): Promise<string[]> => {
-	const files = (gallery ?? []).filter((file) => file && file.size > 0);
-	if (files.length === 0) return [];
-
-	try {
-		return await Promise.all(files.map((file) => saveUploadedFile(file)));
-	} catch (error) {
-		console.error('Error uploading gallery:', error);
-		throw error;
 	}
 };

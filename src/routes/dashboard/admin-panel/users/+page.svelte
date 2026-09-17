@@ -8,6 +8,7 @@
 	import Loading from '$lib/components/Loading.svelte';
 	import { Frown, Plus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { can } from '$lib/permissions';
 </script>
 
 <svelte:head>
@@ -23,7 +24,9 @@
 				<Frown class="h-12 w-16  animate-bounce" />
 				Users List is Empty
 			</p>
-			<Button href="/dashboard/users/add-users"><Plus />Add New Users</Button>
+			{#if can(data.access, 'users.create')}
+				<Button href="/dashboard/admin-panel/users/add-users"><Plus />Add New Users</Button>
+			{/if}
 		</div>
 	{:else}
 		<h2 class="my-4 text-2xl">No of Users: {data.userList?.length}</h2>

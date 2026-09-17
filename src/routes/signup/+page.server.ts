@@ -11,19 +11,13 @@ import { eq, and, sql } from 'drizzle-orm';
 
 import { db } from '$lib/server/db';
 import { APIError } from 'better-auth';
-import { roles, user, customers } from '$lib/server/db/schema';
+import { user, customers } from '$lib/server/db/schema';
 import { saveUploadedFile } from '$lib/server/upload';
+import { getAccess, hasDashboardAccess } from '$lib/server/permissions';
 
 export const load: PageServerLoad = async (event) => {
 	if (event.locals.user) {
-		const roleName = await db
-			.select({ name: roles.name })
-			.from(user)
-			.leftJoin(roles, eq(user.roleId, roles.id))
-			.where(eq(user.id, event.locals.user.id))
-			.then((rows) => rows[0]);
-
-		if (roleName.name === 'Admin') {
+		if (hasDashboardAccess(await getAccess(event.locals.user.id))) {
 			return redirect(302, '/dashboard');
 		} else return redirect(302, '/');
 	}

@@ -21,7 +21,8 @@ import {
 	thicknesses,
 	lengths
 } from '$lib/server/db/schema';
-import type { PricingBasis } from '$lib/server/pricing';
+import { applyPercentDiscount, type PricingBasis } from '$lib/server/pricing';
+import { fetchProductDiscounts } from '$lib/server/product-listing';
 
 /** What the client is allowed to ask for. Note the absence of any price field. */
 export type RequestedLine = {
@@ -80,6 +81,13 @@ function basisPreference(soldBy: 'quantity' | 'length' | 'both'): PricingBasis[]
 }
 
 type DbLike = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** A catalog price that can actually be charged: a positive number. */
+function isRealPrice(price: string | null | undefined): price is string {
+	if (price == null) return false;
+	const n = Number(price);
+	return Number.isFinite(n) && n > 0;
+}
 
 /**
  * A cut-to-order length the customer asked for on a variant-backed line, or
@@ -210,6 +218,11 @@ export async function resolveOrderLines(
 				.where(inArray(variantPrices.variantId, variantIds))
 		: [];
 
+	// Active product discounts (percentages). Applied to the resolved unit rate
+	// below, so the stored order line — and every total later built from it —
+	// already reflects the discount the storefront advertised.
+	const discountByProduct = await fetchProductDiscounts(productIds, tx);
+
 	const ratesByVariant = new Map<number, typeof rateRows>();
 	for (const rate of rateRows) {
 		const list = ratesByVariant.get(rate.variantId) ?? [];
@@ -253,11 +266,11 @@ export async function resolveOrderLines(
 				preferred.map((b) => rates.find((r) => r.basis === b)).find((r) => r !== undefined) ??
 				rates[0];
 
-			if (rate) {
+			if (rate && isRealPrice(rate.price)) {
 				price = rate.price;
 				priceBasis = rate.basis as PricingBasis;
 				priceIncludesVat = rate.priceIncludesVat;
-			} else if (variant.price != null) {
+			} else if (isRealPrice(variant.price)) {
 				// No entry in the rate book — fall back to the variant's flat
 				// retail price, which is a per-piece figure by definition.
 				price = variant.price;
@@ -265,6 +278,13 @@ export async function resolveOrderLines(
 				priceIncludesVat = false;
 			}
 			// else: quote-only variant. price stays null; staff will price it.
+			// A stored 0 counts as quote-only too — the admin shows it that way,
+			// and letting it through made the line free at checkout.
+
+			const discount = discountByProduct.get(productId);
+			if (price != null && discount) {
+				price = applyPercentDiscount(Number(price), discount.percentage).toFixed(2);
+			}
 		}
 
 		// --- spec: from the variant when there is one, else the request ------

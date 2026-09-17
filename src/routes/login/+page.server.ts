@@ -6,12 +6,12 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { loginSchema } from '$lib/ZodSchema';
 import { redirect } from 'sveltekit-flash-message/server';
 import { auth } from '$lib/server/auth';
+import { getAccess, hasDashboardAccess } from '$lib/server/permissions';
 
-export const load: PageServerLoad = async ({ locals, parent }) => {
+export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) {
-		const roleName = (await parent()).roleName;
-
-		if (roleName === 'Admin') {
+		// Anyone with dashboard permissions (not just the Admin role) goes there.
+		if (hasDashboardAccess(await getAccess(locals.user.id))) {
 			return redirect(302, '/dashboard');
 		} else return redirect(302, '/');
 	}

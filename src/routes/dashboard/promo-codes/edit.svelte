@@ -15,19 +15,25 @@
 	let {
 		data,
 		row,
-		icon = false
+		icon = false,
+		key = icon ? 'icon' : 'code'
 	}: {
 		data: SuperValidated<Edit>;
 		row: PromoRow;
 		icon?: boolean;
+		/** Which cell this instance sits in — each row renders the dialog twice. */
+		key?: string;
 	} = $props();
 
 	let open = $state(false);
 
-	// One superForm per row, so each needs its own id — sharing one makes every
-	// dialog on the page answer to the same submission.
+	// One superForm per instance, so each needs its own id — sharing one makes
+	// every dialog on the page answer to the same submission. A row renders this
+	// twice (code cell + edit icon), so the cell is part of the id too; otherwise
+	// errors from the icon's dialog landed in the closed code-cell instance.
+	const formId = untrack(() => `promo-${key}-${row.id}`);
 	const { form, errors, enhance, delayed, message, allErrors } = untrack(() =>
-		superForm(data, { resetForm: false, dataType: 'json', id: `promo-${row.id}` })
+		superForm(data, { resetForm: false, dataType: 'json', id: formId })
 	);
 
 	untrack(() => {
@@ -59,7 +65,7 @@
 	variant="ghost"
 	size="md"
 >
-	<form action="?/edit" method="post" use:enhance id="edit-{row.id}" class="flex flex-col gap-3">
+	<form action="?/edit" method="post" use:enhance id={formId} class="flex flex-col gap-3">
 		<Errors allErrors={$allErrors} />
 
 		<InputComp {form} {errors} label="Code" type="text" name="code" required={true} />
@@ -114,7 +120,7 @@
 			placeholder="Sales staff can apply this code"
 		/>
 
-		<Button type="submit" class="mt-2" form="edit-{row.id}">
+		<Button type="submit" class="mt-2">
 			{#if $delayed}
 				<LoadingBtn name="Saving changes" />
 			{:else}

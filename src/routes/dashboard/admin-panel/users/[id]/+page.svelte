@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
@@ -18,8 +19,8 @@
 	import Delete from '$lib/forms/Delete.svelte';
 	import SingleView from '$lib/components/SingleView.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
-	import DataTable from '$lib/components/Table/data-table.svelte';
-	import { columns } from './columns.js';
+	import PermissionMatrix from '$lib/components/dashboard/permission-matrix.svelte';
+	import { can, PERMISSIONS } from '$lib/permissions';
 
 	let singleTable = $derived([
 		{ name: 'Name', value: data.singleUser?.name },
@@ -29,12 +30,11 @@
 		{ name: 'Updated At', value: data.singleUser?.updatedAt.toLocaleString() }
 	]);
 
-	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = superForm(
-		data.form,
-		{
+	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = untrack(() =>
+		superForm(data.form, {
 			validators: zod4Client(editUserSchema),
 			resetForm: false
-		}
+		})
 	);
 
 	import { toast } from 'svelte-sonner';
@@ -50,13 +50,33 @@
 
 	export const snapshot: Snapshot = { capture, restore };
 
+	const {
+		form: permForm,
+		enhance: permEnhance,
+		delayed: permDelayed,
+		message: permMessage
+	} = untrack(() =>
+		superForm(data.permissionsForm, { id: 'user-permissions', dataType: 'json', resetForm: false })
+	);
+
+	$effect(() => {
+		if (!$permMessage) return;
+		if ($permMessage.type === 'error') toast.error($permMessage.text);
+		else toast.success($permMessage.text);
+	});
+
+	const canEdit = $derived(can(data.access, 'users.edit'));
+	const canDelete = $derived(can(data.access, 'users.delete'));
+
 	//   let date = $derived(dateProxy(editForm, 'appointmentDate', { format: 'date'}));
 
 	let edit = $state(false);
 
-	$form.name = data.singleUser?.name;
-	$form.email = data.singleUser?.email;
-	$form.role = data.singleUser?.roleId;
+	untrack(() => {
+		$form.name = data.singleUser?.name;
+		$form.email = data.singleUser?.email;
+		$form.role = data.singleUser?.roleId;
+	});
 </script>
 
 <svelte:head>
@@ -64,17 +84,21 @@
 </svelte:head>
 <SingleView title="User Details">
 	<div class="mt-4 flex w-full flex-row items-start justify-start gap-2 pl-4">
-		<Button onclick={() => (edit = !edit)}>
-			{#if !edit}
-				<Pencil class="h-4 w-4" />
-				Edit
-			{:else}
-				<ArrowLeft class="h-4 w-4" />
+		{#if canEdit}
+			<Button onclick={() => (edit = !edit)}>
+				{#if !edit}
+					<Pencil class="h-4 w-4" />
+					Edit
+				{:else}
+					<ArrowLeft class="h-4 w-4" />
 
-				Back
-			{/if}
-		</Button>
-		<Delete redirect="/dashboard/products" />
+					Back
+				{/if}
+			</Button>
+		{/if}
+		{#if canDelete}
+			<Delete redirect="/dashboard/admin-panel/users" />
+		{/if}
 	</div>
 	{#if edit === false}
 		<div class="w-full p-4"><SingleTable {singleTable} /></div>
@@ -105,13 +129,44 @@
 	{/if}
 </SingleView>
 
-<br />
+<section class="mt-8 flex flex-col gap-4">
+	<div class="flex flex-wrap items-center justify-between gap-2">
+		<div>
+			<h3 class="text-xl font-semibold">Permissions</h3>
+			<p class="text-sm text-muted-foreground">
+				{#if data.isSuperAdmin}
+					On the Admin role — full access to everything.
+				{:else}
+					Ticked “(role)” permissions come from the {data.singleUser?.role ?? 'user’s'} role. Tick more
+					to give this user extra access on top of their role.
+				{/if}
+			</p>
+		</div>
+		{#if canEdit && !data.isSuperAdmin}
+			<Button type="submit" form="user-permissions-form">
+				{#if $permDelayed}
+					<LoadingBtn name="Saving Permissions" />
+				{:else}
+					<Save class="h-4 w-4" /> Save Permissions
+				{/if}
+			</Button>
+		{/if}
+	</div>
 
-<DataTable
-	data={data?.permissionList}
-	{columns}
-	fileName="{data?.singleUser?.name}Permission List"
-/>
+	{#if data.isSuperAdmin}
+		<PermissionMatrix selected={PERMISSIONS.map((p) => p.key)} disabled idPrefix="user" />
+	{:else}
+		<form id="user-permissions-form" method="POST" action="?/editPermissions" use:permEnhance>
+			<PermissionMatrix
+				bind:selected={$permForm.permissions}
+				inherited={data.rolePermissions}
+				locked={data.lockedPermissions}
+				disabled={!canEdit}
+				idPrefix="user"
+			/>
+		</form>
+	{/if}
+</section>
 
 {#snippet fe(
 	label = '',

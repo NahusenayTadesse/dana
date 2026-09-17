@@ -34,7 +34,7 @@
 		<FilterMenu
 			bind:filteredList
 			data={data?.allReports}
-			filterKeys={['status', 'quantityPurchased', 'lineTotal']}
+			filterKeys={['status', 'priceBasis', 'productName']}
 		/>
 
 		<DataTable data={filteredList} {columns} fileName="Reports from {data?.start} - {data?.end}" />

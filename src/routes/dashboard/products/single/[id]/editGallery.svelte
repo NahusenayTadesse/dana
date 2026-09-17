@@ -5,6 +5,7 @@
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
+	import { untrack } from 'svelte';
 	import type { EditGallery } from './schema';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 
@@ -15,10 +16,14 @@
 		data: SuperValidated<EditGallery>;
 		images: string[];
 	} = $props();
-	const { form, errors, enhance, delayed, message } = superForm(data, {});
+	const { form, errors, enhance, delayed, message } = superForm(untrack(() => data), {});
 	import { toast } from 'svelte-sonner';
+	// Two effects: when they shared one, removing an image re-ran it and toasted
+	// the previous save's message again.
 	$effect(() => {
 		$form.existing = images.join(','); // server splits on ',' — join explicitly rather than relying on Array.toString
+	});
+	$effect(() => {
 		if ($message) {
 			if ($message.type === 'error') {
 				toast.error($message.text);

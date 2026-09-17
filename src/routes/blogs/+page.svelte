@@ -3,7 +3,6 @@
 	import PortfolioHero from '$lib/components/blogs/portfolio-hero.svelte';
 	import PortfolioFilters from '$lib/components/blogs/portfolio-filters.svelte';
 	import PortfolioGrid from '$lib/components/blogs/portfolio-grid.svelte';
-	import type { BlogItem } from '$lib/data/portfolio';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let searchQuery = $state('');
@@ -11,7 +10,11 @@
 	let { data } = $props();
 
 	const filteredItems = $derived.by(() => {
-		let items: BlogItem[] = data?.portfolioItems ?? [];
+		// The card grid expects a category string; posts can have none.
+		let items = (data?.portfolioItems ?? []).map((item) => ({
+			...item,
+			category: item.category ?? ''
+		}));
 
 		if (selectedCategory) {
 			items = items.filter((item) => item.category === selectedCategory);

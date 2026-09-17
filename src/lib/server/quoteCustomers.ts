@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { db } from '$lib/server/db';
 import { customers, orders, quoteRequests } from '$lib/server/db/schema';
+import type { DbLike } from '$lib/server/stock';
 
 /**
  * Everything the quote builder does downstream of "Start Order" is addressed to
@@ -29,10 +30,14 @@ export type QuoteCustomerResult =
  * Ensures the quote request, and the order built from it, both point at a
  * customers row — creating one from the quote's own contact details if needed.
  *
- * Safe to call repeatedly: it only writes what is missing.
+ * Safe to call repeatedly: it only writes what is missing. Pass the caller's
+ * transaction so the customer it creates rolls back with the order.
  */
-export async function ensureQuoteCustomer(quoteRequestId: number): Promise<QuoteCustomerResult> {
-	const quote = await db
+export async function ensureQuoteCustomer(
+	quoteRequestId: number,
+	tx: DbLike = db
+): Promise<QuoteCustomerResult> {
+	const quote = await tx
 		.select()
 		.from(quoteRequests)
 		.where(eq(quoteRequests.id, quoteRequestId))
@@ -45,7 +50,7 @@ export async function ensureQuoteCustomer(quoteRequestId: number): Promise<Quote
 	if (customerId) {
 		// The link can be stale — a customer deleted since the quote came in
 		// would leave an id pointing at nothing, and every send would fail on it.
-		const exists = await db
+		const exists = await tx
 			.select({ id: customers.id })
 			.from(customers)
 			.where(eq(customers.id, customerId))
@@ -65,7 +70,7 @@ export async function ensureQuoteCustomer(quoteRequestId: number): Promise<Quote
 			};
 		}
 
-		const existing = await db
+		const existing = await tx
 			.select({ id: customers.id })
 			.from(customers)
 			.where(eq(customers.email, email))
@@ -75,7 +80,7 @@ export async function ensureQuoteCustomer(quoteRequestId: number): Promise<Quote
 		if (existing) {
 			customerId = existing.id;
 		} else {
-			const [inserted] = await db
+			const [inserted] = await tx
 				.insert(customers)
 				.values({
 					name: quote.name,
@@ -87,7 +92,7 @@ export async function ensureQuoteCustomer(quoteRequestId: number): Promise<Quote
 			customerId = inserted.id;
 		}
 
-		await db
+		await tx
 			.update(quoteRequests)
 			.set({ customerId })
 			.where(eq(quoteRequests.id, quoteRequestId));
@@ -96,14 +101,14 @@ export async function ensureQuoteCustomer(quoteRequestId: number): Promise<Quote
 	// The order carries its own copy of the link; an order started before the
 	// customer existed still has a null one.
 	if (quote.orderId) {
-		const order = await db
+		const order = await tx
 			.select({ id: orders.id, customerId: orders.customerId })
 			.from(orders)
 			.where(eq(orders.id, quote.orderId))
 			.then((rows) => rows[0]);
 
 		if (order && order.customerId !== customerId) {
-			await db.update(orders).set({ customerId }).where(eq(orders.id, order.id));
+			await tx.update(orders).set({ customerId }).where(eq(orders.id, order.id));
 		}
 	}
 

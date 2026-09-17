@@ -1,90 +1,53 @@
-import { setError, superValidate, message, fail } from 'sveltekit-superforms';
+import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq } from 'drizzle-orm';
 
-import { add, edit } from '../schema';
+import { add } from '../schema';
 import { db } from '$lib/server/db';
 import { productSuppliers as supplySuppliers } from '$lib/server/db/schema';
-import type { Actions } from './$types';
-import type { PageServerLoad } from './$types.js';
+import { describeDbError } from '$lib/server/dbErrors';
+import type { Actions, PageServerLoad } from './$types';
+
 export const load: PageServerLoad = async () => {
 	const form = await superValidate(zod4(add));
-	const editForm = await superValidate(zod4(edit));
-
-	const allData = await db
-		.select({
-			id: supplySuppliers.id,
-			name: supplySuppliers.name,
-			phone: supplySuppliers.phone,
-			email: supplySuppliers.email,
-
-			status: supplySuppliers.isActive
-		})
-		.from(supplySuppliers);
 
 	return {
-		form,
-		editForm,
-		allData
+		form
 	};
 };
 
+// Editing lives on the [id] route; this page only adds.
 export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(add));
 
 		if (!form.valid) {
-			return message(form, { type: 'error', text: 'Please check the form for Errors' });
+			return message(
+				form,
+				{ type: 'error', text: 'Please check the form for Errors' },
+				{ status: 400 }
+			);
 		}
 
-		const {
-			name,
-
-			phone,
-			description,
-			status
-		} = form.data;
+		const { name, phone, email, description, status } = form.data;
 
 		try {
 			await db.insert(supplySuppliers).values({
 				name,
 				phone,
-				description,
+				email: email || null,
+				description: description || null,
 				isActive: status,
 				createdBy: locals?.user?.id
 			});
 
 			return message(form, { type: 'success', text: 'Supplier Successfully Added' });
-		} catch (err: any) {
-			return message(form, {
-				type: 'error',
-				text: 'Error: ' + err?.message
-			});
-		}
-	},
-	edit: async ({ request, locals }) => {
-		const form = await superValidate(request, zod4(edit));
-		if (!form.valid) {
-			return fail(400, { form });
-		}
-
-		const { id, name, phone, description, status } = form.data;
-
-		try {
-			await db
-				.update(supplySuppliers)
-				.set({ name, phone, description, isActive: status, createdBy: locals?.user?.id })
-				.where(eq(supplySuppliers.id, Number(id)));
-			return message(form, { type: 'success', text: 'Supplier Successfully Updated' });
-		} catch (err: any) {
-			if (err.code === 'ER_DUP_ENTRY') {
-				setError(form, 'name', 'Supplier name already exists.');
-				return message(form, {
-					type: 'error',
-					text: 'Supplier name is already taken. Please choose another one.'
-				});
-			}
-			return message(form, { type: 'error', text: err.message });
+		} catch (err) {
+			console.error('supplier add failed', err);
+			return message(
+				form,
+				{ type: 'error', text: describeDbError(err, 'Could not add the supplier.') },
+				{ status: 500 }
+			);
 		}
 	}
 };

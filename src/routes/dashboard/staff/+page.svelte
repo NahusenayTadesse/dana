@@ -12,10 +12,14 @@
 	import Statuses from '$lib/components/Table/statuses.svelte';
 	import { Button } from '$lib/components/ui/button/index';
 	import Edit from './edit.svelte';
+	import { can } from '$lib/permissions';
 	import type { StaffRow } from './types';
 
 	let { data } = $props();
 	let addOpen = $state(false);
+
+	const canCreate = $derived(can(data.access, 'staff.create'));
+	const canEdit = $derived(can(data.access, 'staff.edit'));
 
 	const { form, errors, enhance, delayed, message } = untrack(() =>
 		superForm(data.form, { dataType: 'json', id: 'staff-add' })
@@ -34,13 +38,11 @@
 	const rows = $derived(data.allData as StaffRow[]);
 	const here = $derived(rows.filter((r) => r.isActive).length);
 
-	const columns: ColumnDef<StaffRow, unknown>[] = [
+	const baseColumns: ColumnDef<StaffRow, unknown>[] = [
 		{ accessorKey: 'index', header: '#', cell: (info) => info.row.index + 1 },
-		{
-			accessorKey: 'name',
-			header: 'Name',
-			cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm })
-		},
+		// Only the Edit column renders the edit dialog: two instances of one
+		// per-row superForm id would send the action result to the wrong one.
+		{ accessorKey: 'name', header: 'Name' },
 		{ accessorKey: 'role', header: 'Job title' },
 		{ accessorKey: 'phone', header: 'Phone' },
 		{
@@ -48,13 +50,17 @@
 			header: 'Status',
 			cell: ({ row }) =>
 				renderComponent(Statuses, { status: row.original.isActive ? 'active' : 'inactive' })
-		},
-		{
-			accessorKey: 'edit',
-			header: 'Edit',
-			cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm, icon: true })
 		}
 	];
+
+	const editColumn: ColumnDef<StaffRow, unknown> = {
+		accessorKey: 'edit',
+		header: 'Edit',
+		cell: ({ row }) => renderComponent(Edit, { row: row.original, data: data.editForm, icon: true })
+	};
+
+	// Only show the Edit column when this user's role may edit (the server refuses it anyway).
+	const columns = $derived(canEdit ? [...baseColumns, editColumn] : baseColumns);
 </script>
 
 <svelte:head>
@@ -72,36 +78,38 @@
 		</p>
 	</div>
 
-	<DialogComp bind:open={addOpen} title="Add Person" variant="default" IconComp={Plus} size="md">
-		<form action="?/add" method="post" use:enhance id="staff-add-form" class="flex flex-col gap-3">
-			<InputComp {form} {errors} label="Name" type="text" name="name" required={true} />
-			<InputComp
-				{form}
-				{errors}
-				label="Job title"
-				type="text"
-				name="role"
-				placeholder="Machine Operator"
-			/>
-			<InputComp {form} {errors} label="Phone" type="tel" name="phone" placeholder="0911 000 000" />
-			<InputComp
-				{form}
-				{errors}
-				label="Still here"
-				type="checkboxSingle"
-				name="isActive"
-				placeholder="Uncheck when someone leaves — their past records stay"
-			/>
+	{#if canCreate}
+		<DialogComp bind:open={addOpen} title="Add Person" variant="default" IconComp={Plus} size="md">
+			<form action="?/add" method="post" use:enhance id="staff-add-form" class="flex flex-col gap-3">
+				<InputComp {form} {errors} label="Name" type="text" name="name" required={true} />
+				<InputComp
+					{form}
+					{errors}
+					label="Job title"
+					type="text"
+					name="role"
+					placeholder="Machine Operator"
+				/>
+				<InputComp {form} {errors} label="Phone" type="tel" name="phone" placeholder="0911 000 000" />
+				<InputComp
+					{form}
+					{errors}
+					label="Still here"
+					type="checkboxSingle"
+					name="isActive"
+					placeholder="Uncheck when someone leaves — their past records stay"
+				/>
 
-			<Button type="submit" class="mt-2" form="staff-add-form">
-				{#if $delayed}
-					<LoadingBtn name="Adding" />
-				{:else}
-					<Plus /> Add person
-				{/if}
-			</Button>
-		</form>
-	</DialogComp>
+				<Button type="submit" class="mt-2" form="staff-add-form">
+					{#if $delayed}
+						<LoadingBtn name="Adding" />
+					{:else}
+						<Plus /> Add person
+					{/if}
+				</Button>
+			</form>
+		</DialogComp>
+	{/if}
 </div>
 
 {#key data.allData}

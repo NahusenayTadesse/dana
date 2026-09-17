@@ -2,6 +2,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Save, Plus, SquarePen, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { untrack } from 'svelte';
 
 	import type { SuperValidated } from 'sveltekit-superforms';
 	import { superForm } from 'sveltekit-superforms';
@@ -84,38 +85,47 @@
 		{ value: 'ton', name: 'ton' }
 	];
 
-	const { form, errors, enhance, delayed, message } = superForm(data, {
-		id: mode === 'edit' ? `edit-line-${line?.id}` : 'add-line',
-		dataType: 'json',
-		resetForm: mode === 'add'
-	});
+	// Each row is its own component instance, created once — the props are
+	// read once on purpose (untrack), and every edit form gets its own id.
+	const { form, errors, enhance, delayed, message } = untrack(() =>
+		superForm(data, {
+			id: mode === 'edit' ? `edit-line-${line?.id}` : 'add-line',
+			dataType: 'json',
+			resetForm: mode === 'add'
+		})
+	);
 
-	$form.orderId = orderId;
-	if (mode === 'edit' && line) {
-		form.update(
-			(f) => ({
-				...f,
-				id: line.id,
-				orderId,
-				productId: line.productId,
-				variantId: line.variantId,
-				quantity: line.quantity,
-				length: line.length != null ? Number(line.length) : null,
-				lengthUnit: line.lengthUnit ?? 'm',
-				thickness: line.thickness != null ? Number(line.thickness) : null,
-				thicknessUnit: line.thicknessUnit ?? 'mm',
-				width: line.width != null ? Number(line.width) : null,
-				widthUnit: line.widthUnit ?? 'mm',
-				weight: line.weight != null ? Number(line.weight) : null,
-				weightUnit: line.weightUnit ?? 'kg',
-				colorId: line.colorId,
-				basis: line.priceBasis,
-				unitPrice: line.price != null ? Number(line.price) : 0,
-				priceIncludesVat: !!line.priceIncludesVat
-			}),
-			{ taint: false }
-		);
-	}
+	// For "add", the load function also puts orderId into the form's initial
+	// data — resetForm restores that data after each save, and an id only set
+	// here came back as 0, failing the second "Add line".
+	untrack(() => {
+		$form.orderId = orderId;
+		if (mode === 'edit' && line) {
+			form.update(
+				(f) => ({
+					...f,
+					id: line.id,
+					orderId,
+					productId: line.productId,
+					variantId: line.variantId,
+					quantity: line.quantity,
+					length: line.length != null ? Number(line.length) : null,
+					lengthUnit: line.lengthUnit ?? 'm',
+					thickness: line.thickness != null ? Number(line.thickness) : null,
+					thicknessUnit: line.thicknessUnit ?? 'mm',
+					width: line.width != null ? Number(line.width) : null,
+					widthUnit: line.widthUnit ?? 'mm',
+					weight: line.weight != null ? Number(line.weight) : null,
+					weightUnit: line.weightUnit ?? 'kg',
+					colorId: line.colorId,
+					basis: line.priceBasis,
+					unitPrice: line.price != null ? Number(line.price) : 0,
+					priceIncludesVat: !!line.priceIncludesVat
+				}),
+				{ taint: false }
+			);
+		}
+	});
 
 	$effect(() => {
 		if ($message) {
@@ -171,7 +181,7 @@
 				<div class="flex flex-col gap-1.5 rounded-lg border border-dashed p-3">
 					<p class="text-xs text-muted-foreground">Standard rates for this variant — click to apply:</p>
 					<div class="flex flex-wrap gap-2">
-						{#each availableRates as rate}
+						{#each availableRates as rate (rate.basis)}
 							<Button type="button" size="sm" variant="outline" onclick={() => applyRate(rate)}>
 								{rate.basis}: {rate.price}{rate.priceIncludesVat ? ' (incl. VAT)' : ''}
 							</Button>

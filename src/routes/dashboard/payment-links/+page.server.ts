@@ -1,6 +1,6 @@
 import { superValidate, message } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import { eq, desc, isNull, and } from 'drizzle-orm';
+import { eq, desc, isNull, and, gt } from 'drizzle-orm';
 
 import { revokeLink } from './schema';
 import { db } from '$lib/server/db';
@@ -55,10 +55,30 @@ export const actions: Actions = {
 		try {
 			// Only an unused link can be revoked — expiring one that has already
 			// been paid would rewrite the record of a completed payment.
+			const now = new Date();
 			const result = await db
 				.update(paymentLinks)
-				.set({ expiresAt: new Date(Date.now() - 1000) })
-				.where(and(eq(paymentLinks.id, form.data.id), isNull(paymentLinks.usedAt)));
+				.set({ expiresAt: new Date(now.getTime() - 1000) })
+				.where(
+					and(
+						eq(paymentLinks.id, form.data.id),
+						isNull(paymentLinks.usedAt),
+						gt(paymentLinks.expiresAt, now)
+					)
+				);
+
+			// mysql2 resolves writes to [ResultSetHeader, fields]. Nothing matched
+			// means the link doesn't exist, was paid, or had already expired —
+			// reporting "revoked" there told staff a live link was dead when
+			// nothing had changed.
+			const header = Array.isArray(result) ? result[0] : result;
+			if (!(header as { affectedRows?: number })?.affectedRows) {
+				return message(
+					form,
+					{ type: 'error', text: 'This link was already used, expired or revoked — nothing changed.' },
+					{ status: 409 }
+				);
+			}
 
 			return message(form, { type: 'success', text: 'Link revoked' });
 		} catch (err) {

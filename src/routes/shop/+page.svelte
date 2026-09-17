@@ -581,8 +581,16 @@
 					</div>
 				{:else}
 					<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-						{#each data.productList as product}
-							<div class="transition-all duration-300 hover:-translate-y-1">
+						{#each data.productList as product (product.productId)}
+							<div class="relative transition-all duration-300 hover:-translate-y-1">
+								{#if product.discountPercentage}
+									<!-- Prices on the card are already discounted (same rate checkout charges). -->
+									<span
+										class="absolute -top-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-emerald-600 px-2.5 py-0.5 font-mono text-xs font-bold text-white shadow-sm"
+									>
+										-{product.discountPercentage}%
+									</span>
+								{/if}
 								<ProductCard {...product} />
 							</div>
 						{/each}

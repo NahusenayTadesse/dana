@@ -4,6 +4,10 @@
 // priced against (priceBasis), and whether that rate already includes VAT.
 // This intentionally lives server-side only: it's re-run every time a quote
 // is (re)priced, never trusted from the client.
+//
+// Product discounts (the `discounts` table — a percentage per product) are
+// applied earlier, when a cart line is resolved (see orderLines.ts), so the
+// line rates arriving here are already discounted.
 
 export type PricingBasis =
 	| 'quantity'
@@ -124,6 +128,24 @@ export function calculateOrderPricing({
 		withholdingAmount,
 		total
 	};
+}
+
+/** Clamp a stored discount to a usable percentage (0–100); junk becomes 0. */
+export function clampPercentage(value: unknown): number {
+	const n = Number(value);
+	if (!Number.isFinite(n)) return 0;
+	return Math.min(100, Math.max(0, n));
+}
+
+/**
+ * A unit price after a product discount (`discounts.amount`, a percentage),
+ * rounded to cents. Used when a cart line is resolved, so the discounted rate
+ * is what gets stored on the order line and every total built from it.
+ */
+export function applyPercentDiscount(unitPrice: number, percentage: number | null | undefined): number {
+	const pct = clampPercentage(percentage ?? 0);
+	if (pct === 0) return unitPrice;
+	return round2(unitPrice * (1 - pct / 100));
 }
 
 function round2(n: number): number {

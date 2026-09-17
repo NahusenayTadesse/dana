@@ -3,11 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ChevronDownIcon } from '@lucide/svelte';
 
-	type catItem = {
-		name: string;
-	};
-
-	const { names = [], title = 'Categories' }: { names: catItem[]; title: string } = $props();
+	const { names = [], title = 'Categories' }: { names: string[]; title: string } = $props();
 </script>
 
 <Popover>
@@ -27,15 +23,15 @@
 			<div class="max-h-64 overflow-y-auto">
 				{#if names.length > 0}
 					<ul class="list-disc pl-5">
-						{#each names as price}
+						{#each names as name (name)}
 							<li class="py-1.5 transition-colors hover:bg-muted/50">
-								<span class="text-sm">{price}</span>
+								<span class="text-sm">{name}</span>
 							</li>
 						{/each}
 					</ul>
 				{:else}
 					<div class="px-4 py-6 text-center">
-						<p class="text-sm text-muted-foreground">No Categories Available</p>
+						<p class="text-sm text-muted-foreground">No {title} Available</p>
 					</div>
 				{/if}
 			</div>

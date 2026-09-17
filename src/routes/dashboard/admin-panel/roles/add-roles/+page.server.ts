@@ -3,8 +3,10 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 
 import { createRoleSchema as schema } from './schema';
 import { db } from '$lib/server/db';
-import { rolePermissions, roles } from '$lib/server/db/schema';
+import { roles } from '$lib/server/db/schema';
 import type { PageServerLoad, Actions } from './$types.js';
+import { isDuplicateEntry } from '$lib/server/dbErrors';
+import { redirect } from 'sveltekit-flash-message/server';
 
 export const load: PageServerLoad = async () => {
 	const form = await superValidate(zod4(schema));
@@ -15,7 +17,7 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	add: async ({ request }) => {
+	add: async ({ request, cookies }) => {
 		const form = await superValidate(request, zod4(schema));
 
 		if (!form.valid) {
@@ -24,27 +26,27 @@ export const actions: Actions = {
 
 		const { name, description } = form.data;
 
+		let roleId: number;
 		try {
-			await db.insert(roles).values({ name, description });
+			const [created] = await db.insert(roles).values({ name, description }).$returningId();
+			roleId = created.id;
+		} catch (err) {
+			if (isDuplicateEntry(err)) return setError(form, 'name', 'Role Name already exists.');
 
-			// await db.insert(rolePermissions).values(
-			// 	permissions.map((permId) => ({
-			// 		roleId: role.id,
-			// 		permissionId: Number(permId)
-			// 	}))
-			// );
-
-			return message(form, { type: 'success', text: 'Role added successfully.' });
-		} catch (err: any) {
-			if (err.code === 'ER_DUP_ENTRY') return setError(form, 'name', 'Role Name already exists.');
-
-			return message(form, {
-				type: 'error',
-				text:
-					err.code === 'ER_DUP_ENTRY'
-						? 'Role Name is already taken. Please choose another one.'
-						: err.message
-			});
+			console.error('Error adding role:', err);
+			return message(
+				form,
+				{ type: 'error', text: 'Could not add the role. Please try again.' },
+				{ status: 500 }
+			);
 		}
+
+		// A new role has no permissions; its page is where they're set.
+		redirect(
+			303,
+			`/dashboard/admin-panel/roles/${roleId}`,
+			{ type: 'success', message: 'Role added. Now choose what it can do.' },
+			cookies
+		);
 	}
 } satisfies Actions;

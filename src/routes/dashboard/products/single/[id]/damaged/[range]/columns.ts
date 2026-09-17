@@ -1,6 +1,5 @@
 import { renderComponent } from '$lib/components/ui/data-table/index.js';
 import DataTableLinks from '$lib/components/Table/data-table-links.svelte';
-import DataTableActions from './data-table-actions.svelte';
 import DataTableSort from '$lib/components/Table/data-table-sort.svelte';
 import { formatEthiopianDate } from '$lib/global.svelte';
 
@@ -43,15 +42,9 @@ export const columns = [
 				onclick: column.getToggleSortingHandler()
 			}),
 
+		// damaged_by is free text (a name), not a staff id — there is nothing to link to.
 		sortable: true,
-		cell: ({ row }) => {
-			return renderComponent(DataTableLinks, {
-				id: row.original.damagedById,
-				name: row.original.damagedBy,
-				link: `/dashboard/staff`,
-				target: '_blank'
-			});
-		}
+		cell: ({ row }) => row.original.damagedBy ?? '—'
 	},
 
 	{
@@ -63,34 +56,22 @@ export const columns = [
 			}),
 
 		sortable: true,
+		// DataTableLinks builds `${link}/${id}`; users live under admin-panel.
 		cell: ({ row }) => {
+			if (!row.original.changedById) return row.original.changedBy ?? '—';
 			return renderComponent(DataTableLinks, {
-				id: row.original.extraSettings,
+				id: row.original.changedById,
 				name: row.original.changedBy,
-				link: `/dashboard/users/${row.original.changedById}`,
+				link: '/dashboard/admin-panel/users',
 				target: '_blank'
 			});
 		}
 	},
 
 	{
-		accessorKey: 'reciept',
-		header: 'Reciept',
-		sortable: true,
-		cell: ({ row }) => {
-			// You can pass whatever you need from `row.original` to the component
-			//
-			if (row.original.reciept) {
-				return renderComponent(DataTableLinks, {
-					id: row.original.extraSettings,
-					name: 'View Reciept',
-					link: `/dashboard/files/${row.original.reciept}`,
-					target: '_blank'
-				});
-			} else {
-				return 'No Reciept';
-			}
-		}
+		accessorKey: 'reason',
+		header: 'Reason',
+		cell: ({ row }) => row.original.reason ?? '—'
 	}
 
 	// {

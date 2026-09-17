@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { edit as schema } from './schema';
 
@@ -9,39 +10,37 @@
 	import { superForm } from 'sveltekit-superforms/client';
 
 	import LoadingBtn from '$lib/formComponents/LoadingBtn.svelte';
-	import { ArrowLeft, Pencil, Save, Trash } from '@lucide/svelte';
+	import { ArrowLeft, Pencil, Save } from '@lucide/svelte';
 	import type { Snapshot } from '@sveltejs/kit';
 
 	import Delete from '$lib/forms/Delete.svelte';
 	import SingleView from '$lib/components/SingleView.svelte';
-	// import DataTable from '$lib/components/Table/data-table.svelte';
-	// import { columns, userColumns } from './columns.js';
 	import InputComp from '$lib/formComponents/InputComp.svelte';
 	import Errors from '$lib/formComponents/Errors.svelte';
+	import { toast } from 'svelte-sonner';
+	import { can } from '$lib/permissions';
+
+	const canEdit = $derived(can(data.access, 'suppliers.edit'));
+	const canDelete = $derived(can(data.access, 'suppliers.delete'));
 
 	let singleTable = $derived([
-		{ name: 'Name', value: data.single?.name },
-		{ name: 'Phone', value: data.single?.phone },
-		{ name: 'Email', value: data.single?.email },
-
-		{
-			name: 'Description',
-			value: data.single?.description
-		},
-
-		{ name: 'Status', value: data.single?.status ? 'Active' : 'Inactive' }
+		{ name: 'Name', value: data.single?.name ?? '' },
+		{ name: 'Phone', value: data.single?.phone ?? '' },
+		{ name: 'Email', value: data.single?.email ?? '' },
+		{ name: 'Description', value: data.single?.description ?? '' },
+		{ name: 'Status', value: data.single?.status ? 'Active' : 'Inactive' },
+		{ name: 'Linked products', value: String(data.usage.products) },
+		{ name: 'Purchase orders', value: String(data.usage.purchaseOrders) },
+		{ name: 'Raw materials', value: String(data.usage.rawMaterials) }
 	]);
 
-	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = superForm(
-		data.form,
-		{
+	// The form is pre-filled on the server from the stored supplier.
+	const { form, errors, enhance, delayed, capture, restore, allErrors, message } = untrack(() =>
+		superForm(data.editForm, {
 			validators: zod4Client(schema),
 			resetForm: false
-		}
+		})
 	);
-
-	import { toast } from 'svelte-sonner';
-	import ComboboxComp from '$lib/formComponents/ComboboxComp.svelte';
 
 	$effect(() => {
 		if ($message) {
@@ -56,49 +55,42 @@
 	export const snapshot: Snapshot = { capture, restore };
 
 	let edit = $state(false);
-
-	$form.name = data?.single?.name;
-	$form.phone = data?.single?.phone;
-	$form.email = data?.single?.email;
-	$form.description = data?.single?.description || '';
-
-	$form.status = data?.single?.status;
 </script>
 
 <svelte:head>
 	<title>Supplier Details</title>
 </svelte:head>
 <SingleView title="Supplier Details">
-	<div class="mt-4 flex w-full flex-row items-start justify-start gap-2 pl-4">
-		<Button onclick={() => (edit = !edit)}>
-			{#if !edit}
-				<Pencil class="h-4 w-4" />
-				Edit
-			{:else}
-				<ArrowLeft class="h-4 w-4" />
+	<div class="mt-4 flex w-full flex-row flex-wrap items-center justify-start gap-2 pl-4">
+		{#if canEdit}
+			<Button onclick={() => (edit = !edit)}>
+				{#if !edit}
+					<Pencil class="h-4 w-4" />
+					Edit
+				{:else}
+					<ArrowLeft class="h-4 w-4" />
 
-				Back
+					Back
+				{/if}
+			</Button>
+		{/if}
+		{#if canDelete}
+			<Delete redirect="/dashboard/products/suppliers" />
+			{#if data.usage.total > 0}
+				<p class="text-sm text-muted-foreground">
+					This supplier is in use, so deleting it will deactivate it instead.
+				</p>
 			{/if}
-		</Button>
-		{#if data.single?.userCount > 0}
-			<Button
-				variant="destructive"
-				onclick={() => toast.error('Cannot delete role with users')}
-				title="Cannot delete role with users"><Trash /> Delete</Button
-			>
-		{:else}
-			<Delete redirect="/dashboard/admin-panel/roles" />
 		{/if}
 	</div>
-	{#if edit === false}
+	{#if !canEdit || edit === false}
 		<div class="w-full p-4"><SingleTable {singleTable} /></div>
 	{/if}
-	{#if edit}
+	{#if canEdit && edit}
 		<div class="w-full p-4">
 			<form use:enhance action="?/edit" id="main" class="flex flex-col gap-4" method="POST">
 				<Errors allErrors={$allErrors} />
 
-				<InputComp {form} {errors} label="" type="hidden" name="addressId" required={true} />
 				<InputComp {form} {errors} label="name" type="text" name="name" required={true} />
 				<InputComp {form} {errors} label="phone" type="tel" name="phone" required={true} />
 				<InputComp {form} {errors} label="email" type="email" name="email" required={false} />
@@ -136,23 +128,3 @@
 		</div>
 	{/if}
 </SingleView>
-
-<br />
-
-<!-- {#if data?.userList?.length}
-	<h3>Users on this Role</h3>
-	<DataTable
-		data={data?.userList}
-		columns={userColumns}
-		fileName="{data?.singleUser.name} Users List"
-	/>
-{/if}
-{#if data?.permissionList?.length}
-	<h3>Permissions on this Role</h3>
-
-	<DataTable
-		data={data?.permissionList}
-		{columns}
-		fileName="{data?.singleUser.name} Permissions List"
-	/>
-{/if} -->

@@ -7,29 +7,50 @@ import { db } from '$lib/server/db';
 import { promoCodes } from '$lib/server/db/schema';
 import type { Actions, PageServerLoad } from './$types';
 import type { PromoRow } from './types';
+import { isDuplicateEntry } from '$lib/server/dbErrors';
 
-/** `YYYY-MM-DD` as the date inputs expect it, in the server's own timezone. */
+// Promo windows are business days in Ethiopia (UTC+3, no daylight saving),
+// not the server's own timezone — on a UTC host, local midnight shifted every
+// window by three hours.
+const BUSINESS_TIME_ZONE = 'Africa/Addis_Ababa';
+const BUSINESS_UTC_OFFSET = '+03:00';
+
+/** `YYYY-MM-DD` as the date inputs expect it, in business time. */
 function toDateInput(value: Date | null): string {
 	if (!value) return '';
-	const pad = (n: number) => String(n).padStart(2, '0');
-	return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+	// en-CA formats as YYYY-MM-DD.
+	return new Intl.DateTimeFormat('en-CA', {
+		timeZone: BUSINESS_TIME_ZONE,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(value);
 }
 
 /**
  * A start date opens the day; an end date closes it. Storing the end as
  * midnight would expire the code a day early — dashboard/quotes rejects on
  * `now > expiresAt`, so 2026-12-31 has to mean the end of the 31st.
+ *
+ * Whole seconds only: `promo_codes.expires_at` is a `timestamp` without
+ * fractional seconds, and MySQL ROUNDS `23:59:59.999` up to 00:00 the next day
+ * — so the edit dialog showed the next day, and every re-save added another.
  */
 function startOfDay(value: string | null): Date | null {
-	return value ? new Date(`${value}T00:00:00`) : null;
+	return value ? new Date(`${value}T00:00:00${BUSINESS_UTC_OFFSET}`) : null;
 }
 
 function endOfDay(value: string | null): Date | null {
-	return value ? new Date(`${value}T23:59:59.999`) : null;
+	return value ? new Date(`${value}T23:59:59${BUSINESS_UTC_OFFSET}`) : null;
 }
 
 const dayLabel = (value: Date) =>
-	value.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+	value.toLocaleDateString('en-GB', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		timeZone: BUSINESS_TIME_ZONE
+	});
 
 function windowLabel(startsAt: Date | null, expiresAt: Date | null): string {
 	if (startsAt && expiresAt) return `${dayLabel(startsAt)} – ${dayLabel(expiresAt)}`;
@@ -93,21 +114,6 @@ export const load: PageServerLoad = async () => {
 	return { form, editForm, allData };
 };
 
-/**
- * Drizzle wraps the driver error in a DrizzleQueryError, so `err.code` is
- * undefined and a plain `err.code === 'ER_DUP_ENTRY'` check never fires — the
- * operator gets the raw INSERT statement instead of "that code already exists".
- * Walk the cause chain for the real driver code.
- */
-function isDuplicate(err: unknown): boolean {
-	let current: any = err;
-	for (let depth = 0; current && depth < 5; depth++) {
-		if (current.code === 'ER_DUP_ENTRY' || current.errno === 1062) return true;
-		current = current.cause;
-	}
-	return false;
-}
-
 export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const form = await superValidate(request, zod4(add));
@@ -132,7 +138,7 @@ export const actions: Actions = {
 
 			return message(form, { type: 'success', text: `Promo code ${code.toUpperCase()} created` });
 		} catch (err) {
-			if (isDuplicate(err)) {
+			if (isDuplicateEntry(err)) {
 				setError(form, 'code', 'That code already exists.');
 				return message(form, { type: 'error', text: 'That code already exists.' }, { status: 400 });
 			}
@@ -152,8 +158,8 @@ export const actions: Actions = {
 		const { id, code, discountPercentage, reason, startsAt, expiresAt, maxUses, isActive } = form.data;
 
 		try {
-			// `timesUsed` is deliberately untouched: offers already saved against
-			// this code counted against its limit, and rewriting the tally here
+			// `timesUsed` is deliberately untouched: quote orders already approved
+			// with this code counted against its limit, and rewriting the tally here
 			// would let a code be reused past the cap it was sold under.
 			await db
 				.update(promoCodes)
@@ -171,7 +177,7 @@ export const actions: Actions = {
 
 			return message(form, { type: 'success', text: `Promo code ${code.toUpperCase()} updated` });
 		} catch (err) {
-			if (isDuplicate(err)) {
+			if (isDuplicateEntry(err)) {
 				setError(form, 'code', 'That code already exists.');
 				return message(form, { type: 'error', text: 'That code already exists.' }, { status: 400 });
 			}
