@@ -32,3 +32,6 @@ build*.tar.gz
 build*.zip
 # Playwright
 test-results
+
+# Video masters — the served renditions live in static/videos/
+media-src/

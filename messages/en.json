@@ -1363,5 +1363,17 @@
 	"contact_maps_description": "Our factory in Adama, Oromia and our head office in Addis Ababa — open either map for directions.",
 	"contact_map_factory_title": "Map showing DANA STEEL FACTORY in Adama, Oromia",
 	"contact_map_office_title": "Map showing the DANA STEEL FACTORY head office in Addis Ababa",
-	"contact_map_directions": "Get directions"
+	"contact_map_directions": "Get directions",
+	"roofs_in_place_badge": "On real roofs",
+	"roofs_in_place_title": "See our sheets where they end up, on finished homes",
+	"roofs_in_place_description": "Not a showroom shot. These are DANA stone-coated steel profiles laid, lapped and ridge-capped on completed houses, the same panels that leave our line in Adama.",
+	"roofs_clip_red_title": "Terracotta red bond tile",
+	"roofs_clip_red_sub": "Aerial pass over a finished hip roof",
+	"roofs_clip_charcoal_title": "Charcoal shingle profile",
+	"roofs_clip_charcoal_sub": "Ridge caps, valleys and gutter line",
+	"video_play": "Play video",
+	"video_pause": "Pause video",
+	"video_mute": "Mute sound",
+	"video_unmute": "Unmute sound",
+	"video_fullscreen": "Play fullscreen"
 }

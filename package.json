@@ -82,6 +82,7 @@
 		"chapa-nodejs": "^2.1.1",
 		"chart.js": "^4.5.1",
 		"embla-carousel-autoplay": "^8.6.0",
+		"hls.js": "^1.7.3",
 		"mode-watcher": "^1.1.0",
 		"nodemailer": "^8.0.10",
 		"papaparse": "^5.5.3",

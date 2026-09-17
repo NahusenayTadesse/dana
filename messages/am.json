@@ -1363,5 +1363,17 @@
 	"contact_maps_description": "በአዳማ፣ ኦሮሚያ ያለው ፋብሪካችንና በአዲስ አበባ ያለው ዋና መሥሪያ ቤታችን — መንገዱን ለማየት ማንኛውንም ካርታ ይክፈቱ።",
 	"contact_map_factory_title": "በአዳማ፣ ኦሮሚያ የሚገኘውን ዳና ስቲል ፋብሪካ የሚያሳይ ካርታ",
 	"contact_map_office_title": "በአዲስ አበባ የሚገኘውን የዳና ስቲል ፋብሪካ ዋና መሥሪያ ቤት የሚያሳይ ካርታ",
-	"contact_map_directions": "መንገድ ይመልከቱ"
+	"contact_map_directions": "መንገድ ይመልከቱ",
+	"roofs_in_place_badge": "በእውነተኛ ጣሪያዎች ላይ",
+	"roofs_in_place_title": "ሉሆቻችንን በተጠናቀቁ ቤቶች ላይ ይመልከቱ",
+	"roofs_in_place_description": "የማሳያ ክፍል ፎቶ አይደለም። እነዚህ በአዳማ ከመስመራችን የሚወጡት ተመሳሳይ የዳና በድንጋይ የተለበጡ የብረት ጣሪያዎች ተነጥፈው፣ ተደራርበውና በዳር ክዳን ተጠናቀው የሚታዩበት ነው።",
+	"roofs_clip_red_title": "ቀይ የቦንድ ታይል",
+	"roofs_clip_red_sub": "በተጠናቀቀ ጣሪያ ላይ የአየር ላይ ቀረጻ",
+	"roofs_clip_charcoal_title": "ጥቁር ግራጫ ሺንግል ቅርጽ",
+	"roofs_clip_charcoal_sub": "የዳር ክዳን፣ የውሃ መውረጃና የጣሪያ ጠርዝ",
+	"video_play": "ቪዲዮን ያጫውቱ",
+	"video_pause": "ቪዲዮን ያቁሙ",
+	"video_mute": "ድምጽ ያጥፉ",
+	"video_unmute": "ድምጽ ያብሩ",
+	"video_fullscreen": "በሙሉ ስክሪን ያጫውቱ"
 }
