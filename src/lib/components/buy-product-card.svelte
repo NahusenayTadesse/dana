@@ -33,14 +33,25 @@
 		minPrice: number | null;
 		maxPrice: number | null;
 		variants: Variant[];
+		/** Fired after a line lands on the order, so the page can scroll to it. */
+		onAdded?: (variantId: number) => void;
 	};
 
 	// No hasQuoteOnlyVariant prop: whether the buyer is looking at a quote-only
 	// option depends on the variant they have selected right now, which this
 	// card resolves itself. A product-wide "some option somewhere has no price"
 	// flag can't answer that question.
-	const { productId, productName, slug, image, categoryName, minPrice, maxPrice, variants }: Props =
-		$props();
+	const {
+		productId,
+		productName,
+		slug,
+		image,
+		categoryName,
+		minPrice,
+		maxPrice,
+		variants,
+		onAdded
+	}: Props = $props();
 
 	const cart = useCart();
 	let justAdded = $state(false);
@@ -203,6 +214,8 @@
 			description: m.buy_card_added_toast_description()
 		});
 		setTimeout(() => (justAdded = false), 1500);
+
+		onAdded?.(selectedVariant.variantId);
 	}
 </script>
 

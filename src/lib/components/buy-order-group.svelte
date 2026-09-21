@@ -198,8 +198,11 @@
 	};
 </script>
 
+<!-- The id is the block's scroll target: adding from a product card jumps here.
+     scroll-mt clears the sticky site header so the letter isn't hidden under it. -->
 <section
-	class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900"
+	id="order-block-{letter}"
+	class="scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900"
 >
 	<!-- Block header: the spec every row below shares, stated once. -->
 	<header

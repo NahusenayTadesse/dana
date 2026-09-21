@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { useCart } from '$lib/hooks/cart.svelte.js';
 	import type { CartItem } from '$lib/hooks/cart.svelte.js';
@@ -8,8 +9,16 @@
 	import OrderReceipt from '$lib/components/order-receipt.svelte';
 	import OrderProductSummary from '$lib/components/order-product-summary.svelte';
 	import * as Carousel from '$lib/components/ui/carousel/index.js';
+	import type { CarouselAPI } from '$lib/components/ui/carousel/context.js';
 	import { Button } from '$lib/components/ui/button';
-	import { ArrowRight, Trash2, ReceiptText, PackageSearch, Plus } from '@lucide/svelte';
+	import {
+		ArrowRight,
+		Trash2,
+		ReceiptText,
+		PackageSearch,
+		Plus,
+		MoveHorizontal
+	} from '@lucide/svelte';
 	import { netOf, vatOf, grossOf } from '$lib/vat';
 	import { siteVatRate } from '$lib/siteSettings.svelte';
 
@@ -65,6 +74,52 @@
 		return byUnit
 			.map((u) => `${Number(u.total.toFixed(2))}${u.unit ? ` ${u.unit}` : ''}`)
 			.join(' + ');
+	}
+
+	// The carousel carries no arrows on a phone (they'd sit on top of the cards
+	// and fight the thumb), so position has to be shown some other way: dots
+	// below, plus a swipe hint. Both are driven off Embla's own snap list rather
+	// than the product count, because how many cards share a snap changes with
+	// the breakpoint.
+	let carouselApi = $state<CarouselAPI>();
+	let selectedSnap = $state(0);
+	let snapCount = $state(0);
+
+	$effect(() => {
+		const api = carouselApi;
+		if (!api) return;
+
+		const sync = () => {
+			selectedSnap = api.selectedScrollSnap();
+			snapCount = api.scrollSnapList().length;
+		};
+		sync();
+
+		api.on('select', sync);
+		api.on('reInit', sync);
+		return () => {
+			api.off('select', sync);
+			api.off('reInit', sync);
+		};
+	});
+
+	// On a phone the order list sits a long way below the product carousel, so a
+	// tap on "Add to my order" would otherwise leave the buyer looking at the
+	// same card with no sign of where the line went. Jump to the block it landed
+	// in — awaiting tick() first, because that block may have only just been
+	// rendered by this very addition.
+	async function revealOrder(variantId: number) {
+		await tick();
+
+		const group = groups.find((g) => g.items.some((i) => i.variantId === variantId));
+		const target =
+			(group && document.getElementById(`order-block-${group.letter}`)) ??
+			document.getElementById('your-order');
+
+		target?.scrollIntoView({
+			behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+			block: 'start'
+		});
 	}
 
 	const sumQuantity = (items: CartItem[]) => items.reduce((sum, i) => sum + i.quantity, 0);
@@ -163,9 +218,21 @@
 	<main class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
 		<!-- 1. Products carousel -->
 		<section>
-			<h2 class="mb-4 text-lg font-extrabold text-slate-900 dark:text-white">
-				{m.buy_choose_product()}
-			</h2>
+			<div class="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-lg font-extrabold text-slate-900 dark:text-white">
+					{m.buy_choose_product()}
+				</h2>
+
+				<!-- Phones only: desktop gets the arrows instead. -->
+				{#if data.productList.length > 1}
+					<span
+						class="flex items-center gap-1.5 text-xs font-semibold text-blue-600 sm:hidden dark:text-blue-400"
+					>
+						<MoveHorizontal class="size-3.5 shrink-0" />
+						{m.buy_carousel_swipe_hint({ count: data.productList.length })}
+					</span>
+				{/if}
+			</div>
 
 			{#if data.productList.length === 0}
 				<div
@@ -175,7 +242,18 @@
 				</div>
 			{:else}
 				<div class="relative px-1 sm:px-12">
-					<Carousel.Root opts={{ align: 'start' }} class="w-full">
+					<!-- A card is cut off at the right edge on purpose: the peek is what
+					     says "there is more", and the fade over it stops that looking
+					     like a rendering mistake. -->
+					<div
+						class="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-slate-50 to-transparent sm:hidden dark:from-slate-950"
+					></div>
+
+					<Carousel.Root
+						opts={{ align: 'start' }}
+						setApi={(api) => (carouselApi = api)}
+						class="w-full"
+					>
 						<Carousel.Content>
 							{#each data.productList as product (product.productId)}
 								<Carousel.Item class="basis-[78%] sm:basis-1/2 md:basis-1/3 lg:basis-1/4">
@@ -188,6 +266,7 @@
 										minPrice={product.minPrice}
 										maxPrice={product.maxPrice}
 										variants={product.variants}
+										onAdded={revealOrder}
 									/>
 								</Carousel.Item>
 							{/each}
@@ -195,12 +274,31 @@
 						<Carousel.Previous class="hidden sm:flex" />
 						<Carousel.Next class="hidden sm:flex" />
 					</Carousel.Root>
+
+					<!-- Position dots, phones only. Tappable, so they double as a way to
+					     jump rather than just a read-out. -->
+					{#if snapCount > 1}
+						<div class="mt-4 flex items-center justify-center gap-2 sm:hidden">
+							{#each Array(snapCount), i}
+								<button
+									type="button"
+									onclick={() => carouselApi?.scrollTo(i)}
+									aria-label={m.buy_carousel_goto({ number: i + 1 })}
+									aria-current={i === selectedSnap}
+									class="h-2 rounded-full transition-all duration-300 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:outline-none dark:focus-visible:ring-offset-slate-950 {i ===
+									selectedSnap
+										? 'w-6 bg-blue-600 dark:bg-blue-400'
+										: 'w-2 bg-slate-300 dark:bg-slate-700'}"
+								></button>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</section>
 
 		<!-- 2. Your order: an editable receipt -->
-		<section id="your-order" class="mt-12">
+		<section id="your-order" class="mt-12 scroll-mt-24">
 			<div class="mb-4 flex items-center justify-between">
 				<h2 class="flex items-center gap-2 text-lg font-extrabold text-slate-900 dark:text-white">
 					<ReceiptText class="size-5 text-blue-600 dark:text-blue-400" />

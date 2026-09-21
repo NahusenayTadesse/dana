@@ -1375,5 +1375,9 @@
 	"video_pause": "Pause video",
 	"video_mute": "Mute sound",
 	"video_unmute": "Unmute sound",
-	"video_fullscreen": "Play fullscreen"
+	"video_fullscreen": "Play fullscreen",
+	"video_zoom_in": "Zoom in",
+	"video_zoom_out": "Zoom out",
+	"buy_carousel_swipe_hint": "Swipe to browse all {count} products",
+	"buy_carousel_goto": "Show product {number}"
 }

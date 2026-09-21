@@ -4,7 +4,6 @@
 	import RalShowcase from './RalShowcase.svelte';
 	import FactoryBand from './FactoryBand.svelte';
 	import VideoShowcase from './VideoShowcase.svelte';
-	import RoofsInPlace from './RoofsInPlace.svelte';
 	import Testimonials from './Testimonials.svelte';
 	import Cta from './Cta.svelte';
 	import AboutUs from './AboutUs.svelte';
@@ -34,7 +33,6 @@
 {/if}
 
 <WhyChooseUs />
-<RoofsInPlace />
 <RalShowcase />
 <FactoryBand />
 

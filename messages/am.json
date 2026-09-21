@@ -1375,5 +1375,9 @@
 	"video_pause": "ቪዲዮን ያቁሙ",
 	"video_mute": "ድምጽ ያጥፉ",
 	"video_unmute": "ድምጽ ያብሩ",
-	"video_fullscreen": "በሙሉ ስክሪን ያጫውቱ"
+	"video_fullscreen": "በሙሉ ስክሪን ያጫውቱ",
+	"video_zoom_in": "አጉላ",
+	"video_zoom_out": "አሳንስ",
+	"buy_carousel_swipe_hint": "ሁሉንም {count} ምርቶች ለማየት ያንሸራትቱ",
+	"buy_carousel_goto": "ምርት {number} ያሳዩ"
 }

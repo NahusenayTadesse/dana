@@ -4,6 +4,7 @@
 	import { PaintRoller, Layers, House, Wrench, ArrowRight } from '@lucide/svelte';
 	import { siteImage } from '$lib/siteImages.svelte';
 	import { siteSetting, siteSettingText } from '$lib/siteSettings.svelte';
+	import RoofsInPlace from '$lib/files/RoofsInPlace.svelte';
 
 	// Same label as the homepage band, from dashboard/page-text — these three
 	// buttons all said "Contact Us" through one translation key, so they should
@@ -28,47 +29,6 @@
 		return { destroy: () => io.disconnect() };
 	}
 
-	// Drag-to-pan the 360 background.
-	function pano(node, start = 20) {
-		let pos = start;
-		let dragging = false;
-		let lastX = 0;
-		const apply = () => (node.style.backgroundPositionX = `${pos}%`);
-		apply();
-		const down = (e) => {
-			dragging = true;
-			lastX = e.touches ? e.touches[0].clientX : e.clientX;
-			node.style.cursor = 'grabbing';
-		};
-		const move = (e) => {
-			if (!dragging) return;
-			const x = e.touches ? e.touches[0].clientX : e.clientX;
-			pos = Math.min(100, Math.max(0, pos - (x - lastX) * 0.08));
-			lastX = x;
-			apply();
-		};
-		const up = () => {
-			dragging = false;
-			node.style.cursor = 'grab';
-		};
-		node.addEventListener('mousedown', down);
-		node.addEventListener('touchstart', down, { passive: true });
-		window.addEventListener('mousemove', move);
-		window.addEventListener('touchmove', move, { passive: true });
-		window.addEventListener('mouseup', up);
-		window.addEventListener('touchend', up);
-		return {
-			destroy() {
-				node.removeEventListener('mousedown', down);
-				node.removeEventListener('touchstart', down);
-				window.removeEventListener('mousemove', move);
-				window.removeEventListener('touchmove', move);
-				window.removeEventListener('mouseup', up);
-				window.removeEventListener('touchend', up);
-			}
-		};
-	}
-
 	const factorySteps = [
 		{ n: '01', title: m.step_1_title, desc: m.step_1_desc },
 		{ n: '02', title: m.step_2_title, desc: m.step_2_desc },
@@ -91,8 +51,6 @@
 	const machines = $derived(
 		machineTiles.map((tile, i) => ({ ...tile, img: siteImage('factory.machines', i) }))
 	);
-
-	const panoramaImage = $derived(siteImage('factory.panorama'));
 
 	// The four product lines the company manufactures.
 	const productLines = [
@@ -185,112 +143,8 @@
 		</div>
 	</section>
 
-	<!-- 360 VIEWER -->
-	<section class="mx-auto max-w-[1320px] px-7">
-		<div
-			role="img"
-			aria-label={m.pano_alt()}
-			class="relative h-[600px] overflow-hidden rounded-3xl border border-border shadow-[0_30px_90px_rgba(0,0,0,0.35)]"
-		>
-			<div
-				use:pano={20}
-				class="absolute inset-0 cursor-grab [touch-action:pan-y]"
-				style="background-image:url('{panoramaImage}');background-size:auto 130%;background-position:20% center;background-repeat:no-repeat"
-			></div>
-
-			<!-- legibility vignette (fixed dark, sits over the photo) -->
-			<div
-				class="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60"
-			></div>
-
-			<!-- hotspots -->
-			<div class="pointer-events-none absolute" style="left:26%;top:52%">
-				<span class="relative block h-10 w-10 rounded-full border-2 border-primary bg-primary/30">
-					<span class="absolute -inset-2 animate-ping rounded-full border-2 border-primary/50"
-					></span>
-					<span
-						class="absolute top-1/2 left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
-					></span>
-				</span>
-			</div>
-			<div class="pointer-events-none absolute" style="left:62%;top:44%">
-				<span
-					class="relative block h-10 w-10 rounded-full border-2 border-destructive bg-destructive/30"
-				>
-					<span
-						class="absolute -inset-2 animate-ping rounded-full border-2 border-destructive/50 [animation-delay:.6s]"
-					></span>
-					<span
-						class="absolute top-1/2 left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
-					></span>
-				</span>
-			</div>
-
-			<!-- hotspot label (dark glass panel over the photo) -->
-			<div
-				class="absolute max-w-[210px] rounded-xl border border-white/15 bg-black/70 px-[15px] py-[11px] backdrop-blur-md"
-				style="left:26%;top:52%;transform:translate(30px,-56px)"
-			>
-				<div class="mono text-[10px] tracking-[0.14em] text-white/60 uppercase">
-					{m.hotspot_station()}
-				</div>
-				<div class="mt-[3px] text-[14px] font-bold text-white">{m.hotspot_title()}</div>
-				<div class="mt-[3px] text-[12px] leading-[1.45] text-white/60">{m.hotspot_desc()}</div>
-			</div>
-
-			<!-- controls -->
-			<div
-				class="absolute bottom-[22px] left-6 flex items-center gap-2.5 rounded-full border border-white/15 bg-black/60 py-2 pr-3.5 pl-2.5 backdrop-blur-md"
-			>
-				<span
-					class="flex h-[26px] w-[26px] animate-spin items-center justify-center rounded-full border-[1.5px] border-dashed border-primary [animation-duration:8s]"
-				>
-					<span class="h-[5px] w-[5px] rounded-full bg-primary"></span>
-				</span>
-				<span class="mono text-[11px] tracking-[0.12em] text-white/80 uppercase"
-					>{m.pano_control()}</span
-				>
-			</div>
-			<div class="absolute right-6 bottom-[22px] flex gap-[9px]">
-				<span
-					class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-[11px] border border-white/15 bg-black/60 text-white/80 backdrop-blur-md"
-				>
-					<svg
-						width="18"
-						height="18"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3M11 8v6M8 11h6" /></svg
-					>
-				</span>
-				<span
-					class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-[11px] border border-white/15 bg-black/60 text-white/80 backdrop-blur-md"
-				>
-					<svg
-						width="18"
-						height="18"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						><path
-							d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
-						/></svg
-					>
-				</span>
-			</div>
-		</div>
-
-		<p class="mt-4 max-w-[680px] text-[13.5px] leading-[1.6] text-muted-foreground">
-			{m.pano_caption()}
-		</p>
-	</section>
+	<!-- FINISHED ROOFS: drag-to-look-around clips, in place of the old 360 still -->
+	<RoofsInPlace />
 
 	<!-- PROCESS TIMELINE -->
 	<section class="mx-auto max-w-[1320px] px-7 py-[90px]">
