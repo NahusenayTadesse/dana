@@ -35,3 +35,9 @@ test-results
 
 # Video masters — the served renditions live in static/videos/
 media-src/
+
+# Any build output copy (e.g. "build (2)/") — SvelteKit inlines $env/static/private secrets into it
+/build*/
+
+# Playwright MCP session logs/snapshots
+.playwright-mcp/

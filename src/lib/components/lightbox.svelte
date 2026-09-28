@@ -8,14 +8,23 @@
 		images,
 		currentIndex = $bindable(0),
 		isOpen = $bindable(false),
-		title = ''
+		title = '',
+		/** Per-image captions, when the caller has better words than "image 3". */
+		captions = [] as string[]
 	} = $props();
+
+	/**
+	 * Uploads come through as bare filenames under /files; anything already
+	 * rooted (a static asset, or a full URL) is taken as given.
+	 */
+	const src = (image: string) => (/^(https?:)?\//.test(image) ? image : `/files/${image}`);
 
 	const galleryTitle = $derived(title || m.lightbox_default_title());
 
 	let dialogEl = $state<HTMLDivElement | null>(null);
 
 	let currentImage = $derived(images[currentIndex]);
+	let currentCaption = $derived(captions[currentIndex] ?? '');
 	let hasNext = $derived(currentIndex < images.length - 1);
 	let hasPrev = $derived(currentIndex > 0);
 
@@ -75,7 +84,7 @@
 		>
 			<div class="min-w-0">
 				<p class="truncate text-sm font-medium text-white/90 sm:text-base">
-					{galleryTitle}
+					{currentCaption || galleryTitle}
 				</p>
 				<p class="text-xs text-white/60 sm:text-sm">
 					{m.lightbox_counter({ current: currentIndex + 1, total: images.length })}
@@ -93,7 +102,9 @@
 			</Button>
 		</header>
 
-		<main class="relative flex min-h-0 flex-1 items-center justify-center px-3 py-20 sm:px-6 sm:py-24">
+		<main
+			class="relative flex min-h-0 flex-1 items-center justify-center px-3 py-20 sm:px-6 sm:py-24"
+		>
 			<!-- Click-outside-to-close as a real button rather than a handler on
 			     <main>: a non-interactive element with a mouse handler is
 			     unreachable by keyboard and invisible to assistive tech. Sitting
@@ -123,8 +134,9 @@
 
 			{#key currentIndex}
 				<img
-					src="/files/{currentImage}"
-					alt={m.lightbox_image_alt({ title: galleryTitle, index: currentIndex + 1 })}
+					src={src(currentImage)}
+					alt={currentCaption ||
+						m.lightbox_image_alt({ title: galleryTitle, index: currentIndex + 1 })}
 					class="relative z-10 max-h-full max-w-full rounded-xl object-contain shadow-2xl select-none"
 					transition:scale={{ duration: 180, start: 0.96 }}
 				/>
@@ -165,7 +177,7 @@
 							aria-current={index === currentIndex ? 'true' : undefined}
 						>
 							<img
-								src="/files/{image}"
+								src={src(image)}
 								alt={m.lightbox_thumbnail_alt({ index: index + 1 })}
 								class="size-full object-cover"
 							/>
