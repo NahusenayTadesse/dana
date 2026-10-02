@@ -98,6 +98,7 @@
 	type Props = {
 		product: ProductInfo;
 		images?: string[]; // extra gallery shots from product_images
+		imageColors?: Record<string, number>; // gallery shot -> the colour it shows
 		variants?: Variant[];
 		relatedProducts?: RelatedProduct[];
 		accessories?: Accessory[];
@@ -106,6 +107,7 @@
 	const {
 		product,
 		images = [],
+		imageColors = {},
 		variants = [],
 		relatedProducts = [],
 		accessories = []
@@ -312,9 +314,60 @@
 	// didn't actually select.
 	const selectedVariant = $derived(isCustomLength ? null : configuredVariant);
 
+	// A gallery shot that isn't any variant's own image can still be looked at;
+	// the preview is tied to the variant it was opened on, so picking another
+	// colour/spec drops back to that variant's photo.
+	let preview = $state<{ img: string; variantId: number | null } | null>(null);
+
 	const displayImage = $derived(
-		selectedVariant?.imageUrl || product?.featuredImage || allGalleryImages[0] || ''
+		(preview && preview.variantId === (selectedVariant?.variantId ?? null) ? preview.img : '') ||
+			selectedVariant?.imageUrl ||
+			product?.featuredImage ||
+			allGalleryImages[0] ||
+			''
 	);
+
+	// The colour a gallery shot shows: its product_images tag, else the colour
+	// of the variant using it as its own image. null = not colour-specific.
+	const colorOfImage = (img: string): number | null =>
+		imageColors[img] ?? variants.find((v) => v.imageUrl === img)?.colorId ?? null;
+
+	// Off until a swatch is clicked; "All colours" turns it back off. Shots
+	// with no colour stay in every filtered view.
+	let filterGalleryByColor = $state(false);
+	const canFilterGallery = $derived(
+		hasColorAxis && allGalleryImages.some((img) => colorOfImage(img) !== null)
+	);
+	const colorGallery = $derived(
+		canFilterGallery && selectedColorId !== null
+			? allGalleryImages.filter((img) => {
+					const color = colorOfImage(img);
+					return color === null || color === selectedColorId;
+				})
+			: allGalleryImages
+	);
+	const galleryImages = $derived(filterGalleryByColor ? colorGallery : allGalleryImages);
+
+	function setGalleryFilter(on: boolean) {
+		filterGalleryByColor = on;
+		showAllThumbs = false;
+	}
+	const selectedColor = $derived(availableColors.find((c) => c.id === selectedColorId) ?? null);
+
+	// The strip shows nine shots plus a "+N" tile until it's expanded, so a
+	// product with dozens of photos doesn't download them all up front.
+	const THUMBS_PREVIEW = 9;
+	let showAllThumbs = $state(false);
+	const visibleThumbs = $derived(
+		showAllThumbs || galleryImages.length <= THUMBS_PREVIEW + 1
+			? galleryImages
+			: galleryImages.slice(0, THUMBS_PREVIEW)
+	);
+
+	// Catalogue photos are uploaded with a 640px "-sm" sibling for exactly this
+	// strip; any other upload is used as-is.
+	const thumbSrc = (img: string) =>
+		/^catalog-.+(?<!-sm)\.webp$/.test(img) ? img.replace(/\.webp$/, '-sm.webp') : img;
 
 	let quantity = $state(1);
 	let justAdded = $state(false);
@@ -385,6 +438,8 @@
 
 	function selectColor(colorId: number) {
 		selectedColorId = colorId;
+		// Picking a swatch narrows the gallery to that colour's photos.
+		setGalleryFilter(true);
 		// Re-anchor the sliders to the first available (in-stock, priced) variant
 		// in that color — the option lists themselves are re-derived from it.
 		const match =
@@ -585,9 +640,44 @@
 				{/if}
 			</div>
 
-			{#if allGalleryImages.length > 0}
-				<div class="mt-3.5 grid grid-cols-4 gap-3 sm:grid-cols-5">
-					{#each allGalleryImages as img}
+			{#if canFilterGallery && selectedColor}
+				<div
+					class="mt-3.5 flex flex-wrap items-center gap-2"
+					role="group"
+					aria-label={m.product_detail_gallery_filter_label()}
+				>
+					{#each [{ on: false }, { on: true }] as option (option.on)}
+						<button
+							type="button"
+							aria-pressed={filterGalleryByColor === option.on}
+							onclick={() => setGalleryFilter(option.on)}
+							class={[
+								'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+								filterGalleryByColor === option.on
+									? 'border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-500'
+									: 'border-slate-200 text-slate-600 hover:border-blue-400 hover:text-slate-900 dark:border-white/10 dark:text-slate-300 dark:hover:text-white'
+							]}
+						>
+							{#if option.on}
+								<span
+									class="size-3 shrink-0 rounded-full ring-1 ring-black/20 dark:ring-white/30"
+									style:background-color={selectedColor.hex ?? '#ccc'}
+									aria-hidden="true"
+								></span>
+								{selectedColor.name}
+								<span class="opacity-70">{colorGallery.length}</span>
+							{:else}
+								{m.product_detail_gallery_all_colours()}
+								<span class="opacity-70">{allGalleryImages.length}</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+
+			{#if galleryImages.length > 0}
+				<div class="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-5">
+					{#each visibleThumbs as img (img)}
 						<button
 							type="button"
 							class="h-20 overflow-hidden rounded-xl border-2 p-0 transition-all hover:opacity-90 {displayImage ===
@@ -598,18 +688,35 @@
 								// Jump the sliders to whatever spec this gallery shot belongs to.
 								const match = variants.find((v) => v.imageUrl === img);
 								if (match) {
+									preview = null;
 									if (match.colorId !== null) selectedColorId = match.colorId;
 									applyVariantToConfigurator(match);
+								} else {
+									preview = { img, variantId: selectedVariant?.variantId ?? null };
 								}
 							}}
 						>
 							<img
-								src="/files/{img}"
+								src="/files/{thumbSrc(img)}"
 								alt={m.alt_product_thumbnail()}
+								loading="lazy"
+								decoding="async"
 								class="h-full w-full object-cover"
 							/>
 						</button>
 					{/each}
+					{#if visibleThumbs.length < galleryImages.length}
+						<button
+							type="button"
+							class="flex h-20 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-sm font-bold text-slate-600 transition-all hover:border-blue-500 hover:text-blue-600 dark:border-white/15 dark:text-slate-300"
+							onclick={() => (showAllThumbs = true)}
+							aria-label={m.product_detail_more_photos({
+								count: galleryImages.length - visibleThumbs.length
+							})}
+						>
+							+{galleryImages.length - visibleThumbs.length}
+						</button>
+					{/if}
 				</div>
 			{/if}
 		</div>

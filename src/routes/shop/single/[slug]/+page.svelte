@@ -83,6 +83,7 @@
         <ProductDetail
             product={data.product}
             images={data.images}
+            imageColors={data.imageColors}
             variants={data.variants}
             relatedProducts={data.relatedProducts}
             accessories={data.accessories}

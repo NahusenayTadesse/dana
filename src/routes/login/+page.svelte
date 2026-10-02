@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Login from '$lib/forms/Login.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import AuthPhotoPanel from '$lib/components/AuthPhotoPanel.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	import type { ActionData, PageData } from './$types';
@@ -10,7 +11,10 @@
 
 <Seo title={m.login_meta_title()} description={m.login_meta_description()} />
 
-<div class="flex h-screen w-full items-center justify-center px-4">
+<div
+	class="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-4 py-10 lg:grid-cols-2"
+>
+	<AuthPhotoPanel />
 	<Login data={data?.form} action="?/login" />
 </div>
 

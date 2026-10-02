@@ -670,12 +670,14 @@ export const actions: Actions = {
 
 		const { existing, gallery } = form.data;
 
-		const current = await db
-			.select({ url: productImages.imageUrl })
+		const currentRows = await db
+			.select({ url: productImages.imageUrl, colorId: productImages.colorId })
 			.from(productImages)
 			.where(eq(productImages.productId, productId))
-			.orderBy(asc(productImages.id))
-			.then((rows) => rows.map((r) => r.url));
+			.orderBy(asc(productImages.id));
+		const current = currentRows.map((r) => r.url);
+		// The rows are rewritten below; carry each kept image's colour tag over.
+		const colorByUrl = new Map(currentRows.map((r) => [r.url, r.colorId]));
 
 		// Only images this product actually has can be kept — the list comes from
 		// the browser, so anything else in it is ignored.
@@ -701,7 +703,13 @@ export const actions: Actions = {
 				if (finalList.length > 0) {
 					await tx
 						.insert(productImages)
-						.values(finalList.map((url) => ({ productId, imageUrl: url })));
+						.values(
+							finalList.map((url) => ({
+								productId,
+								imageUrl: url,
+								colorId: colorByUrl.get(url) ?? null
+							}))
+						);
 				}
 			});
 		} catch (err) {

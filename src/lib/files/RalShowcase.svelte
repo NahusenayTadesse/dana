@@ -2,6 +2,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { siteImage } from '$lib/siteImages.svelte';
 	import { siteSetting } from '$lib/siteSettings.svelte';
+	import { showcaseSrcset } from '$lib/showcaseGallery';
 
 	let { image = '' } = $props();
 
@@ -60,12 +61,15 @@
 				</div>
 			</div>
 
-			<div
-				class="h-72 rounded-3xl bg-cover bg-center shadow-2xl shadow-black/30 md:h-80"
-				style="background-image:url('{photo}')"
-				role="img"
-				aria-label={m.ral_title()}
-			></div>
+			<img
+				src={photo}
+				srcset={showcaseSrcset(photo)}
+				sizes="(min-width: 768px) 560px, 100vw"
+				alt={m.ral_title()}
+				loading="lazy"
+				decoding="async"
+				class="h-72 w-full rounded-3xl object-cover shadow-2xl shadow-black/30 md:h-80"
+			/>
 		</div>
 	</div>
 </section>

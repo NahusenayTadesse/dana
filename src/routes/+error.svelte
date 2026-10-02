@@ -9,6 +9,8 @@
 		MailIcon
 	} from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import PhotoBackdrop from '$lib/components/PhotoBackdrop.svelte';
+	import { showcasePath } from '$lib/showcaseGallery';
 
 	const status = $derived(page.status ?? 500);
 	const errorMessage = $derived(page.error?.message ?? m.error_page_default_message());
@@ -47,8 +49,10 @@
 </svelte:head>
 
 <section
-	class="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-16 text-foreground sm:px-6 lg:px-8"
+	class="relative isolate flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-16 text-foreground sm:px-6 lg:px-8"
 >
+	<!-- A hoarding on bare ground: "nothing built here yet". -->
+	<PhotoBackdrop src={showcasePath('fence-white', '02')} />
 	<div
 		class="absolute top-0 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
 	></div>

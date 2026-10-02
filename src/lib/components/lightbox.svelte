@@ -10,7 +10,9 @@
 		isOpen = $bindable(false),
 		title = '',
 		/** Per-image captions, when the caller has better words than "image 3". */
-		captions = [] as string[]
+		captions = [] as string[],
+		/** Smaller files for the thumbnail strip, index-matched to `images`. */
+		thumbnails = [] as string[]
 	} = $props();
 
 	/**
@@ -177,8 +179,10 @@
 							aria-current={index === currentIndex ? 'true' : undefined}
 						>
 							<img
-								src={src(image)}
+								src={src(thumbnails[index] ?? image)}
 								alt={m.lightbox_thumbnail_alt({ index: index + 1 })}
+								loading="lazy"
+								decoding="async"
 								class="size-full object-cover"
 							/>
 						</button>

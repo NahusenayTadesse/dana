@@ -76,11 +76,15 @@ export const load: LayoutServerLoad = async ({ params }) => {
 
 	// 2. Gallery images bound to this product (separate from per-variant images)
 	const imageRows = await db
-		.select({ url: productImages.imageUrl })
+		.select({ url: productImages.imageUrl, colorId: productImages.colorId })
 		.from(productImages)
 		.where(eq(productImages.productId, product.id))
 		.orderBy(asc(productImages.id));
 	const images = imageRows.map((img) => img.url);
+	// url -> colour, for gallery shots tagged with the colour they show.
+	const imageColors: Record<string, number> = Object.fromEntries(
+		imageRows.filter((img) => img.colorId != null).map((img) => [img.url, img.colorId as number])
+	);
 
 	// 3. Full variant matrix — every color/width/thickness/length combo, with its
 	// own price (nullable = quote-only), stock, sku, and image.
@@ -182,6 +186,7 @@ export const load: LayoutServerLoad = async ({ params }) => {
 			discountName: discount?.name ?? null
 		},
 		images,
+		imageColors,
 		variants,
 		relatedProducts,
 		accessories

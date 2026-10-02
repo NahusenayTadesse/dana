@@ -8,6 +8,7 @@
 	import Cta from './Cta.svelte';
 	import AboutUs from './AboutUs.svelte';
 	import WhyChooseUs from './WhyChooseUs.svelte';
+	import ShowcaseCollage from './ShowcaseCollage.svelte';
 
 	type Testimonial = {
 		id: number;
@@ -33,6 +34,7 @@
 {/if}
 
 <WhyChooseUs />
+<ShowcaseCollage />
 <RalShowcase />
 <FactoryBand />
 

@@ -143,7 +143,10 @@ export const productImages = mysqlTable('product_images', {
 	productId: int('product_id')
 		.notNull()
 		.references(() => products.id, { onDelete: 'cascade' }),
-	imageUrl: varchar('image_url', { length: 255 }).notNull()
+	imageUrl: varchar('image_url', { length: 255 }).notNull(),
+	// Which colour the photo shows, so the product page can narrow its gallery
+	// to the colour being looked at. NULL = not colour-specific (shown always).
+	colorId: int('color_id').references(() => colors.id, { onDelete: 'set null' })
 });
 
 

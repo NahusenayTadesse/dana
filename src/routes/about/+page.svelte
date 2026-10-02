@@ -32,6 +32,9 @@
     import Mission from '$lib/components/mission.svelte';
     import * as m from '$lib/paraglide/messages.js';
     import { siteImage, siteImages } from '$lib/siteImages.svelte';
+    import PhotoBackdrop from '$lib/components/PhotoBackdrop.svelte';
+    import PhotoRibbon from '$lib/components/PhotoRibbon.svelte';
+    import SectionPhoto from '$lib/components/SectionPhoto.svelte';
     import { siteSetting } from '$lib/siteSettings.svelte';
 
     type TabKey = 'quality' | 'products' | 'support';
@@ -39,6 +42,12 @@
 
     // Interactive slider state for Product Section
     const productShowcaseImages = $derived(siteImages('about.product_slider'));
+
+    // Decorative strip under the stats: first half of the slot on the top
+    // row, the rest on the bottom row (scrolling the other way).
+    const ribbon = $derived(siteImages('about.ribbon'));
+    const ribbonTop = $derived(ribbon.slice(0, Math.ceil(ribbon.length / 2)));
+    const ribbonBottom = $derived(ribbon.slice(Math.ceil(ribbon.length / 2)));
     let currentProductImageIndex = $state(0);
 
     // The slot is admin-editable, so the list can shrink under a stale index —
@@ -197,7 +206,8 @@
     image={siteImage('about.highlights')}
 />
 
-<div class="relative min-h-screen overflow-hidden  text-foreground">
+<div class="relative isolate min-h-screen overflow-hidden  text-foreground">
+    <PhotoBackdrop src={siteImage('about.hero.backdrop')} />
     <div
         class="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_35%)]"
     ></div>
@@ -324,7 +334,10 @@
   
 
     <!-- Tabs Feature Section with Image Sidecar -->
-    <section class="border-y border-primary/10 px-4 py-20 backdrop-blur-xl sm:px-6 sm:py-24 lg:px-8">
+    <section
+        class="relative isolate overflow-hidden border-y border-primary/10 px-4 py-20 backdrop-blur-xl sm:px-6 sm:py-24 lg:px-8"
+    >
+        <SectionPhoto src={siteImage('about.tabs.background')} />
         <div class="mx-auto max-w-7xl">
             <div class="mb-10 text-center">
                 <span class="text-xs font-bold uppercase tracking-widest text-primary">
@@ -430,6 +443,12 @@
             {/each}
         </div>
     </section>
+
+    <!-- Decorative photo strip, no captions -->
+    <div class="flex flex-col gap-4 pb-8">
+        <PhotoRibbon images={ribbonTop} />
+        <PhotoRibbon images={ribbonBottom} reverse seconds={80} />
+    </div>
 
   
 
@@ -586,36 +605,39 @@
   
 
     <!-- Journey Section -->
-    <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div class="mb-12 text-center">
-            <span class="text-xs font-bold uppercase tracking-widest text-primary">
-                {m.about_page_buying_flow_label()}
-            </span>
-            <h2 class="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
-                {m.about_page_buying_flow_title()}
-            </h2>
-        </div>
+    <section class="relative isolate overflow-hidden">
+        <SectionPhoto src={siteImage('about.journey.background')} />
+        <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+            <div class="mb-12 text-center">
+                <span class="text-xs font-bold uppercase tracking-widest text-primary">
+                    {m.about_page_buying_flow_label()}
+                </span>
+                <h2 class="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+                    {m.about_page_buying_flow_title()}
+                </h2>
+            </div>
 
-        <div class="relative grid gap-5 lg:grid-cols-3">
-            <div class="absolute left-0 right-0 top-1/2 -z-10 hidden h-px bg-primary/20 lg:block"></div>
-            {#each journey as step, i}
-                <div
-                    class="group relative rounded-3xl border border-primary/10 bg-card/40 p-6 shadow-xl backdrop-blur-2xl transition duration-500 hover:-translate-y-2 hover:border-primary/30"
-                >
+            <div class="relative grid gap-5 lg:grid-cols-3">
+                <div class="absolute left-0 right-0 top-1/2 -z-10 hidden h-px bg-primary/20 lg:block"></div>
+                {#each journey as step, i}
                     <div
-                        class="absolute -top-3 left-6 rounded-full border border-primary/20 bg-background px-3 py-1 font-mono text-xs text-primary shadow-lg"
+                        class="group relative rounded-3xl border border-primary/10 bg-card/40 p-6 shadow-xl backdrop-blur-2xl transition duration-500 hover:-translate-y-2 hover:border-primary/30"
                     >
-                        {m.about_page_step_label({ number: i + 1 })}
+                        <div
+                            class="absolute -top-3 left-6 rounded-full border border-primary/20 bg-background px-3 py-1 font-mono text-xs text-primary shadow-lg"
+                        >
+                            {m.about_page_step_label({ number: i + 1 })}
+                        </div>
+                        <div
+                            class="mt-5 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xl transition duration-500 group-hover:scale-110"
+                        >
+                            <step.icon class="size-6" />
+                        </div>
+                        <h3 class="mt-6 text-xl font-black">{step.title()}</h3>
+                        <p class="mt-3 text-sm leading-relaxed text-muted-foreground">{step.text()}</p>
                     </div>
-                    <div
-                        class="mt-5 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xl transition duration-500 group-hover:scale-110"
-                    >
-                        <step.icon class="size-6" />
-                    </div>
-                    <h3 class="mt-6 text-xl font-black">{step.title()}</h3>
-                    <p class="mt-3 text-sm leading-relaxed text-muted-foreground">{step.text()}</p>
-                </div>
-            {/each}
+                {/each}
+            </div>
         </div>
     </section>
 
@@ -626,36 +648,40 @@
   
 
     <!-- CTA Section -->
-    <section class="mx-auto max-w-4xl px-4 py-24 text-center sm:px-6 lg:px-8">
-        <div
-            class="relative overflow-hidden rounded-3xl border border-primary/20 bg-card/40 p-8 shadow-2xl backdrop-blur-2xl sm:p-12"
-        >
+    <section class="mx-auto max-w-5xl px-4 py-24 text-center sm:px-6 lg:px-8">
+        <!-- The photo shows through the frosted card, and around its edges. -->
+        <div class="relative isolate overflow-hidden rounded-[2rem] p-4 shadow-2xl sm:p-10">
+            <SectionPhoto src={siteImage('about.cta.background')} tone="plain" />
             <div
-                class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_45%)]"
-            ></div>
-
-            <div class="mx-auto flex max-w-xl flex-col items-center gap-6">
+                class="relative overflow-hidden rounded-3xl border border-white/30 bg-card/75 p-8 shadow-2xl backdrop-blur-xl sm:p-12"
+            >
                 <div
-                    class="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary"
-                >
-                    <SparklesIcon class="size-3" />
-                    {m.about_page_cta_badge()}
+                    class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_45%)]"
+                ></div>
+
+                <div class="mx-auto flex max-w-xl flex-col items-center gap-6">
+                    <div
+                        class="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary"
+                    >
+                        <SparklesIcon class="size-3" />
+                        {m.about_page_cta_badge()}
+                    </div>
+
+                    <h2 class="text-3xl font-black tracking-tight sm:text-4xl">
+                        {m.about_page_cta_title()}
+                    </h2>
+
+                    <p class="text-sm leading-relaxed text-muted-foreground">
+                        {m.about_page_cta_description()}
+                    </p>
+
+                    <Separator class="bg-primary/10" />
+
+                    <Button href="/quotes" size="lg" class="group gap-2">
+                        {m.about_page_shop_now()}
+                        <ZapIcon class="size-4 transition-transform group-hover:scale-110" />
+                    </Button>
                 </div>
-
-                <h2 class="text-3xl font-black tracking-tight sm:text-4xl">
-                    {m.about_page_cta_title()}
-                </h2>
-
-                <p class="text-sm leading-relaxed text-muted-foreground">
-                    {m.about_page_cta_description()}
-                </p>
-
-                <Separator class="bg-primary/10" />
-
-                <Button href="/quotes" size="lg" class="group gap-2">
-                    {m.about_page_shop_now()}
-                    <ZapIcon class="size-4 transition-transform group-hover:scale-110" />
-                </Button>
             </div>
         </div>
     </section>

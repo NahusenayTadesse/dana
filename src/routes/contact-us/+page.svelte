@@ -27,6 +27,8 @@
 	import { IconBrandFacebook, IconBrandInstagram, IconBrandTiktok } from '@tabler/icons-svelte';
 	import { fly } from 'svelte/transition';
 	import * as m from '$lib/paraglide/messages.js';
+	import PhotoBackdrop from '$lib/components/PhotoBackdrop.svelte';
+	import { siteImage } from '$lib/siteImages.svelte';
 	import {
 		siteSetting,
 		siteSettingText,
@@ -171,8 +173,9 @@
 <Seo title={m.contact_meta_title()} description={m.contact_meta_description()} />
 
 <div
-	class="relative min-h-dvh w-full overflow-hidden px-4 py-20 text-foreground transition-colors duration-300 sm:px-6 lg:px-8"
+	class="relative isolate min-h-dvh w-full overflow-hidden px-4 py-20 text-foreground transition-colors duration-300 sm:px-6 lg:px-8"
 >
+	<PhotoBackdrop src={siteImage('pages.contact.backdrop')} />
 	<div
 		class="absolute top-0 left-1/4 -z-10 h-96 w-96 animate-pulse rounded-full bg-primary/10 opacity-70 blur-3xl duration-4000 dark:bg-primary/5"
 	></div>

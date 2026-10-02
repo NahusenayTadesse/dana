@@ -2,9 +2,13 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import Seo from '$lib/components/Seo.svelte';
 	import { PaintRoller, Layers, House, Wrench, ArrowRight } from '@lucide/svelte';
-	import { siteImage } from '$lib/siteImages.svelte';
+	import { siteImage, siteImages } from '$lib/siteImages.svelte';
 	import { siteSetting, siteSettingText } from '$lib/siteSettings.svelte';
 	import RoofsInPlace from '$lib/files/RoofsInPlace.svelte';
+	import ShowcaseGallery from '$lib/files/ShowcaseGallery.svelte';
+	import PhotoMosaic from '$lib/components/PhotoMosaic.svelte';
+	import PhotoRibbon from '$lib/components/PhotoRibbon.svelte';
+	import SectionPhoto from '$lib/components/SectionPhoto.svelte';
 
 	// Same label as the homepage band, from dashboard/page-text — these three
 	// buttons all said "Contact Us" through one translation key, so they should
@@ -108,38 +112,42 @@
 			<span>/</span>
 			<span class="text-foreground/70">{m.breadcrumb_factory()}</span>
 		</div>
-		<div class="max-w-[720px]">
-			<div class="mono mb-3.5 text-[12px] tracking-[0.26em] text-primary uppercase">
-				{m.hero_eyebrow()}
-			</div>
-			<h1
-				class="display text-[clamp(32px,4.4vw,58px)] leading-[1.03] font-black tracking-[-0.025em]"
-			>
-				{m.hero_title()}
-			</h1>
-			<p class="mt-[18px] text-[17px] leading-[1.65] text-muted-foreground">{m.hero_desc()}</p>
+		<div class="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,500px)]">
+			<div class="max-w-[720px]">
+				<div class="mono mb-3.5 text-[12px] tracking-[0.26em] text-primary uppercase">
+					{m.hero_eyebrow()}
+				</div>
+				<h1
+					class="display text-[clamp(32px,4.4vw,58px)] leading-[1.03] font-black tracking-[-0.025em]"
+				>
+					{m.hero_title()}
+				</h1>
+				<p class="mt-[18px] text-[17px] leading-[1.65] text-muted-foreground">{m.hero_desc()}</p>
 
-			<div class="mt-8 flex flex-wrap items-center gap-3">
-				<a
-					href="/quotes"
-					class="group inline-flex items-center gap-2.5 rounded-full bg-primary px-6 py-3.5 text-[14.5px] font-bold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5"
-				>
-					{m.btn_quote()}
-					<ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
-				</a>
-				<a
-					href="/shop"
-					class="inline-flex items-center rounded-full border border-border bg-card px-6 py-3.5 text-[14.5px] font-bold transition duration-300 hover:-translate-y-0.5 hover:border-primary/40"
-				>
-					{m.btn_explore()}
-				</a>
-				<a
-					href="/contact-us"
-					class="inline-flex items-center rounded-full px-4 py-3.5 text-[14.5px] font-bold text-primary underline-offset-4 hover:underline"
-				>
-					{ctaButton}
-				</a>
+				<div class="mt-8 flex flex-wrap items-center gap-3">
+					<a
+						href="/quotes"
+						class="group inline-flex items-center gap-2.5 rounded-full bg-primary px-6 py-3.5 text-[14.5px] font-bold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5"
+					>
+						{m.btn_quote()}
+						<ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
+					</a>
+					<a
+						href="/shop"
+						class="inline-flex items-center rounded-full border border-border bg-card px-6 py-3.5 text-[14.5px] font-bold transition duration-300 hover:-translate-y-0.5 hover:border-primary/40"
+					>
+						{m.btn_explore()}
+					</a>
+					<a
+						href="/contact-us"
+						class="inline-flex items-center rounded-full px-4 py-3.5 text-[14.5px] font-bold text-primary underline-offset-4 hover:underline"
+					>
+						{ctaButton}
+					</a>
+				</div>
 			</div>
+			<!-- Large screens only: the lazy images inside a hidden box are never fetched on phones. -->
+			<PhotoMosaic images={siteImages('factory.hero.mosaic')} class="hidden lg:grid" />
 		</div>
 	</section>
 
@@ -167,6 +175,11 @@
 			{/each}
 		</div>
 	</section>
+
+	<!-- Decorative photo strip, no captions -->
+	<div class="pb-[90px]">
+		<PhotoRibbon images={siteImages('factory.ribbon')} seconds={80} />
+	</div>
 
 	<!-- MACHINE GALLERY -->
 	<section class="border-y border-border bg-card">
@@ -260,31 +273,38 @@
 		</div>
 	</section>
 
+	<!-- PROJECT GALLERY: every finished roof and fence, filterable -->
+	<ShowcaseGallery />
+
 	<!-- QC STATS -->
-	<section class="mx-auto grid max-w-[1320px] items-center gap-14 px-7 py-[90px] md:grid-cols-2">
-		<div use:reveal class={hidden}>
-			<div class="mono mb-3.5 text-[12px] tracking-[0.26em] text-primary uppercase">
-				{m.qc_eyebrow()}
-			</div>
-			<h2
-				class="display text-[clamp(26px,3.2vw,40px)] leading-[1.08] font-extrabold tracking-[-0.02em]"
-			>
-				{m.qc_heading()}
-			</h2>
-			<p class="mt-[18px] text-[16px] leading-[1.7] text-muted-foreground">{m.qc_desc()}</p>
-		</div>
-		<div use:reveal={120} class="{hidden} grid grid-cols-2 gap-3.5">
-			{#each stats as st (st.l)}
-				<div class="rounded-2xl border border-border bg-card p-6">
-					<div class="display text-[38px] font-black text-primary">{st.v}</div>
-					<div class="mt-1 text-[13px] text-muted-foreground">{st.l()}</div>
+	<section class="relative isolate overflow-hidden">
+		<SectionPhoto src={siteImage('factory.qc.background')} />
+		<div class="mx-auto grid max-w-[1320px] items-center gap-14 px-7 py-[90px] md:grid-cols-2">
+			<div use:reveal class={hidden}>
+				<div class="mono mb-3.5 text-[12px] tracking-[0.26em] text-primary uppercase">
+					{m.qc_eyebrow()}
 				</div>
-			{/each}
+				<h2
+					class="display text-[clamp(26px,3.2vw,40px)] leading-[1.08] font-extrabold tracking-[-0.02em]"
+				>
+					{m.qc_heading()}
+				</h2>
+				<p class="mt-[18px] text-[16px] leading-[1.7] text-muted-foreground">{m.qc_desc()}</p>
+			</div>
+			<div use:reveal={120} class="{hidden} grid grid-cols-2 gap-3.5">
+				{#each stats as st (st.l)}
+					<div class="rounded-2xl border border-border bg-card p-6">
+						<div class="display text-[38px] font-black text-primary">{st.v}</div>
+						<div class="mt-1 text-[13px] text-muted-foreground">{st.l()}</div>
+					</div>
+				{/each}
+			</div>
 		</div>
 	</section>
 
 	<!-- CLOSING -->
-	<section class="border-t border-border bg-card">
+	<section class="relative isolate overflow-hidden bg-[#0C1B34] text-white">
+		<SectionPhoto src={siteImage('factory.closing.background')} tone="dark" />
 		<div class="mx-auto max-w-[1320px] px-7 py-[90px]">
 			<div use:reveal class="{hidden} grid items-center gap-10 md:grid-cols-[1.1fr_1fr]">
 				<div>
@@ -293,7 +313,7 @@
 					>
 						{m.factory_closing_heading()}
 					</h2>
-					<p class="mt-[18px] text-[16px] leading-[1.7] text-muted-foreground">
+					<p class="mt-[18px] text-[16px] leading-[1.7] text-[#D6E2F5]">
 						{m.factory_closing_desc()}
 					</p>
 					<div class="mt-8 flex flex-wrap items-center gap-3">
@@ -306,7 +326,7 @@
 						</a>
 						<a
 							href="/contact-us"
-							class="inline-flex items-center rounded-full border border-border bg-background px-6 py-3.5 text-[14.5px] font-bold transition duration-300 hover:-translate-y-0.5 hover:border-primary/40"
+							class="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-6 py-3.5 text-[14.5px] font-bold text-white backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white/15"
 						>
 							{ctaButton}
 						</a>
@@ -314,7 +334,7 @@
 				</div>
 
 				<blockquote
-					class="rounded-2xl border border-primary/20 bg-background p-7 text-[17px] leading-[1.55] font-semibold text-balance"
+					class="rounded-2xl border border-white/15 bg-white/10 p-7 text-[17px] leading-[1.55] font-semibold text-balance text-white backdrop-blur"
 				>
 					{m.factory_closing_line()}
 				</blockquote>

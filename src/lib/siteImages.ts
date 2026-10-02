@@ -36,7 +36,7 @@ export type SiteImageSlot = {
 	maxCount?: number;
 };
 
-export const SITE_IMAGE_SECTIONS = ['Global', 'Home', 'About', 'Factory'] as const;
+export const SITE_IMAGE_SECTIONS = ['Global', 'Home', 'About', 'Factory', 'Pages'] as const;
 
 export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
 	/* ------------------------------------------------------------------ Global */
@@ -118,7 +118,7 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
 		page: '/',
 		kind: 'single',
 		description: 'Photo inside the dark navy RAL colour-range band.',
-		defaults: ['/images/manufacture.webp'],
+		defaults: ['/showcase/gallery/roof-blue/02-1280.webp'],
 		recommended: '4:3, 1200×900'
 	},
 	{
@@ -130,6 +130,38 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
 		description: 'Full-width background photo behind the factory statistics band.',
 		defaults: ['/assets/factory-gate.jpg'],
 		recommended: 'Wide, 2000×900 — keep the left third uncluttered, text sits there'
+	},
+	{
+		key: 'home.cta.background',
+		label: 'Closing call-to-action background',
+		section: 'Home',
+		page: '/',
+		kind: 'single',
+		description:
+			'Photo behind the "get a quote" card at the very bottom of the homepage. A dark wash sits on top so the white text stays readable.',
+		defaults: ['/showcase/gallery/roof-terracotta/03-1280.webp'],
+		recommended: 'Wide, 1600×900 — subject in the centre'
+	},
+	{
+		key: 'home.showcase.grid',
+		label: 'Project photo collage',
+		section: 'Home',
+		page: '/',
+		kind: 'gallery',
+		description:
+			'Small label-free photo collage on the homepage that links through to the full gallery on the factory page. Order matters: 1 and 6 are the large tiles.',
+		defaults: [
+			'/showcase/gallery/roof-red/02-1280.webp',
+			'/showcase/gallery/roof-lightblue/02-1280.webp',
+			'/showcase/gallery/roof-terracotta/02-1280.webp',
+			'/showcase/gallery/roof-green/02-1280.webp',
+			'/showcase/gallery/fence-red/01-1280.webp',
+			'/showcase/gallery/fence-blue/05-1280.webp',
+			'/showcase/gallery/roof-black/01-1280.webp',
+			'/showcase/gallery/fence-white/03-1280.webp'
+		],
+		recommended: 'Landscape, 1200×900',
+		maxCount: 8
 	},
 
 	/* ------------------------------------------------------------------- About */
@@ -227,6 +259,87 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
 		],
 		recommended: 'Any orientation, 1200px on the long edge'
 	},
+	{
+		key: 'about.hero.backdrop',
+		label: 'Hero backdrop',
+		section: 'About',
+		page: '/about',
+		kind: 'single',
+		description:
+			'Faded photo behind the heading at the top of the about page.',
+		defaults: [
+			'/showcase/gallery/roof-black/06-1280.webp'
+		],
+		recommended: 'Wide, 1600×900'
+	},
+	{
+		key: 'about.tabs.background',
+		label: 'Tabs section background',
+		section: 'About',
+		page: '/about',
+		kind: 'single',
+		description:
+			'Faint photo behind the tabbed feature section. Shown very softly, so any clear scene works.',
+		defaults: [
+			'/showcase/gallery/fence-red/05-1280.webp'
+		],
+		recommended: 'Wide, 1600×900'
+	},
+	{
+		key: 'about.ribbon',
+		label: 'Scrolling photo strip',
+		section: 'About',
+		page: '/about',
+		kind: 'gallery',
+		description:
+			'Two slowly scrolling rows of photos under the stats. The first half of the list fills the top row, the rest the bottom row.',
+		defaults: [
+			'/showcase/gallery/roof-red/02-1280.webp',
+			'/showcase/gallery/roof-terracotta/02-1280.webp',
+			'/showcase/gallery/roof-blue/02-1280.webp',
+			'/showcase/gallery/roof-green/02-1280.webp',
+			'/showcase/gallery/roof-black/01-1280.webp',
+			'/showcase/gallery/roof-lightblue/02-1280.webp',
+			'/showcase/gallery/roof-brown/02-1280.webp',
+			'/showcase/gallery/roof-red/06-1280.webp',
+			'/showcase/gallery/fence-blue/02-1280.webp',
+			'/showcase/gallery/fence-red/01-1280.webp',
+			'/showcase/gallery/fence-white/03-1280.webp',
+			'/showcase/gallery/roof-blue/03-1280.webp',
+			'/showcase/gallery/fence-blue/04-1280.webp',
+			'/showcase/gallery/roof-brown/03-1280.webp',
+			'/showcase/gallery/fence-red/06-1280.webp',
+			'/showcase/gallery/roof-red/03-1280.webp'
+		],
+		recommended: 'Landscape, 1200×900',
+		maxCount: 24
+	},
+	{
+		key: 'about.journey.background',
+		label: 'Buying steps background',
+		section: 'About',
+		page: '/about',
+		kind: 'single',
+		description:
+			'Faint photo behind the three buying-step cards.',
+		defaults: [
+			'/showcase/gallery/roof-terracotta/01-1280.webp'
+		],
+		recommended: 'Wide, 1600×900'
+	},
+	{
+		key: 'about.cta.background',
+		label: 'Closing card background',
+		section: 'About',
+		page: '/about',
+		kind: 'single',
+		description:
+			'Photo seen through the frosted closing call-to-action card.',
+		defaults: [
+			'/showcase/gallery/roof-blue/01-1280.webp'
+		],
+		recommended: 'Wide, 1600×900'
+	},
 
 	/* ----------------------------------------------------------------- Factory */
 	{
@@ -267,6 +380,106 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
 		description: 'Photo beside the specification note at the end of the product lines section.',
 		defaults: ['/assets/image9.jpg'],
 		recommended: 'Landscape, 1200×800'
+	},
+	{
+		key: 'factory.hero.mosaic',
+		label: 'Hero photo collage (4 photos)',
+		section: 'Factory',
+		page: '/factory',
+		kind: 'gallery',
+		description:
+			'Collage beside the heading on large screens (phones skip it). Order matters: 1 is the tall tile, 4 the wide one along the bottom.',
+		defaults: [
+			'/showcase/gallery/roof-lightblue/01-1280.webp',
+			'/showcase/gallery/roof-brown/03-1280.webp',
+			'/showcase/gallery/fence-blue/04-1280.webp',
+			'/showcase/gallery/fence-red/06-1280.webp'
+		],
+		recommended: 'Mixed — tall, square, square, wide',
+		maxCount: 4
+	},
+	{
+		key: 'factory.ribbon',
+		label: 'Scrolling photo strip',
+		section: 'Factory',
+		page: '/factory',
+		kind: 'gallery',
+		description:
+			'Slowly scrolling row of photos between the process steps and the machine gallery.',
+		defaults: [
+			'/showcase/gallery/fence-blue/05-1280.webp',
+			'/showcase/gallery/roof-blue/03-1280.webp',
+			'/showcase/gallery/fence-red/02-1280.webp',
+			'/showcase/gallery/roof-red/03-1280.webp',
+			'/showcase/gallery/fence-white/01-1280.webp',
+			'/showcase/gallery/roof-lightblue/03-1280.webp',
+			'/showcase/gallery/fence-blue/03-1280.webp',
+			'/showcase/gallery/roof-brown/03-1280.webp',
+			'/showcase/gallery/fence-red/04-1280.webp',
+			'/showcase/gallery/fence-white/04-1280.webp'
+		],
+		recommended: 'Landscape, 1200×900',
+		maxCount: 20
+	},
+	{
+		key: 'factory.qc.background',
+		label: 'Quality stats background',
+		section: 'Factory',
+		page: '/factory',
+		kind: 'single',
+		description:
+			'Faint photo behind the quality-control figures.',
+		defaults: [
+			'/showcase/gallery/roof-blue/03-1280.webp'
+		],
+		recommended: 'Wide or square'
+	},
+	{
+		key: 'factory.closing.background',
+		label: 'Closing band background',
+		section: 'Factory',
+		page: '/factory',
+		kind: 'single',
+		description:
+			'Photo behind the closing call-to-action, under a dark wash so the white text reads.',
+		defaults: [
+			'/showcase/gallery/fence-blue/05-1280.webp'
+		],
+		recommended: 'Wide, 1600×900'
+	},
+
+	/* ------------------------------------------------------------------- Pages */
+	{
+		key: 'pages.contact.backdrop',
+		label: 'Contact page backdrop',
+		section: 'Pages',
+		page: '/contact-us',
+		kind: 'single',
+		description:
+			'Faded photo behind the heading at the top of the contact page. Shown softly, so a bright, simple scene works best.',
+		defaults: ['/showcase/gallery/roof-lightblue/02-1280.webp'],
+		recommended: 'Wide, 1600×900'
+	},
+	{
+		key: 'pages.quotes.backdrop',
+		label: 'Quote request backdrop',
+		section: 'Pages',
+		page: '/quotes',
+		kind: 'single',
+		description: 'Faded photo behind the heading at the top of the quote request page.',
+		defaults: ['/showcase/gallery/fence-blue/01-1280.webp'],
+		recommended: 'Wide, 1600×900'
+	},
+	{
+		key: 'pages.auth.panel',
+		label: 'Sign-in & sign-up photo',
+		section: 'Pages',
+		page: '/login',
+		kind: 'single',
+		description:
+			'Tall photo beside the sign-in and sign-up forms on large screens. Phones never load it.',
+		defaults: ['/showcase/gallery/roof-green/03-1280.webp'],
+		recommended: 'Portrait or square, 1200×1400'
 	}
 ];
 

@@ -18,6 +18,8 @@
 	import Signup from '$lib/forms/Signup.svelte';
 	import Login from '$lib/forms/Login.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import PhotoBackdrop from '$lib/components/PhotoBackdrop.svelte';
+	import { siteImage } from '$lib/siteImages.svelte';
 
 	let { data } = $props();
 
@@ -71,8 +73,9 @@
 </svelte:head>
 
 <div
-	class="relative min-h-screen bg-linear-to-b from-background via-background/98 to-muted/20 pb-16 text-foreground antialiased selection:bg-primary/20"
+	class="relative isolate min-h-screen bg-linear-to-b from-background via-background/98 to-muted/20 pb-16 text-foreground antialiased selection:bg-primary/20"
 >
+	<PhotoBackdrop src={siteImage('pages.quotes.backdrop')} />
 	<div class="mx-auto max-w-3xl px-4 py-8 md:py-12">
 		<div
 			class="mb-8 flex flex-col gap-4 border-b border-border/60 pb-6 sm:flex-row sm:items-center sm:justify-between"
